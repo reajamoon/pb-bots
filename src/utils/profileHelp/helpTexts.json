@@ -1,0 +1,66 @@
+{
+  "birthday": {
+    "title": "🎂 Birthday Features",
+    "description": "I can handle birthday stuff for you. Set it once and I'll take care of the rest. Each piece of birthday info has independent privacy controls.",
+    "fields": [
+      { "name": "Setting Your Birthday", "value": "So get this! You set your birthday once, and I keep track—no need to remind me every year. Head to Profile Settings → Set Birthday. You can put in your full date (like 12/25/2001) or just the month and day (12/25) if you’re not into sharing your age. I’ll update your profile automatically, so you don’t have to mess with it again.", "inline": false },
+      { "name": "What Shows When", "value": "Birthday & Zodiac: These show up unless you go full stealth mode and hide your birthday.\nChinese Zodiac & Age: Only pop up if you give your birth year.\nEach field’s got its own privacy—hide your birthday, still show your zodiac, whatever works for you.", "inline": false },
+      { "name": "Privacy Modes", "value": "You can read about all the various ways you can hide or show your b-day on the privacy page.", "inline": false },
+      { "name": "Birthday Mentions & Birthday Announcements", "value": "If you want, I’ll give you a shout-out on your birthday. There’s also an option to get in on server birthday announcements. You can toggle these in Privacy Settings", "inline": false },
+  { "name": "\u200B", "value": "*The birthday pings are independant of the other privacy options, so you can still get birthday wishes while keeping your age or birthdate hidden on your profile. Read more in the privacy controls tab!*", "inline": false }
+    ]
+  },
+  "bio": {
+    "title": "📝 Bio & Pronouns",
+    "description": "Your bio’s where you get to be yourself. Pronouns help folks know how to talk to you, and I’ll make sure they show up the way you want.",
+    "fields": [
+      { "name": "📝 Adding a Bio", "value": "Go to Profile Settings → Set Bio. Type what you want—your interests, a favorite quote, what you’re working on, or when you're most active. Keep it under 1000 characters. I’ll update your profile right away.", "inline": false },
+      { "name": "Updating or Removing Your Bio", "value": "Change it anytime by going to Profile Settings → Set Bio again. Type a new bio to replace the old one, or leave it blank to clear it out.", "inline": false },
+      { "name": "✨ Setting Your Pronouns", "value": "Head to Profile Settings → Set Pronouns. Type your pronouns however you like: she/her, he/him, they/them, xe/xir, he/they, she/they, or anything else. I’ll show them on your profile so people get it right.", "inline": false },
+      { "name": "Updating or Removing Pronouns", "value": "Change your pronouns anytime through Profile Settings → Set Pronouns. Clear the text if you want to remove them.", "inline": false }
+    ]
+  },
+  "privacy": {
+    "title": "🔒 Privacy Controls",
+    "description": "Your info, your rules. Use the **Privacy Settings** button for granular control over exactly what shows!",
+    "fields": [
+      { "name": "Privacy Mode (Strict)", "value": "If you set your birthday without a year (like 12/25), I won’t show your age or Chinese zodiac—because I don’t know them. You’ll still get birthday and regular zodiac on your profile.", "inline": false },
+      { "name": "Privacy Mode (Age Hidden)", "value": "If you want, I’ll hide just your age. Everything else—birthday, Western zodiac, Chinese zodiac—still shows up.", "inline": false },
+      { "name": "Privacy Mode (Year Hidden)", "value": "Give me the full date, then use Privacy Settings to hide anything year-based (age, Chinese zodiac). Birthday and regular zodiac stick around.", "inline": false },
+      { "name": "Privacy Mode (Birthday Hidden)", "value": "Hide your birthday date, but keep the zodiac signs. Use Privacy Settings → Hide Birthday for that. If you want me to wish you happy birthday, I still can—even if your profile keeps it quiet.", "inline": false },
+      { "name": "Privacy Mode (Full)", "value": "Privacy Settings → Privacy Mode (Full) shuts down all birthday, age, and zodiac info on your profile. I won’t show any of it.", "inline": false },
+      { "name": "Birthday Hiding", "value": "If you want, I’ll hide your birthday completely from your profile (including zodiac), but I’ll still remember it for birthday wishes.", "inline": false },
+      { "name": "Region Display Control", "value": "You can show or hide your region on your profile. Doesn’t matter what you pick for timezone -- region’s its own thing. You can hide your timezone too.", "inline": false },
+      { "name": "Profile Blocking", "value": "If you block your profile, nobody else can see it. They’ll just get a ‘Profile not found.’ message.", "inline": false },
+      { "name": "Profile Deletion", "value": "If you want everything gone, I’ll wipe your data from my database. No take-backs. Use with caution.", "inline": false },
+      { "name": "Pro Tips", "value": "Birthday and zodiac signs have independent controls. You can:\n• Hide birthday but show zodiac signs\n• Hide age/Chinese zodiac but show birthday/Western zodiac\n• Mix and match however you want.", "inline": false }
+    ]
+  },
+  "tips": {
+    "title": "💡 Tips & Tricks",
+    "description": "Here's a few things I’ve learned on the road—stuff that makes your profile work smoother.",
+    "fields": [
+      { "name": "Settings", "value": "You’ve got three main buttons: Profile Settings to change your info, Privacy Settings to keep things private, and Help if you get stuck.", "inline": false },
+      { "name": "Quick Setup", "value": "If you want to get set up fast, go in order: Birthday, Bio, Timezone, Region, Pronouns. Then hit Privacy Settings to lock down what you want. That’s how I’d do it.", "inline": false },
+      { "name": "Flexible Input Tips", "value": "Timezones and regions aren’t picky. You can use city names, abbreviations, offsets, or just type what makes sense. I can usually figure it out—like ‘PST’, ‘Tokyo’, or ‘UTC+2’. No need to overthink it.", "inline": false },
+      { "name": "Display Control Tips", "value": "Region and timezone show up separately. You can hide one, show the other, or mix it up. Try different display modes until it feels right.", "inline": false },
+      { "name": "Privacy Control", "value": "You can hide your birthday but still show your zodiac, or keep your age private and let the rest show. Every feature’s got its own privacy toggle.", "inline": false },
+      { "name": "Auto Updates", "value": "Your Discord username and avatar update on their own. If you change your profile, I’ll update your old profile messages too—no hunting them down.", "inline": false },
+      { "name": "Birthday & PB-versary", "value": "During your birthday week and PB-versary week, I’ll throw some special emojis on your profile. It’s a little thing, but hey, everyone deserves a good birthday or anniversary.", "inline": false },
+      { "name": "🔔 Birthday Notifications", "value": "Want to know when someone else’s birthday is coming up? Use `/birthday-notifications subscribe` and I’ll ping you with the daily list.", "inline": false },
+      { "name": "📊 Message History", "value": "If you want your full message count included, ask a mod. They can set it so your profile shows everything, not just what I’ve tracked.", "inline": false }
+    ]
+  },
+  "timezone_region": {
+    "title": "🌍 Timezone & Region Features",
+    "description": "Setting your timezone and region helps folks know when you’re around and where you’re from—just enough to make things easier, not to give away your secrets.",
+    "fields": [
+      { "name": "Setting Your Timezone & Region", "value": "Head to Profile Settings → Set Timezone or Set Region. You can use abbreviations like 'PST', offsets like 'UTC+2', city names like 'Tokyo' or 'New York', regions like 'California' or 'UK', or even official IANA names like 'America/New_York'. For region, you can enter countries, states, cities, or timezone areas. Whatever works for you.", "inline": false },
+      { "name": "Flexible Input Examples", "value": "Try abbreviations (PST, EST, GMT), offsets (+5, -8, UTC+2), places (New York, Tokyo, California), or regions (Pacific, Eastern, Central). For region, you can use 'United States', 'CA', 'Tokyo, Japan', or even smaller places like 'Jamtalann, Sweden'. I can usually figure it out.", "inline": false },
+      { "name": "How It Shows", "value": "Your profile shows your current local time and, if you’ve set a region, I’ll add that for context. If timezone is visible, region shows up underneath as extra info. If timezone is hidden, region gets its own field.", "inline": false },
+      { "name": "Display Options", "value": "Pick how your timezone shows up: IANA (America/New_York), Offset (2:30 PM UTC-8), Short (2:30 PM PST), Combined (time, timezone, and region), or just hide it altogether if you want to stay mysterious. Region display is independent—show it or hide it whenever you want.", "inline": false },
+      { "name": "Privacy & Context", "value": "Only your local time and general region show up. I’m not sharing your exact coordinates, just enough for coordination, not for tracking. You control what’s visible.", "inline": false },
+      { "name": "Updating or Removing", "value": "Change your timezone or region anytime in Profile Settings. You can also use Timezone Display or Region Display to hide them completely.", "inline": false }
+    ]
+  }
+}

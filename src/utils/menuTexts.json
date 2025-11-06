@@ -1,0 +1,15 @@
+{
+  "privacy": {
+    "birthdayMentionsOn": "Birthday Mentions: ON",
+    "birthdayMentionsOff": "Birthday Mentions: OFF",
+    "dailyListsOn": "Daily Lists: ON",
+    "dailyListsOff": "Daily Lists: OFF",
+    "privacyModeFullOn": "Privacy Mode (Full): ON",
+    "privacyModeFullOff": "Privacy Mode (Full): OFF",
+    "privacyModeAgeHiddenOn": "Privacy Mode (Age Hidden): ON",
+    "privacyModeAgeHiddenOff": "Privacy Mode (Age Hidden): OFF",
+    "profileBirthdayHidden": "Profile Birthday: HIDDEN",
+    "profileBirthdayVisible": "Profile Birthday: VISIBLE",
+    "closeSettings": "Close Settings"
+  }
+}

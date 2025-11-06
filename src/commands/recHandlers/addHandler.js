@@ -1,0 +1,222 @@
+const { Recommendation } = require('../../models/index.js');
+const { fetchFicMetadata } = require('../../utils/ficParser');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
+
+const isValidFanficUrl = require('../../utils/recUtils/isValidFanficUrl');
+
+// Adds a new fic rec. Checks for duplicates, fetches metadata, and builds the embed.
+async function handleAddRecommendation(interaction) {
+  try {
+    await interaction.deferReply();
+
+    // Extract options from interaction (assuming slash command)
+    const url = interaction.options.getString('url');
+    const manualTitle = interaction.options.getString('title');
+    const manualAuthor = interaction.options.getString('author');
+    const manualSummary = interaction.options.getString('summary');
+    const manualWordCount = interaction.options.getInteger('wordcount');
+    const manualRating = interaction.options.getString('rating');
+    const additionalTags = interaction.options.getString('tags') ? interaction.options.getString('tags').split(',').map(t => t.trim()) : [];
+    const notes = interaction.options.getString('notes');
+
+    // Validate URL
+    if (!url || !isValidFanficUrl(url)) {
+      return await interaction.editReply({
+        content: 'Please provide a valid fanfiction URL (AO3, FFNet, Wattpad, etc.)'
+      });
+    }
+
+    // See if this fic is already in the database
+    const existingRec = await Recommendation.findOne({
+      where: {
+        url: url
+      }
+    });
+
+    if (existingRec) {
+      return await interaction.editReply({
+        content: `That fic's already in our library. ${existingRec.recommendedByUsername} added it on ${existingRec.createdAt.toLocaleDateString()}. Great minds think alike though!`
+      });
+    }
+
+    let metadata;
+    // If the user gave a title and author, just use those instead of parsing
+    if (manualTitle && manualAuthor) {
+      metadata = {
+        title: manualTitle,
+        author: manualAuthor,
+        summary: manualSummary || 'Manually added recommendation',
+        tags: [],
+        rating: manualRating || 'Not Rated',
+        language: 'English',
+        wordCount: manualWordCount,
+        url: url
+      };
+    } else {
+      // Try to grab fic details automatically from the URL
+      metadata = await fetchFicMetadata(url);
+      if (!metadata) {
+        return await interaction.editReply({
+          content: 'I couldn\'t fetch the details from that URL. Make sure it\'s a valid, public fanfiction link and try again. Sometimes the archives can be a bit finicky.'
+        });
+      }
+      // If the site blocks me (Cloudflare etc), tell the user to add details manually
+      if (metadata.error && metadata.error === 'Site protection detected') {
+        return await interaction.editReply({
+          content: `Ugh, looks like that site's got some kind of major mojo going on. I can't get past their defenses to grab the story details automatically. \n\nI mean, I get it, they're trying to keep the bad guys out, but it's blocking the good guys too. If you really want to add this one, you'll have to tell me the title and author yourself. Try the command again like this:\n\n\`/rec add url:${url} title:\"Story Title Here\" author:\"Author Name Here\"\`\n\n*This usually happens with FanFiction.Net - they're pretty paranoid over there.*`
+        });
+      }
+      // If the link is dead (404), let the user know and give some tips
+      if (metadata.is404 || (metadata.error && metadata.error === '404_not_found')) {
+        return await interaction.editReply({
+          content: `📭 **Story Not Found (404)**\n\nThat link seems to be broken - the story has either been deleted, moved, or never existed at that URL. This happens sometimes when:\n\n• The author deleted their work\n• The story was moved to a different URL\n• The link was copied incorrectly\n• The site restructured their URLs\n\nYou might want to:\n• Check if the author has an updated link\n• Search for the story on the same site by title/author\n• Look for the story on other platforms\n\nSorry I couldn't add this one to the library! 📚`
+        });
+      }
+      // Handle other HTTP errors (403, connection issues, etc)
+      if (metadata.is403) {
+        return await interaction.editReply({
+          content: `🔒 **Access Restricted (403)**\n\nI can't access this story - it's either:\n• Locked to registered users only\n• Restricted by age verification\n• Set to private/friends-only\n\nYou might need to log in to the site to access it. If you can view it while logged in, you can still add it manually:\n\n\`/rec add url:${url} title:\"Story Title Here\" author:\"Author Name Here\"\``
+        });
+      }
+      if (metadata.isHttpError) {
+        return await interaction.editReply({
+          content: `⚠ **Connection Error**\n\nI'm having trouble connecting to that site right now. This could be:\n• The site is temporarily down\n• Server maintenance\n• Network connectivity issues\n\nTry again in a few minutes, or add the story manually if you can access it:\n\n\`/rec add url:${url} title:\"Story Title Here\" author:\"Author Name Here\"\``
+        });
+      }
+      // If the user gave manual fields, use those instead of what I parsed
+      if (manualTitle) metadata.title = manualTitle;
+      if (manualAuthor) metadata.author = manualAuthor;
+      if (manualSummary) metadata.summary = manualSummary;
+      if (manualWordCount) metadata.wordCount = manualWordCount;
+      if (manualRating) metadata.rating = manualRating;
+    }
+
+    // Actually add the fic to the database
+    const recommendation = await Recommendation.create({
+      url: url,
+      title: metadata.title,
+      author: metadata.author,
+      summary: metadata.summary,
+      tags: JSON.stringify(metadata.tags || []),
+      rating: metadata.rating,
+      wordCount: metadata.wordCount,
+      chapters: metadata.chapters,
+      status: metadata.status,
+      language: metadata.language,
+      publishedDate: metadata.publishedDate,
+      updatedDate: metadata.updatedDate,
+      recommendedBy: interaction.user.id,
+      recommendedByUsername: interaction.user.username,
+      additionalTags: JSON.stringify(additionalTags),
+      notes: notes,
+      // AO3-style fields for stats and sorting
+      kudos: metadata.kudos,
+      hits: metadata.hits,
+      bookmarks: metadata.bookmarks,
+      comments: metadata.comments,
+      category: metadata.category
+    });
+
+    // Build the embed for the response, same format as random/search
+    const embed = new EmbedBuilder()
+      .setTitle(`📚 ${metadata.title}`)
+      .setDescription(`**By:** ${metadata.author}\n*✅ Added to the Profound Bond Library!*`)
+      .setURL(url)
+      .setColor(0x4CAF50)
+      .setTimestamp()
+      .setFooter({
+        text: `From the Profound Bond Library • Recommended by ${interaction.user.username} • ID: ${recommendation.id}`,
+        iconURL: interaction.user.displayAvatarURL()
+      });
+
+    if (metadata.summary) {
+      embed.addFields({ 
+        name: 'Summary', 
+        value: metadata.summary.length > 400 ? metadata.summary.substring(0, 400) + '...' : metadata.summary 
+      });
+    }
+
+    // Add a big link to the fic (AO3, FFNet, etc)
+    const siteName = url.includes('archiveofourown.org') ? 'AO3' : 
+            url.includes('fanfiction.net') ? 'FFNet' : 
+            url.includes('wattpad.com') ? 'Wattpad' :
+            url.includes('livejournal.com') ? 'LiveJournal' :
+            url.includes('dreamwidth.org') ? 'Dreamwidth' :
+            url.includes('tumblr.com') ? 'Tumblr' : 'Link';
+      
+    embed.addFields({ 
+      name: '🔗 Read Here', 
+      value: `[Read on ${siteName}](${url})`, 
+      inline: false 
+    });
+
+    const fields = [];
+    if (metadata.rating) fields.push({ name: 'Rating', value: metadata.rating || 'Not Rated', inline: true });
+    if (metadata.wordCount) fields.push({ name: 'Words', value: metadata.wordCount ? metadata.wordCount.toLocaleString() : 'Unknown', inline: true });
+    if (metadata.chapters) fields.push({ name: 'Chapters', value: metadata.chapters || 'Unknown', inline: true });
+    if (metadata.status) fields.push({ name: 'Status', value: metadata.status || 'Unknown', inline: true });
+
+    if (fields.length > 0) {
+      embed.addFields(fields);
+    }
+
+    // If this is a reblog, add a warning
+    if (metadata.isReblog && metadata.reblogWarning) {
+      embed.addFields({ 
+        name: '⚠ Reblog Detected', 
+        value: metadata.reblogWarning,
+        inline: false 
+      });
+    }
+
+    // If I found an AO3 version, suggest it here
+    if (metadata.hasAO3Links && metadata.ao3Suggestion) {
+      let ao3FieldValue = metadata.ao3Suggestion;
+          
+      if (metadata.ao3Preview) {
+        ao3FieldValue += `\n\n**AO3 Preview:**\n**Title:** ${metadata.ao3Preview.title}\n**Author:** ${metadata.ao3Preview.author}`;
+        if (metadata.ao3Preview.rating) {
+          ao3FieldValue += `\n**Rating:** ${metadata.ao3Preview.rating}`;
+        }
+        if (metadata.ao3Preview.wordCount) {
+          ao3FieldValue += `\n**Word Count:** ${metadata.ao3Preview.wordCount.toLocaleString()}`;
+        }
+        ao3FieldValue += `\n**URL:** ${metadata.ao3Preview.url}`;
+      } else if (metadata.ao3Links && metadata.ao3Links.length > 0) {
+        ao3FieldValue += `\n**Found AO3 Link:** ${metadata.ao3Links[0].url}`;
+      }
+          
+      embed.addFields({ 
+        name: '📚 AO3 Version Available', 
+        value: ao3FieldValue,
+        inline: false 
+      });
+    }
+
+    const allTags = [...(metadata.tags || []), ...additionalTags];
+    if (allTags.length > 0) {
+      embed.addFields({ 
+        name: 'Tags', 
+        value: allTags.slice(0, 8).join(', ') + (allTags.length > 8 ? '...' : '') 
+      });
+    }
+
+    if (notes) {
+      embed.addFields({ name: 'Notes', value: notes });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (error) {
+    // If something goes wrong, reply with a single error message
+    try {
+      await interaction.editReply({
+        content: error.message || 'There was an error adding the recommendation. Please try again.'
+      });
+    } catch (replyError) {
+      // If editReply fails (e.g. interaction already replied), just log
+      console.error('Failed to send error message in /rec add:', replyError);
+    }
+    return;
+  }
+}
+module.exports = handleAddRecommendation;

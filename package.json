@@ -1,0 +1,42 @@
+{
+  "name": "sam-bot",
+  "version": "3.0.0",
+  "description": "A Discord bot built with discord.js and Sequelize",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "echo \"ERROR: Use PM2 to start the bot (npm run deploy or pm2 start ecosystem.config.js)\" && exit 1",
+    "dev": "echo \"ERROR: Use PM2 for development. Do not run nodemon directly.\" && exit 1",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:migrate": "npx sequelize-cli db:migrate",
+    "db:seed": "npx sequelize-cli db:seed:all",
+    "db:reset": "npx sequelize-cli db:migrate:undo:all && npm run db:migrate && npm run db:seed",
+    "deploy": "pm2 start ecosystem.config.js --env production"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "discord.js",
+    "sequelize"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "country-region-data": "^3.2.0",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3",
+    "pg-hstore": "^2.3.4",
+    "puppeteer": "^24.27.0",
+    "sequelize": "^6.35.0",
+    "sqlite3": "^5.1.6",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "nodemon": "^3.0.2",
+    "sequelize-cli": "^6.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

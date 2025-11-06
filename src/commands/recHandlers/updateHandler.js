@@ -1,0 +1,273 @@
+const { Recommendation } = require('../../models');
+const { fetchFicMetadata } = require('../../utils/ficParser');
+const findRecommendationByIdOrUrl = require('../../utils/recUtils/findRecommendationByIdOrUrl');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
+
+const isValidFanficUrl = require('../../utils/recUtils/isValidFanficUrl');
+
+// Modular validation helpers
+function validateAttachment(newAttachment, willBeDeleted) {
+    const allowedTypes = [
+        'text/plain', 'application/pdf', 'application/epub+zip',
+        'application/x-mobipocket-ebook', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword', 'application/rtf'
+    ];
+    if (!willBeDeleted) {
+        return 'File attachments are only for stories that have been deleted from their original sites. Mark it as deleted first.';
+    }
+    if (!allowedTypes.includes(newAttachment.contentType)) {
+        return 'Unsupported file type. Only text files, PDFs, EPUBs, and similar formats are allowed.';
+    }
+    if (newAttachment.size > 10 * 1024 * 1024) {
+        return 'File size exceeds 10MB limit.';
+    }
+    return null;
+}
+
+async function handleUpdateRecommendation(interaction) {
+    // Timing diagnostics
+    try {
+        const startTime = Date.now();
+        console.log(`[rec update] Interaction received at: ${new Date().toISOString()}`);
+        console.log(`[rec update] Discord interaction createdTimestamp: ${interaction.createdTimestamp}`);
+        console.log(`[rec update] Discord interaction age (ms): ${Date.now() - interaction.createdTimestamp}`);
+        await interaction.deferReply();
+        console.log(`[rec update] deferReply completed in ${Date.now() - startTime}ms`);
+
+        const recId = interaction.options.getInteger('id');
+        const findUrl = interaction.options.getString('find_url');
+        const findAo3Id = interaction.options.getInteger('find_ao3_id');
+        const newUrl = interaction.options.getString('new_url');
+        const newTitle = interaction.options.getString('title');
+        const newAuthor = interaction.options.getString('author');
+        const newSummary = interaction.options.getString('summary');
+        const newRating = interaction.options.getString('rating');
+        const newStatus = interaction.options.getString('status');
+        const newWordCount = interaction.options.getInteger('wordcount');
+        const newDeleted = interaction.options.getBoolean('deleted');
+        const newAttachment = interaction.options.getAttachment('attachment');
+        const newTags = interaction.options.getString('tags')?.split(',').map(tag => tag.trim()).filter(tag => tag) || null;
+        const newNotes = interaction.options.getString('notes');
+
+        const findStart = Date.now();
+        console.log('[rec update] Finding recommendation...');
+        const recommendation = await findRecommendationByIdOrUrl(interaction, recId, findUrl, findAo3Id);
+        console.log(`[rec update] Recommendation found: ${!!recommendation} (find took ${Date.now() - findStart}ms)`);
+        if (!recommendation) {
+            await interaction.editReply({
+                content: `I couldn't find a recommendation with ID ${recId} in our library. Use \`/rec stats\` to see what's available.`
+            });
+            return;
+        }
+
+        const isOwner = recommendation.recommendedBy === interaction.user.id;
+        const isAdmin = interaction.member.permissions.has('ManageMessages');
+        if (!isOwner && !isAdmin) {
+            await interaction.editReply({
+                content: `That recommendation was added by ${recommendation.recommendedByUsername}. You can only update your own recommendations unless you're a moderator.`
+            });
+            return;
+        }
+
+        const urlToUse = newUrl || recommendation.url;
+        let shouldUpdateMetadata = false;
+        let metadata = null;
+
+        if (newUrl && newUrl !== recommendation.url) {
+            if (!isValidFanficUrl(newUrl)) {
+                await interaction.editReply({
+                    content: 'That doesn\'t look like a supported fanfiction URL. As your librarian, I can work with Archive of Our Own (AO3), FanFiction.Net, and Wattpad links.'
+                });
+                return;
+            }
+            const dupStart = Date.now();
+            console.log('[rec update] Checking for duplicate URL...');
+            const existingRec = await Recommendation.findOne({
+                where: {
+                    url: newUrl,
+                    id: { [require('sequelize').Op.ne]: recId }
+                }
+            });
+            console.log(`[rec update] Duplicate URL found: ${!!existingRec} (dup check took ${Date.now() - dupStart}ms)`);
+            if (existingRec) {
+                await interaction.editReply({
+                    content: `That URL is already in our library (ID: ${existingRec.id}). Each URL can only appear once in the collection.`
+                });
+                return;
+            }
+            shouldUpdateMetadata = true;
+        } else if (!newUrl && !newTags && !newNotes && !newTitle && !newAuthor && !newSummary && !newRating && !newStatus && !newWordCount) {
+            shouldUpdateMetadata = true;
+        }
+
+        if (shouldUpdateMetadata) {
+            await interaction.editReply({
+                content: '🔄 Fetching updated metadata...'
+            });
+            const metaStart = Date.now();
+            console.log('[rec update] Fetching metadata for:', urlToUse);
+            metadata = await fetchFicMetadata(urlToUse);
+            console.log(`[rec update] Metadata fetch result: ${metadata ? 'success' : 'failed'} (fetch took ${Date.now() - metaStart}ms)`);
+            if (!metadata) {
+                await interaction.editReply({
+                    content: 'I couldn\'t fetch the details from that URL. The original recommendation remains unchanged.'
+                });
+                return;
+            }
+            if (metadata.error && metadata.error === 'Site protection detected') {
+                await interaction.editReply({
+                    content: `That site's protection is blocking me from fetching updated metadata. The original recommendation remains unchanged.`
+                });
+                return;
+            }
+            if (metadata.is404 || (metadata.error && metadata.error === '404_not_found')) {
+                await interaction.editReply({
+                    content: `📭 **Story Not Found (404)**\n\nThe story at this URL appears to have been deleted or moved. The original recommendation remains unchanged.\n\nYou might want to:\n• Update the URL if you know where it moved: \`/rec update id:${recId} new_url:new_link_here\`\n• Remove this recommendation: \`/rec remove id:${recId}\`\n• Keep it as-is for reference`
+                });
+                return;
+            }
+            if (metadata.is403) {
+                await interaction.editReply({
+                    content: `🔒 **Access Restricted (403)**\n\nThis story is now restricted or requires special permissions. The original recommendation remains unchanged.`
+                });
+                return;
+            }
+            if (metadata.isHttpError) {
+                await interaction.editReply({
+                    content: `⚠ **Connection Error**\n\nI'm having trouble connecting to that site right now. The original recommendation remains unchanged. Try again later.`
+                });
+                return;
+            }
+        }
+
+        const updateData = {};
+        if (metadata) {
+            updateData.url = urlToUse;
+            if (metadata.title) updateData.title = metadata.title;
+            if (metadata.author) updateData.author = metadata.author;
+            if (metadata.summary) updateData.summary = metadata.summary;
+            if (metadata.tags) updateData.tags = JSON.stringify(metadata.tags);
+            if (metadata.rating) updateData.rating = metadata.rating;
+            if (metadata.wordCount) updateData.wordCount = metadata.wordCount;
+            if (metadata.chapters) updateData.chapters = metadata.chapters;
+            if (metadata.status) updateData.status = metadata.status;
+            if (metadata.language) updateData.language = metadata.language;
+            if (metadata.publishedDate) updateData.publishedDate = metadata.publishedDate;
+            if (metadata.updatedDate) updateData.updatedDate = metadata.updatedDate;
+        }
+        if (newTags !== null) updateData.tags = JSON.stringify(newTags);
+        if (newNotes !== null) updateData.notes = newNotes;
+        if (newUrl) updateData.url = newUrl;
+        if (newTitle !== null) updateData.title = newTitle;
+        if (newAuthor !== null) updateData.author = newAuthor;
+        if (newSummary !== null) updateData.summary = newSummary;
+        if (newRating !== null) updateData.rating = newRating;
+        if (newStatus !== null) updateData.status = newStatus;
+        if (newWordCount !== null) updateData.wordCount = newWordCount;
+        if (newAttachment) {
+            const { validateAttachment } = require('../../utils/validateAttachment');
+            const willBeDeleted = newDeleted !== null ? newDeleted : recommendation.deleted;
+            const attachStart = Date.now();
+            const validationError = validateAttachment(newAttachment, willBeDeleted);
+            if (validationError) {
+                await interaction.editReply({
+                    content: validationError + '\n\n**And remember:** Only attach files if you\'ve got the author\'s permission. I\'m not running a piracy operation here.'
+                });
+                console.log(`[rec update] Attachment validation failed (took ${Date.now() - attachStart}ms)`);
+                return;
+            }
+            updateData.attachmentUrl = newAttachment.url;
+            await interaction.followUp({
+                content: `Alright, file's attached. But listen up - this server has a strict policy about this. You better have the author's explicit permission, because if you don't, the mods are going to remove it faster than you can say "copyright infringement." Don't make me look bad here.`,
+                flags: MessageFlags.Ephemeral
+            });
+            console.log(`[rec update] Attachment followUp sent (took ${Date.now() - attachStart}ms)`);
+        }
+
+        const dbStart = Date.now();
+        console.log('[rec update] Updating recommendation in DB...');
+        await recommendation.update(updateData);
+        await recommendation.reload();
+        console.log(`[rec update] Recommendation updated and reloaded (DB ops took ${Date.now() - dbStart}ms)`);
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📝 ${recommendation.title}`)
+            .setDescription(`**By:** ${recommendation.author}`)
+            .setURL(recommendation.url)
+            .setColor(0xFF9800)
+            .setTimestamp()
+            .setFooter({
+                text: `Updated by ${interaction.user.username} • Originally added by ${recommendation.recommendedByUsername} • ID: ${recommendation.id}`,
+                iconURL: interaction.user.displayAvatarURL()
+            });
+        if (recommendation.summary) {
+            embed.addFields({ 
+                name: 'Summary', 
+                value: recommendation.summary.length > 400 ? recommendation.summary.substring(0, 400) + '...' : recommendation.summary 
+            });
+        }
+        const siteName = recommendation.url.includes('archiveofourown.org') ? 'AO3' : 
+                        recommendation.url.includes('fanfiction.net') ? 'FFNet' : 
+                        recommendation.url.includes('wattpad.com') ? 'Wattpad' :
+                        recommendation.url.includes('livejournal.com') ? 'LiveJournal' :
+                        recommendation.url.includes('dreamwidth.org') ? 'Dreamwidth' :
+                        recommendation.url.includes('tumblr.com') ? 'Tumblr' : 'Link';
+        let linkValue = `[Read on ${siteName}](${recommendation.url})`;
+        if (recommendation.deleted && recommendation.attachmentUrl) {
+            linkValue += `\n📎 [Backup Copy Available](${recommendation.attachmentUrl}) *(with permission)*`;
+        }
+        embed.addFields({ 
+            name: '🔗 Read Here', 
+            value: linkValue, 
+            inline: false 
+        });
+        const fields = [];
+        if (recommendation.rating) fields.push({ name: 'Rating', value: recommendation.rating || 'Not Rated', inline: true });
+        if (recommendation.wordCount) fields.push({ name: 'Words', value: recommendation.wordCount ? recommendation.wordCount.toLocaleString() : 'Unknown', inline: true });
+        if (recommendation.chapters) fields.push({ name: 'Chapters', value: recommendation.chapters || 'Unknown', inline: true });
+        if (recommendation.status) {
+            let statusValue = recommendation.status || 'Unknown';
+            if (recommendation.deleted) statusValue += ' (Deleted)';
+            fields.push({ name: 'Status', value: statusValue, inline: true });
+        } else if (recommendation.deleted) {
+            fields.push({ name: 'Status', value: 'Deleted', inline: true });
+        }
+        if (fields.length > 0) {
+            embed.addFields(fields);
+        }
+        const allTags = recommendation.getParsedTags();
+        if (allTags.length > 0) {
+            embed.addFields({ 
+                name: 'Tags', 
+                value: allTags.slice(0, 8).join(', ') + (allTags.length > 8 ? '...' : '') 
+            });
+        }
+        if (recommendation.notes) {
+            embed.addFields({ name: 'Notes', value: recommendation.notes });
+        }
+        let updateSummary = [];
+        if (metadata) updateSummary.push('metadata refreshed');
+        if (newTags !== null) updateSummary.push('tags updated');
+        if (newNotes !== null) updateSummary.push('notes updated');
+        if (newUrl) updateSummary.push('URL changed');
+        if (newTitle !== null) updateSummary.push('title updated');
+        if (newAuthor !== null) updateSummary.push('author updated');
+        if (newSummary !== null) updateSummary.push('summary updated');
+        if (newRating !== null) updateSummary.push('rating updated');
+        if (newStatus !== null) updateSummary.push('status updated');
+        if (newWordCount !== null) updateSummary.push('word count updated');
+        embed.addFields({ 
+            name: 'Changes Made', 
+            value: updateSummary.length > 0 ? updateSummary.join(', ') : 'metadata refreshed',
+            inline: false 
+        });
+        await interaction.editReply({ content: null, embeds: [embed] });
+    } catch (error) {
+        console.error('[rec update] Error:', error);
+        await interaction.editReply({
+            content: error.message || 'There was an error updating the recommendation. Please try again.'
+        });
+    }
+}
+
+module.exports = handleUpdateRecommendation;
