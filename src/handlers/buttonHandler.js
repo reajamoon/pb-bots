@@ -11,6 +11,8 @@ const logger = require('../utils/logger');
  */
 async function handleButton(interaction) {
     try {
+            const logger = require('../utils/logger');
+            logger.info(`[buttonHandler] Invoked for customId: ${interaction.customId}`);
         const customId = interaction.customId;
     // logger.info(`[ButtonHandler] Received button interaction: customId=${customId}`);
 
