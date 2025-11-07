@@ -185,15 +185,22 @@ function validateTimezone(input) {
         };
     }
     
-    // 2. Handle UTC offset formats like +5, -8, UTC+2, UTC-5
-    const offsetMatch = cleanInput.match(/^(UTC)?([+-]\d{1,2})(:?\d{2})?$/i);
+    // 2. Handle UTC offset formats like +5, -8, UTC+2, UTC-5, UTC 0, UTC +0, UTC -0, UTC+00:00, UTC 00:00
+    const offsetMatch = cleanInput.match(/^(UTC)?\s*([+-]?\d{1,2})(:?\d{2})?$/i);
     if (offsetMatch) {
-        const [, , offsetHours, offsetMinutes] = offsetMatch;
-        const hours = parseInt(offsetHours);
+        const [, utcPrefix, offsetHours, offsetMinutes] = offsetMatch;
+        // Accept 'UTC 0', 'UTC+0', 'UTC -0', 'UTC0', '+0', '-0', '0'
+        let hours = parseInt(offsetHours);
+        if (isNaN(hours)) hours = 0;
         const mins = offsetMinutes ? parseInt(offsetMinutes.replace(':', '')) : 0;
-        
         if (hours >= -12 && hours <= 14 && mins >= 0 && mins < 60) {
-            const utcOffset = `UTC${offsetHours}${offsetMinutes || ''}`;
+            // Normalize to UTC+X or UTC-X
+            let sign = hours < 0 ? '-' : '+';
+            if (hours === 0 && offsetHours.startsWith('-')) sign = '-';
+            if (hours === 0 && offsetHours.startsWith('+')) sign = '+';
+            const absHours = Math.abs(hours).toString().padStart(2, '0');
+            const absMins = mins ? `:${mins.toString().padStart(2, '0')}` : '';
+            const utcOffset = `UTC${sign}${absHours}${absMins}`;
             return {
                 isValid: true,
                 normalizedTimezone: utcOffset,
