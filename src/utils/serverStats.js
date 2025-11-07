@@ -53,7 +53,7 @@ function formatTimezoneForProfile(timezone, timezoneDisplay = 'iana') {
                 timezoneDisplayText = timezone;
             }
         } else if (timezoneDisplay === 'combined') {
-            // Show both short timezone name and UTC offset. Because why not, right?
+            // Show both short timezone name and UTC offset.
             try {
                 const timeInTimezone = now.toLocaleString('en-US', {
                     timeZone: timezone,
@@ -61,44 +61,27 @@ function formatTimezoneForProfile(timezone, timezoneDisplay = 'iana') {
                     minute: '2-digit',
                     timeZoneName: 'short'
                 });
-                
-                // Grab timezone abbreviation from the formatted string
+                // Extract short timezone name (e.g., PST, EST)
                 const parts = timeInTimezone.split(' ');
-                const timezoneName = parts[parts.length - 1]; // Get the last part (timezone abbrev)
-                const timeOnly = parts.slice(0, -1).join(' '); // Get everything except the timezone
-                
-                // Calculate UTC offset (again)
+                const timezoneName = parts[parts.length - 1];
+                const timeOnly = parts.slice(0, -1).join(' ');
+                // Calculate UTC offset
                 const utcTime = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
                 const timezoneTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
                 const offsetMs = timezoneTime.getTime() - utcTime.getTime();
                 const offsetHours = Math.floor(offsetMs / (1000 * 60 * 60));
                 const offsetMins = Math.floor((Math.abs(offsetMs) % (1000 * 60 * 60)) / (1000 * 60));
-                const sign = offsetHours >= 0 ? '+' : '';
-                const offsetString = `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
-                
-                timezoneDisplayText = `${timeOnly} ${timezoneName} (${offsetString})`;
+                const sign = offsetHours >= 0 ? '+' : '-';
+                const absHours = Math.abs(offsetHours);
+                const offsetString = `UTC${sign}${absHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
+                timezoneDisplayText = `${timezoneName} (${offsetString})`;
             } catch (error) {
-                // Fallback to stored value if timezone is invalid. Classic.
-                timezoneDisplayText = timezone;
-            }
-        } else {
-            // Show IANA format (default, the boring one)
-            try {
-                const timeInTimezone = now.toLocaleString('en-US', {
-                    timeZone: timezone,
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                timezoneDisplayText = `${timeInTimezone} (${timezone})`;
-            } catch (error) {
-                // Fallback to stored value if timezone is invalid. You know the drill.
                 timezoneDisplayText = timezone;
             }
         }
-
         return timezoneDisplayText;
     } catch (error) {
-    // If all fails, just show the raw timezone. Good luck.
+        // Defensive: fallback to raw timezone value on error
         return timezone;
     }
 }
@@ -111,13 +94,13 @@ function formatTimezoneForProfile(timezone, timezoneDisplay = 'iana') {
  */
 function formatBirthdayForStats(birthday, timezone) {
     if (!birthday) return 'Not set';
-    
+
     const [year, month, day] = birthday.split('-').map(Number);
     const displayDate = new Date(year, month - 1, day);
     const monthName = displayDate.toLocaleDateString('en-US', { month: 'long' });
-    
+
     // Get day with ordinal suffix (1st, 2nd, etc.)
-    const getDayWithSuffix = (day) => {
+    function getDayWithSuffix(day) {
         if (day >= 11 && day <= 13) return day + 'th';
         switch (day % 10) {
             case 1: return day + 'st';
@@ -125,8 +108,8 @@ function formatBirthdayForStats(birthday, timezone) {
             case 3: return day + 'rd';
             default: return day + 'th';
         }
-    };
-    
+    }
+
     return `${monthName} ${getDayWithSuffix(day)}`;
 }
 
@@ -163,12 +146,12 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
         const row3Fields = [];
         const row4Fields = [];
         const row6Fields = [];
-        
+
     // Server join date with breakdown and PB-versary
         if (member.joinedAt) {
             const joinDate = member.joinedAt;
             const now = new Date();
-            
+
             // Calculate time since joining (years, months, days)
             let years = now.getFullYear() - joinDate.getFullYear();
             let months = now.getMonth() - joinDate.getMonth();
@@ -202,38 +185,28 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
             }
             
             // Calculate next PB-versary (how long until cake?)
-            const nextPBversary = new Date(now.getFullYear(), joinDate.getMonth(), joinDate.getDate());
-            if (nextPBversary < now) {
-                nextPBversary.setFullYear(now.getFullYear() + 1);
-            }
-            
-            const msUntilPBversary = nextPBversary - now;
+            const isPBversaryToday = now.getMonth() === joinDate.getMonth() && now.getDate() === joinDate.getDate();
             let pbversaryText = '';
-            
-            if (msUntilPBversary < 24 * 60 * 60 * 1000) {
-                // Less than 1 day - show hours (almost party time)
-                const hoursUntil = Math.ceil(msUntilPBversary / (60 * 60 * 1000));
-                if (hoursUntil <= 1) {
-                    pbversaryText = '� **PB-versary is TODAY!**';
-                } else {
-                    pbversaryText = `🎂 PB-versary in ${hoursUntil}h`;
-                }
+            if (isPBversaryToday) {
+                pbversaryText = '🎂 **PB-versary is TODAY!**';
             } else {
+                const nextPBversary = new Date(now.getFullYear(), joinDate.getMonth(), joinDate.getDate());
+                if (nextPBversary < now) {
+                    nextPBversary.setFullYear(now.getFullYear() + 1);
+                }
+                const msUntilPBversary = nextPBversary - now;
                 // Calculate months and days until PB-versary
                 let tempDate = new Date(now);
                 let monthsUntil = 0;
                 let daysUntil = 0;
-                
                 // Count full months (calendar shenanigans)
                 while (tempDate.getFullYear() < nextPBversary.getFullYear() || 
                        (tempDate.getFullYear() === nextPBversary.getFullYear() && tempDate.getMonth() < nextPBversary.getMonth())) {
                     tempDate.setMonth(tempDate.getMonth() + 1);
                     monthsUntil++;
                 }
-                
                 // Calculate remaining days (almost there)
                 daysUntil = Math.ceil((nextPBversary - tempDate) / (24 * 60 * 60 * 1000));
-                
                 // Format the relative time (mo/d)
                 if (monthsUntil > 0 && daysUntil > 0) {
                     pbversaryText = `PB-versary in ${monthsUntil}mo, ${daysUntil}d`;
@@ -511,45 +484,21 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
         }
 
         return {
-            row2Fields: row2Fields,
-            row3Fields: row3Fields,
-            row4Fields: row4Fields,
-            row6Fields: row6Fields,
-            hasStats: row2Fields.length > 0 || row3Fields.length > 0 || row4Fields.length > 0 || row6Fields.length > 0
+            row2Fields,
+            row3Fields,
+            row4Fields,
+            row6Fields,
+            hasStats: true
         };
-
     } catch (error) {
+        // Defensive: log and return empty stats on error
         console.error('Error generating server stats:', error);
         return { row2Fields: [], row3Fields: [], row4Fields: [], row6Fields: [], hasStats: false };
     }
 }
 
-/**
- * Generate server leaderboard or community stats. Numbers for the curious.
- * @param {Object} client - Discord client
- * @returns {Object} Community stats info
- */
-async function generateCommunityStats(client) {
-    try {
-        const guild = client.guilds.cache.get(process.env.PROFOUND_BOND_GUILD_ID);
-        if (!guild) {
-            return null;
-        }
-
-        const stats = {
-            memberCount: guild.memberCount,
-            boostLevel: guild.premiumTier,
-            boostCount: guild.premiumSubscriptionCount
-        };
-
-        return stats;
-    } catch (error) {
-        console.error('Error generating community stats:', error);
-        return null;
-    }
-}
-
 module.exports = {
     generateServerStats,
-    generateCommunityStats
+    formatTimezoneForProfile,
+    formatBirthdayForStats
 };

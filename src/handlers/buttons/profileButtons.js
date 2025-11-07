@@ -340,7 +340,8 @@ async function handleProfileSettingsDone(interaction) {
     }
     
     // Set timezone buttons
-    else if (interaction.customId === 'set_timezone' || interaction.customId.startsWith('set_timezone_')) {
+    logger.info(`[DEBUG] Checking set_timezone handler condition: customId=${interaction.customId}, eq=${interaction.customId === 'set_timezone'}, startsWith=${interaction.customId.startsWith('set_timezone_')}`);
+    if (interaction.customId === 'set_timezone' || interaction.customId.startsWith('set_timezone_')) {
         // Extract userId and messageId if this is from tracked profile settings
         const parts = interaction.customId.split('_');
         const targetUserId = parts.length >= 3 ? parts[2] : interaction.user.id;
@@ -349,25 +350,51 @@ async function handleProfileSettingsDone(interaction) {
         // Permission check removed: parent menu is ephemeral and only accessible by the user
 
         // Build modal custom ID with message tracking if available
-    const { buildModalCustomId } = require('../../utils/messageTracking');
-    const modalCustomId = buildModalCustomId('timezone', originalMessageId);
+        const { buildModalCustomId } = require('../../utils/messageTracking');
+        const modalCustomId = buildModalCustomId('timezone', originalMessageId);
+        logger.info(`[SetTimezoneButton] Preparing to show modal. modalCustomId: ${modalCustomId}, originalMessageId: ${originalMessageId}`);
+        logger.info(`[SetTimezoneButton] interaction.isButton: ${typeof interaction.isButton === 'function' ? interaction.isButton() : 'not a function'}`);
+        logger.info(`[SetTimezoneButton] typeof interaction.showModal: ${typeof interaction.showModal}`);
+        logger.info(`[SetTimezoneButton] interaction type: ${interaction.type}`);
+        logger.info(`[SetTimezoneButton] interaction object keys: ${Object.keys(interaction)}`);
 
-        const modal = new ModalBuilder()
-            .setCustomId(modalCustomId)
-            .setTitle('Set Your Timezone');
+        logger.info('[SetTimezoneButton] Before modal creation');
+        let modalError = null;
+        try {
+            logger.info('[SetTimezoneButton] Creating modal');
+            const modal = new ModalBuilder()
+                .setCustomId(modalCustomId)
+                .setTitle('Set Your Timezone');
 
-        const timezoneInput = new TextInputBuilder()
-            .setCustomId('timezone_input')
-            .setLabel('Timezone (City, UTC offset, or abbreviation)')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Examples: New York, UTC-5, EST, Los Angeles')
-            .setRequired(true)
-            .setMaxLength(50);
+            const timezoneInput = new TextInputBuilder()
+                .setCustomId('timezone_input')
+                .setLabel('Timezone (City, UTC offset, or abbreviation)')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Examples: New York, UTC-5, EST, Los Angeles')
+                .setRequired(true)
+                .setMaxLength(50);
 
-        const firstActionRow = new ActionRowBuilder().addComponents(timezoneInput);
-        modal.addComponents(firstActionRow);
-
-        await interaction.showModal(modal);
+            const firstActionRow = new ActionRowBuilder().addComponents(timezoneInput);
+            modal.addComponents(firstActionRow);
+            logger.info('[SetTimezoneButton] After modal creation, before showModal');
+            logger.info(`[SetTimezoneButton] About to call interaction.showModal for modalCustomId: ${modalCustomId}`);
+            await interaction.showModal(modal);
+            logger.info('[SetTimezoneButton] After showModal call');
+            logger.info(`[SetTimezoneButton] showModal called successfully for modalCustomId: ${modalCustomId}`);
+        } catch (err) {
+            modalError = err;
+            logger.error(`[SetTimezoneButton] Exception thrown by interaction.showModal for modalCustomId: ${modalCustomId}, originalMessageId: ${originalMessageId}. Error: ${err && err.stack ? err.stack : err}`);
+        }
+        if (modalError) {
+            try {
+                await interaction.reply({
+                    content: '❌ Something went wrong showing the timezone modal. Please try again or contact Sam.',
+                    flags: InteractionFlags.Ephemeral || 64
+                });
+            } catch (replyError) {
+                logger.error(`[SetTimezoneButton] Failed to send fallback reply after modal error: ${replyError && replyError.stack ? replyError.stack : replyError}`);
+            }
+        }
     }
 
     // Set pronouns buttons

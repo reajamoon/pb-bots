@@ -8,6 +8,8 @@ const { handleRegion } = require('./region');
 const { handleBackToProfileSettings } = require('./backToProfileSettings');
 
 async function handleProfileButtons(interaction) {
+        const logger = require('../../../utils/logger');
+        logger.info(`[handleProfileButtons] Invoked for customId: ${interaction.customId}`);
     if (interaction.customId === 'profile_settings' || 
         (interaction.customId.startsWith('profile_settings_') && !interaction.customId.startsWith('profile_settings_done_'))) {
         return handleSettingsMenu(interaction);
@@ -37,6 +39,10 @@ async function handleProfileButtons(interaction) {
     }
     if (interaction.customId === 'back_to_profile_settings' || interaction.customId.startsWith('back_to_profile_settings_')) {
         return handleBackToProfileSettings(interaction);
+    }
+    if (interaction.customId === 'set_timezone' || interaction.customId.startsWith('set_timezone_')) {
+        const { handleTimezone } = require('./setTimezone');
+        return handleTimezone(interaction);
     }
     // ...other handlers will be added here as modularization continues...
 }
