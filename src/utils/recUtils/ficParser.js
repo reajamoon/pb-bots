@@ -4,26 +4,26 @@
  * @returns {Promise<string>} - The page HTML
  */
 async function fetchHTMLWithBrowser(url) {
+    // Generic browser-based HTML fetch
     const puppeteer = require('puppeteer');
-    // Always append ?view_adult=true for AO3 URLs
-    let urlToFetch = url;
-    if (urlToFetch.includes('archiveofourown.org') && !urlToFetch.includes('view_adult=true')) {
-        urlToFetch += (urlToFetch.includes('?') ? '&' : '?') + 'view_adult=true';
-    }
-    const browser = await puppeteer.launch({ headless: true });
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:118.0) Gecko/20100101 Firefox/118.0');
     await page.setExtraHTTPHeaders({
         'Accept-Language': 'en-US,en;q=0.5',
         'Upgrade-Insecure-Requests': '1'
     });
-    await page.goto(urlToFetch, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
     const html = await page.content();
     await browser.close();
     return html;
 }
 const https = require('https');
 const http = require('http');
+const { fetchAO3MetadataWithFallback, parseAO3Metadata, detectAO3LinksInHtml } = require('./ao3Meta');
 
 /**
  * Quick check if a URL is accessible (HEAD request)
@@ -115,37 +115,28 @@ async function fetchFicMetadata(url, includeRawHtml = false) {
         setTimeout(() => reject(new Error('Metadata fetch timeout - taking too long')), 10000)
     );
 
-    // Always append ?view_adult=true for AO3 URLs
-    let urlToFetch = url;
-    if (urlToFetch.includes('archiveofourown.org') && !urlToFetch.includes('view_adult=true')) {
-        urlToFetch += (urlToFetch.includes('?') ? '&' : '?') + 'view_adult=true';
-    }
-
     const fetchPromise = async () => {
         try {
             let metadata = null;
             let source = null;
 
-            if (urlToFetch.includes('archiveofourown.org')) {
-                // Use Puppeteer for AO3
-                const { fetchHTMLWithBrowser } = require('./ficParser');
-                const html = await fetchHTMLWithBrowser(urlToFetch);
-                metadata = await fetchAO3MetadataFromHtml(html, urlToFetch, includeRawHtml);
-                source = 'ao3';
-            } else if (urlToFetch.includes('fanfiction.net')) {
-                metadata = await fetchFFNetMetadata(urlToFetch, includeRawHtml);
+            if (url.includes('archiveofourown.org')) {
+                metadata = await fetchAO3MetadataWithFallback(url, includeRawHtml);
+                if (metadata) source = 'ao3';
+            } else if (url.includes('fanfiction.net')) {
+                metadata = await fetchFFNetMetadata(url, includeRawHtml);
                 source = 'ffnet';
-            } else if (urlToFetch.includes('wattpad.com')) {
-                metadata = await fetchWattpadMetadata(urlToFetch, includeRawHtml);
+            } else if (url.includes('wattpad.com')) {
+                metadata = await fetchWattpadMetadata(url, includeRawHtml);
                 source = 'wattpad';
-            } else if (urlToFetch.includes('livejournal.com') || urlToFetch.includes('.livejournal.com')) {
-                metadata = await fetchLiveJournalMetadata(urlToFetch, includeRawHtml);
+            } else if (url.includes('livejournal.com') || url.includes('.livejournal.com')) {
+                metadata = await fetchLiveJournalMetadata(url, includeRawHtml);
                 source = 'livejournal';
-            } else if (urlToFetch.includes('dreamwidth.org') || urlToFetch.includes('.dreamwidth.org')) {
-                metadata = await fetchDreamwidthMetadata(urlToFetch, includeRawHtml);
+            } else if (url.includes('dreamwidth.org') || url.includes('.dreamwidth.org')) {
+                metadata = await fetchDreamwidthMetadata(url, includeRawHtml);
                 source = 'dreamwidth';
-            } else if (urlToFetch.includes('tumblr.com') || urlToFetch.includes('.tumblr.com')) {
-                metadata = await fetchTumblrMetadata(urlToFetch, includeRawHtml);
+            } else if (url.includes('tumblr.com') || url.includes('.tumblr.com')) {
+                metadata = await fetchTumblrMetadata(url, includeRawHtml);
                 source = 'tumblr';
             }
 
@@ -159,198 +150,14 @@ async function fetchFicMetadata(url, includeRawHtml = false) {
             return null;
         }
     };
-// Helper for AO3: parse metadata from HTML
 async function fetchAO3MetadataFromHtml(html, url, includeRawHtml = false) {
-    try {
-        if (!html) return null;
-
-        // Check for Cloudflare or other protection
-        if (html.includes('challenge') || html.includes('cloudflare') || html.includes('Enable JavaScript')) {
-            return {
-                title: 'Unknown Title',
-                author: 'Unknown Author',
-                url: url,
-                error: 'Site protection detected',
-                summary: 'Site protection is blocking metadata fetch.'
-            };
-        }
-
-        const metadata = { url: url };
-
-        // Title
-        const titleMatch = html.match(/<h2 class="title heading">\s*([^<]+)/);
-        metadata.title = titleMatch ? titleMatch[1].trim() : 'Unknown Title';
-
-        // Author
-        const authorMatch = html.match(/<a rel="author" href="[^"]*">([^<]+)/);
-        metadata.author = authorMatch ? authorMatch[1].trim() : 'Unknown Author';
-
-        // Summary
-        const summaryMatch = html.match(/<div class="summary module">[\s\S]*?<blockquote class="userstuff">\s*<p>([\s\S]*?)<\/p>/);
-        if (summaryMatch) {
-            metadata.summary = summaryMatch[1].replace(/<[^>]*>/g, '').trim();
-        }
-
-        // Fandom
-        const fandomMatch = html.match(/<dd class="fandom tags">[\s\S]*?<a[^>]*>([^<]+)/);
-        metadata.fandom = fandomMatch ? fandomMatch[1].trim() : null;
-
-        // Rating
-        const ratingMatch = html.match(/<dd class="rating tags">[\s\S]*?<a[^>]*>([^<]+)/);
-        metadata.rating = ratingMatch ? ratingMatch[1].trim() : null;
-
-        // Word count
-        const wordMatch = html.match(/<dt class="words">Words:<\/dt><dd class="words">([^<]+)/);
-        if (wordMatch) {
-            metadata.wordCount = parseInt(wordMatch[1].replace(/,/g, ''));
-        }
-
-        // Chapters
-        const chapterMatch = html.match(/<dt class="chapters">Chapters:<\/dt><dd class="chapters">([^<]+)/);
-        metadata.chapters = chapterMatch ? chapterMatch[1].trim() : null;
-
-        // Status
-        if (metadata.chapters && metadata.chapters.includes('/')) {
-            const [current, total] = metadata.chapters.split('/');
-            metadata.status = current === total ? 'Complete' : 'Work in Progress';
-        }
-
-        // Tags
-        const tagMatches = html.match(/<dd class="freeform tags">[\s\S]*?<\/dd>/);
-        if (tagMatches) {
-            const tagRegex = /<a[^>]*class="tag"[^>]*>([^<]+)/g;
-            metadata.tags = [];
-            let tagMatch;
-            while ((tagMatch = tagRegex.exec(tagMatches[0])) !== null) {
-                metadata.tags.push(tagMatch[1].trim());
-            }
-        }
-
-        // Language
-        const langMatch = html.match(/<dd class="language" lang="[^"]*">([^<]+)/);
-        metadata.language = langMatch ? langMatch[1].trim() : 'English';
-
-        // Published date
-        const publishedMatch = html.match(/<dt class="published">Published:<\/dt><dd class="published">([^<]+)/);
-        if (publishedMatch) {
-            metadata.publishedDate = new Date(publishedMatch[1].trim()).toISOString().split('T')[0];
-        }
-
-        // Updated date
-        const updatedMatch = html.match(/<dt class="status">Completed:<\/dt><dd class="status">([^<]+)/);
-        if (updatedMatch) {
-            metadata.updatedDate = new Date(updatedMatch[1].trim()).toISOString().split('T')[0];
-        }
-
-        if (includeRawHtml) metadata.rawHtml = html;
-        return metadata;
-    } catch (error) {
-        console.error('Error parsing AO3 metadata from HTML:', error);
-        return null;
-    }
+    // For legacy compatibility, use the parser directly
+    return parseAO3Metadata(html, url, includeRawHtml);
 }
-    
     try {
         return await Promise.race([fetchPromise(), timeoutPromise]);
     } catch (error) {
         console.error('Metadata fetch failed or timed out:', error.message);
-        return null;
-    }
-}
-
-/**
- * Fetches metadata from Archive of Our Own
- */
-async function fetchAO3Metadata(url, includeRawHtml = false) {
-    try {
-        const html = await fetchHTML(url);
-        if (!html) return null;
-
-        // Check for Cloudflare or other protection
-        if (html.includes('challenge') || html.includes('cloudflare') || html.includes('Enable JavaScript')) {
-            console.log('Cloudflare protection detected on AO3');
-            const result = {
-                title: 'Unknown Title',
-                author: 'Unknown Author',
-                url: url,
-                error: 'Site protection detected',
-                summary: 'Yeah, so this site has some serious security measures that are blocking me from reading the story details. Think of it like warding - keeps the bad stuff out, but also keeps me from doing my job.'
-            };
-            if (includeRawHtml) result.rawHtml = html;
-            return result;
-        }
-
-        const metadata = { url: url };
-
-        // Title - updated pattern
-        const titleMatch = html.match(/<h2 class="title heading">\s*([^<]+)/);
-        metadata.title = titleMatch ? titleMatch[1].trim() : 'Unknown Title';
-
-        // Author - updated pattern
-        const authorMatch = html.match(/<a rel="author" href="[^"]*">([^<]+)/);
-        metadata.author = authorMatch ? authorMatch[1].trim() : 'Unknown Author';
-
-        // Summary - updated pattern
-        const summaryMatch = html.match(/<div class="summary module">[\s\S]*?<blockquote class="userstuff">\s*<p>([\s\S]*?)<\/p>/);
-        if (summaryMatch) {
-            metadata.summary = summaryMatch[1].replace(/<[^>]*>/g, '').trim();
-        }
-
-        // Fandom - updated pattern
-        const fandomMatch = html.match(/<dd class="fandom tags">[\s\S]*?<a[^>]*>([^<]+)/);
-        metadata.fandom = fandomMatch ? fandomMatch[1].trim() : null;
-
-        // Rating - updated pattern
-        const ratingMatch = html.match(/<dd class="rating tags">[\s\S]*?<a[^>]*>([^<]+)/);
-        metadata.rating = ratingMatch ? ratingMatch[1].trim() : null;
-
-        // Word count - updated pattern
-        const wordMatch = html.match(/<dt class="words">Words:<\/dt><dd class="words">([^<]+)/);
-        if (wordMatch) {
-            metadata.wordCount = parseInt(wordMatch[1].replace(/,/g, ''));
-        }
-
-        // Chapters - updated pattern
-        const chapterMatch = html.match(/<dt class="chapters">Chapters:<\/dt><dd class="chapters">([^<]+)/);
-        metadata.chapters = chapterMatch ? chapterMatch[1].trim() : null;
-
-        // Status (complete/incomplete)
-        if (metadata.chapters && metadata.chapters.includes('/')) {
-            const [current, total] = metadata.chapters.split('/');
-            metadata.status = current === total ? 'Complete' : 'Work in Progress';
-        }
-
-        // Tags - updated pattern for freeform tags
-        const tagMatches = html.match(/<dd class="freeform tags">[\s\S]*?<\/dd>/);
-        if (tagMatches) {
-            const tagRegex = /<a[^>]*class="tag"[^>]*>([^<]+)/g;
-            metadata.tags = [];
-            let tagMatch;
-            while ((tagMatch = tagRegex.exec(tagMatches[0])) !== null) {
-                metadata.tags.push(tagMatch[1].trim());
-            }
-        }
-
-        // Language
-        const langMatch = html.match(/<dd class="language" lang="[^"]*">([^<]+)/);
-        metadata.language = langMatch ? langMatch[1].trim() : 'English';
-
-        // Published date - updated pattern
-        const publishedMatch = html.match(/<dt class="published">Published:<\/dt><dd class="published">([^<]+)/);
-        if (publishedMatch) {
-            metadata.publishedDate = new Date(publishedMatch[1].trim()).toISOString().split('T')[0];
-        }
-
-        // Updated date - updated pattern  
-        const updatedMatch = html.match(/<dt class="status">Completed:<\/dt><dd class="status">([^<]+)/);
-        if (updatedMatch) {
-            metadata.updatedDate = new Date(updatedMatch[1].trim()).toISOString().split('T')[0];
-        }
-
-        if (includeRawHtml) metadata.rawHtml = html;
-        return metadata;
-    } catch (error) {
-        console.error('Error parsing AO3 metadata:', error);
         return null;
     }
 }
@@ -408,7 +215,7 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
                 isHttpError: true
             };
         }
-        
+
         console.error('Error fetching FFNet metadata:', error);
         return null;
     }
@@ -426,7 +233,7 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
         } else {
             metadata.title = titleMatch[1].trim();
         }
-        
+
         if (!metadata.title) {
             metadata.title = 'Unknown Title';
         }
@@ -544,7 +351,7 @@ async function fetchWattpadMetadata(url, includeRawHtml = false) {
         } else {
             metadata.title = titleMatch[1].trim();
         }
-        
+
         if (!metadata.title) {
             metadata.title = 'Unknown Title';
         }
@@ -576,34 +383,34 @@ async function fetchWattpadMetadata(url, includeRawHtml = false) {
         if (jsonMatch) {
             try {
                 const data = JSON.parse(jsonMatch[1]);
-                
+
                 // Extract story data from the JSON
                 if (data.story) {
                     metadata.title = data.story.title || metadata.title;
                     metadata.author = data.story.user?.username || metadata.author;
                     metadata.summary = data.story.description || metadata.summary;
-                    
+
                     if (data.story.numParts) {
                         metadata.chapters = data.story.numParts.toString();
                     }
-                    
+
                     if (data.story.isCompleted !== undefined) {
                         metadata.status = data.story.isCompleted ? 'Complete' : 'Work in Progress';
                     }
-                    
+
                     // Language
                     metadata.language = data.story.language?.name || 'English';
-                    
+
                     // Tags
                     if (data.story.tags && Array.isArray(data.story.tags)) {
                         metadata.tags = data.story.tags.map(tag => tag.name || tag).slice(0, 10);
                     }
-                    
+
                     // Reading time (Wattpad specific)
                     if (data.story.readingTime) {
                         metadata.readingTime = data.story.readingTime;
                     }
-                    
+
                     // Reads and votes (Wattpad metrics)
                     if (data.story.readCount) {
                         metadata.reads = data.story.readCount;
@@ -675,7 +482,7 @@ async function fetchWattpadMetadata(url, includeRawHtml = false) {
                 isHttpError: true
             };
         }
-        
+
         console.error('Error parsing Wattpad metadata:', error);
         return null;
     }
@@ -719,7 +526,7 @@ async function fetchLiveJournalMetadata(url, includeRawHtml = false) {
         if (!summaryMatch) {
             summaryMatch = html.match(/<div[^>]*class="[^"]*asset-body[^"]*"[^>]*>(.*?)<\/div>/s);
         }
-        
+
         if (summaryMatch) {
             const cleanContent = summaryMatch[1]
                 .replace(/<script[^>]*>.*?<\/script>/gs, '')
@@ -727,7 +534,7 @@ async function fetchLiveJournalMetadata(url, includeRawHtml = false) {
                 .replace(/<[^>]*>/g, ' ')
                 .replace(/\s+/g, ' ')
                 .trim();
-            
+
             metadata.summary = cleanContent.length > 300 
                 ? cleanContent.substring(0, 300) + '...' 
                 : cleanContent;
@@ -795,7 +602,7 @@ async function fetchLiveJournalMetadata(url, includeRawHtml = false) {
                 isHttpError: true
             };
         }
-        
+
         console.error('Error parsing LiveJournal metadata:', error);
         return createFallbackMetadata(url, 'livejournal', 'Could not parse LiveJournal content');
     }
@@ -836,7 +643,7 @@ async function fetchDreamwidthMetadata(url, includeRawHtml = false) {
         if (!summaryMatch) {
             summaryMatch = html.match(/<div[^>]*class="[^"]*asset-body[^"]*"[^>]*>(.*?)<\/div>/s);
         }
-        
+
         if (summaryMatch) {
             const cleanContent = summaryMatch[1]
                 .replace(/<script[^>]*>.*?<\/script>/gs, '')
@@ -844,9 +651,9 @@ async function fetchDreamwidthMetadata(url, includeRawHtml = false) {
                 .replace(/<[^>]*>/g, ' ')
                 .replace(/\s+/g, ' ')
                 .trim();
-            
-            metadata.summary = cleanContent.length > 300 
-                ? cleanContent.substring(0, 300) + '...' 
+
+            metadata.summary = cleanContent.length > 300
+                ? cleanContent.substring(0, 300) + '...'
                 : cleanContent;
         }
 
@@ -912,7 +719,7 @@ async function fetchDreamwidthMetadata(url, includeRawHtml = false) {
                 isHttpError: true
             };
         }
-        
+
         console.error('Error parsing Dreamwidth metadata:', error);
         return createFallbackMetadata(url, 'dreamwidth', 'Could not parse Dreamwidth content');
     }
@@ -994,7 +801,7 @@ async function fetchTumblrMetadata(url, includeRawHtml = false) {
             metadata.isReblog = true;
             metadata.rebloggedBy = metadata.author; // The user from the URL
             metadata.reblogWarning = `⚠️ This appears to be a reblog by ${metadata.author}. The original author may be different. Please check the post content and manually enter the correct author name.`;
-            
+
             // Try to find original author in content
             if (isReblog.originalAuthor) {
                 metadata.suggestedAuthor = isReblog.originalAuthor;
@@ -1003,23 +810,21 @@ async function fetchTumblrMetadata(url, includeRawHtml = false) {
         }
 
         // AO3 Link Detection - check if post contains AO3 links
-        const ao3LinkDetection = await detectAO3LinksInTumblr(html);
+    const ao3LinkDetection = await detectAO3LinksInHtml(html);
         if (ao3LinkDetection.hasAO3Links) {
             metadata.hasAO3Links = true;
             metadata.ao3Links = ao3LinkDetection.links;
             metadata.ao3Suggestion = `📚 This Tumblr post contains AO3 link(s). Would you prefer to import from AO3 instead for better metadata?`;
-            
+
             // If we found AO3 links, try to get their metadata for preview
             if (ao3LinkDetection.primaryLink) {
                 try {
                     // Add timeout to prevent hanging interactions
-                    const ao3MetadataPromise = fetchAO3Metadata(ao3LinkDetection.primaryLink.url);
+                    const ao3MetadataPromise = fetchAO3MetadataWithFallback(ao3LinkDetection.primaryLink.url);
                     const timeoutPromise = new Promise((_, reject) => 
                         setTimeout(() => reject(new Error('AO3 fetch timeout')), 5000)
                     );
-                    
                     const ao3Metadata = await Promise.race([ao3MetadataPromise, timeoutPromise]);
-                    
                     if (ao3Metadata && ao3Metadata.title && ao3Metadata.author) {
                         metadata.ao3Preview = {
                             url: ao3LinkDetection.primaryLink.url,
@@ -1199,79 +1004,6 @@ function detectTumblrReblog(url, html) {
     if (blogNameMatches && blogNameMatches.length > 1) {
         result.isReblog = true;
         result.confidence = 'medium';
-    }
-
-    return result;
-}
-
-/**
- * Detects AO3 links in Tumblr post content
- */
-async function detectAO3LinksInTumblr(html) {
-    const result = {
-        hasAO3Links: false,
-        links: [],
-        primaryLink: null
-    };
-
-    // AO3 URL patterns to look for
-    const ao3Patterns = [
-        /https?:\/\/(?:www\.)?archiveofourown\.org\/works\/(\d+)(?:\/chapters\/\d+)?[^\s"<>]*/gi,
-        /https?:\/\/(?:www\.)?ao3\.org\/works\/(\d+)(?:\/chapters\/\d+)?[^\s"<>]*/gi
-    ];
-
-    for (const pattern of ao3Patterns) {
-        let match;
-        while ((match = pattern.exec(html)) !== null) {
-            const fullUrl = match[0];
-            const workId = match[1];
-            
-            // Clean up the URL (remove trailing punctuation that might be part of text)
-            const cleanUrl = fullUrl.replace(/[.,;:!?]+$/, '');
-            
-            result.links.push({
-                url: cleanUrl,
-                workId: workId,
-                foundAt: match.index
-            });
-            result.hasAO3Links = true;
-        }
-    }
-
-    // If we found links, pick the first/primary one
-    if (result.links.length > 0) {
-        result.primaryLink = result.links[0];
-    }
-
-    // Also check for text-based AO3 references
-    const textPatterns = [
-        /(?:read\s+(?:on|at|more on)\s+)?(?:ao3|archive\s+of\s+our\s+own)/gi,
-        /(?:full\s+(?:fic|story|work)\s+(?:on|at))\s+ao3/gi,
-        /(?:continue\s+reading\s+(?:on|at))\s+ao3/gi
-    ];
-
-    for (const pattern of textPatterns) {
-        if (html.match(pattern)) {
-            // Look for nearby URLs even if not perfect AO3 format
-            const nearbyUrlPattern = /https?:\/\/[^\s"<>]+/gi;
-            let urlMatch;
-            while ((urlMatch = nearbyUrlPattern.exec(html)) !== null) {
-                const url = urlMatch[0];
-                if (url.includes('archiveofourown') || url.includes('ao3')) {
-                    result.links.push({
-                        url: url,
-                        workId: 'unknown',
-                        foundAt: urlMatch.index,
-                        textBased: true
-                    });
-                    result.hasAO3Links = true;
-                    
-                    if (!result.primaryLink) {
-                        result.primaryLink = result.links[result.links.length - 1];
-                    }
-                }
-            }
-        }
     }
 
     return result;

@@ -1,5 +1,5 @@
 const { Recommendation } = require('../../models');
-const { fetchFicMetadata } = require('../../utils/ficParser');
+const { fetchFicMetadata } = require('../../utils/recUtils/ficParser');
 const findRecommendationByIdOrUrl = require('../../utils/recUtils/findRecommendationByIdOrUrl');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 

@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { quickLinkCheck } = require('../ficParser');
+const { quickLinkCheck } = require('./ficParser');
 
 // Builds the embed for a rec. Checks if the link works, adds warnings if needed.
 async function createRecommendationEmbed(rec) {
