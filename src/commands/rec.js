@@ -9,7 +9,7 @@ const handleAddRecommendation = require('./recHandlers/addHandler');
 const handleRemoveRecommendation = require('./recHandlers/removeHandler');
 const handleRandomRecommendation = require('./recHandlers/randomHandler');
 const handleStats = require('./recHandlers/statsHandler');
-const { fetchFicMetadata, quickLinkCheck } = require('../utils/ficParser');
+const { fetchFicMetadata, quickLinkCheck } = require('../utils/recUtils/ficParser');
 const findRecommendationByIdOrUrl = require('../utils/recUtils/findRecommendationByIdOrUrl');
 const createRecommendationEmbed = require('../utils/recUtils/createRecommendationEmbed');
 const handleUpdateRecommendation = require('./recHandlers/updateHandler');
@@ -139,6 +139,18 @@ module.exports = {
                 .addStringOption(option =>
                     option.setName('notes')
                         .setDescription('Update personal notes about this fic')
+                        .setRequired(false)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('remove')
+                .setDescription('Remove a fanfiction recommendation')
+                .addIntegerOption(option =>
+                    option.setName('id')
+                        .setDescription('ID of the recommendation to remove')
+                        .setRequired(false))
+                .addStringOption(option =>
+                    option.setName('url')
+                        .setDescription('URL of the recommendation to remove')
                         .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand

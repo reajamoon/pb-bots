@@ -1,5 +1,5 @@
 const { Recommendation } = require('../../models/index.js');
-const { fetchFicMetadata } = require('../../utils/ficParser');
+const { fetchFicMetadata } = require('../../utils/recUtils/ficParser.js');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 
 const isValidFanficUrl = require('../../utils/recUtils/isValidFanficUrl');
