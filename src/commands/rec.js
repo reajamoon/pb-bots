@@ -158,6 +158,10 @@ module.exports = {
                 .setDescription('Show detailed help for the recommendation system'))
         .addSubcommand(subcommand =>
             subcommand
+                .setName('stats')
+                .setDescription('Show library and contributor statistics'))
+        .addSubcommand(subcommand =>
+            subcommand
                 .setName('search')
                 .setDescription('Search for recommendations by title, author, or tags')),
 
