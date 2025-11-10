@@ -45,7 +45,7 @@ async function handleAddRecommendation(interaction) {
     if (manualTitle && manualAuthor) {
       metadata = {
         title: manualTitle,
-        author: manualAuthor,
+        authors: [manualAuthor],
         summary: manualSummary || 'Manually added recommendation',
         tags: [],
         rating: manualRating || 'Not Rated',
@@ -85,18 +85,18 @@ async function handleAddRecommendation(interaction) {
         });
       }
       // If the user gave manual fields, use those instead of what I parsed
-      if (manualTitle) metadata.title = manualTitle;
-      if (manualAuthor) metadata.author = manualAuthor;
-      if (manualSummary) metadata.summary = manualSummary;
-      if (manualWordCount) metadata.wordCount = manualWordCount;
-      if (manualRating) metadata.rating = manualRating;
+  if (manualTitle) metadata.title = manualTitle;
+  if (manualAuthor) metadata.authors = [manualAuthor];
+  if (manualSummary) metadata.summary = manualSummary;
+  if (manualWordCount) metadata.wordCount = manualWordCount;
+  if (manualRating) metadata.rating = manualRating;
     }
 
     // Actually add the fic to the database
     const recommendation = await Recommendation.create({
       url: url,
       title: metadata.title,
-      author: metadata.author,
+      author: (metadata.authors && metadata.authors[0]) || metadata.author || 'Unknown Author',
       summary: metadata.summary,
       tags: JSON.stringify(metadata.tags || []),
       rating: metadata.rating,
@@ -122,6 +122,7 @@ async function handleAddRecommendation(interaction) {
     // Build the rec object for the embed utility
     const recForEmbed = {
       ...metadata,
+      authors: metadata.authors || (metadata.author ? [metadata.author] : ['Unknown Author']),
       url,
       id: recommendation.id,
       recommendedByUsername: interaction.user.username,
