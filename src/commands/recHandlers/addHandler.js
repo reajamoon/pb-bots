@@ -11,7 +11,9 @@ async function handleAddRecommendation(interaction) {
     await interaction.deferReply();
 
     // Extract options from interaction (assuming slash command)
-    const url = interaction.options.getString('url');
+  const normalizeAO3Url = require('../../utils/recUtils/normalizeAO3Url');
+  let url = interaction.options.getString('url');
+  url = normalizeAO3Url(url);
     const manualTitle = interaction.options.getString('title');
     const manualAuthor = interaction.options.getString('author');
     const manualSummary = interaction.options.getString('summary');
@@ -55,7 +57,9 @@ async function handleAddRecommendation(interaction) {
       };
     } else {
       // Try to grab fic details automatically from the URL
-      metadata = await fetchFicMetadata(url);
+  metadata = await fetchFicMetadata(url);
+  // If the parser returned a url, normalize it too (for consistency)
+  if (metadata && metadata.url) metadata.url = normalizeAO3Url(metadata.url);
       if (!metadata) {
         return await interaction.editReply({
           content: 'I couldn\'t fetch the details from that URL. Make sure it\'s a valid, public fanfiction link and try again. Sometimes the archives can be a bit finicky.'
