@@ -31,6 +31,20 @@ module.exports = {
         .setDescription('Manage fanfiction recommendations')
         .addSubcommand(subcommand =>
             subcommand
+                .setName('notifytag')
+                .setDescription('Control whether you are tagged in fic queue notifications')
+                .addStringOption(option =>
+                    option.setName('mode')
+                        .setDescription('on = tag me, off = do not tag me')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'on', value: 'on' },
+                            { name: 'off', value: 'off' }
+                        )
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
                 .setName('queue')
                 .setDescription('View the current fic metadata parsing queue'))
         .addSubcommand(subcommand =>
@@ -137,10 +151,14 @@ module.exports = {
 
         const subcommand = interaction.options.getSubcommand();
 
-    const handleQueue = require('./recHandlers/queueHandler');
-    const handleResetQueue = require('./recHandlers/resetQueueHandler');
+        const handleQueue = require('./recHandlers/queueHandler');
+        const handleResetQueue = require('./recHandlers/resetQueueHandler');
+        const handleRecNotifyTag = require('./recHandlers/recNotifyTag');
         try {
             switch (subcommand) {
+                case 'notifytag':
+                    await handleRecNotifyTag(interaction);
+                    break;
                 case 'add':
                     await handleAddRecommendation(interaction);
                     break;
