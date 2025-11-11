@@ -31,6 +31,10 @@ module.exports = {
         .setDescription('Manage fanfiction recommendations')
         .addSubcommand(subcommand =>
             subcommand
+                .setName('queue')
+                .setDescription('View the current fic metadata parsing queue'))
+        .addSubcommand(subcommand =>
+            subcommand
                 .setName('update')
                 .setDescription('Update an existing recommendation with fresh metadata')
                 .addIntegerOption(option =>
@@ -108,7 +112,15 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('resetqueue')
-                .setDescription('Reset stuck fic metadata jobs (mods/admins only)')),
+                .setDescription('Reset stuck fic metadata jobs (mods/admins only)'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('clearqueue')
+                .setDescription('Remove all queue jobs for a fic URL (mods/admins only)')
+                .addStringOption(option =>
+                    option.setName('url')
+                        .setDescription('Fic URL to clear from the queue')
+                        .setRequired(true))),
 
     /**
      * Main entry for all /rec subcommands. Routes to the appropriate handler.
@@ -153,6 +165,11 @@ module.exports = {
                     case 'resetqueue':
                         await handleResetQueue(interaction);
                         break;
+                case 'clearqueue': {
+                    const handleClearQueue = require('./recHandlers/clearQueueHandler');
+                    await handleClearQueue(interaction);
+                    break;
+                }
                 case 'add_ao3share': {
                     const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
                     const modal = new ModalBuilder()
