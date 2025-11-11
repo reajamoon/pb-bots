@@ -4,21 +4,28 @@ const { parseAo3ShareHtml } = require('../../utils/recUtils/ao3ShareParser');
 const { MessageFlags } = require('discord.js');
 
 async function handleAo3ShareModal(interaction) {
+    const logger = require('../../utils/logger');
+    logger.info('AO3 share modal submitted');
     const html = interaction.fields.getTextInputValue('ao3share_html');
     let ficData;
     try {
+        logger.info('Parsing AO3 share HTML...');
         ficData = parseAo3ShareHtml(html);
+        logger.info('AO3 share HTML parsed successfully:', ficData);
     } catch (err) {
+        logger.error('Error parsing AO3 share HTML:', err);
         let msg = 'Sorry, I could not parse the AO3 share HTML.';
         if (err.parseErrors && err.parseErrors.length > 0) {
             msg += '\n' + err.parseErrors.map(e => `• ${e}`).join('\n');
         } else if (err.message) {
             msg += `\n${err.message}`;
         }
-        return await interaction.reply({
+        await interaction.reply({
             content: msg + '\n\nMake sure you pasted the full AO3 share HTML export, starting with the work link.',
             flags: MessageFlags.Ephemeral
         });
+        logger.info('AO3 share modal error reply sent');
+        return;
     }
     // Show confirmation modal with pre-filled fields
     const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
@@ -78,7 +85,9 @@ async function handleAo3ShareModal(interaction) {
         new ActionRowBuilder().addComponents(wordcountInput),
         new ActionRowBuilder().addComponents(summaryInput)
     );
+    logger.info('Showing AO3 share confirmation modal...');
     await interaction.showModal(confirmModal);
+    logger.info('AO3 share confirmation modal shown');
 }
 
 module.exports = { handleAo3ShareModal };
