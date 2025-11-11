@@ -113,8 +113,8 @@ async function handleUpdateRecommendation(interaction) {
                     instant_candidate: isInstant
                 });
             } catch (err) {
-                // Handle race condition: duplicate key error
-                if (err && err.code === '23505') {
+                // Handle race condition: duplicate key error (Sequelize or raw pg)
+                if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
                     // Find the now-existing queue entry
                     queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
                     if (queueEntry && (queueEntry.status === 'pending' || queueEntry.status === 'processing')) {
