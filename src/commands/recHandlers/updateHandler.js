@@ -124,38 +124,35 @@ async function handleUpdateRecommendation(interaction) {
                 if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
                     // Find the now-existing queue entry
                     queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
-                    if (queueEntry && (queueEntry.status === 'pending' || queueEntry.status === 'processing')) {
-                        const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
-                        if (!existingSub) {
-                            await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
-                        }
-                        await interaction.editReply({
-                            content: 'That fic is already being processed! You’ll get a notification when it’s ready.'
-                        });
-                        return;
-                    } else if (queueEntry && queueEntry.status === 'done' && queueEntry.result) {
-                        // Return cached result (simulate embed)
-                        await processRecommendationJob({
-                            url: urlToUse,
-                            user: { id: interaction.user.id, username: interaction.user.username },
-                            manualFields: {},
-                            additionalTags: newTags || [],
-                            notes: newNotes || '',
-                            isUpdate: true,
-                            existingRec: recommendation,
-                            notify: async (embed) => {
-                                await interaction.editReply({
-                                    content: 'This fic was already parsed! Here are the details:',
-                                    embeds: [embed]
-                                });
+                    if (queueEntry) {
+                        if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
+                            const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
+                            if (!existingSub) {
+                                await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
                             }
-                        });
-                        return;
-                    } else if (queueEntry && queueEntry.status === 'error') {
-                        await interaction.editReply({
-                            content: `There was an error parsing this fic previously: ${queueEntry.error_message || 'Unknown error.'} You can try again later.`
-                        });
-                        return;
+                            await interaction.editReply({
+                                content: 'That fic is already being processed! You’ll get a notification when it’s ready.'
+                            });
+                            return;
+                        } else if (queueEntry.status === 'done' && queueEntry.result) {
+                            // Return friendly duplicate message with details
+                            // Find who added it and when
+                            const rec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
+                            let addedBy = 'someone';
+                            let addedAt = null;
+                            if (rec && rec.recommendedByUsername) addedBy = rec.recommendedByUsername;
+                            if (rec && rec.createdAt) addedAt = new Date(rec.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+                            const title = rec && rec.title ? rec.title : 'This fic';
+                            await interaction.editReply({
+                                content: `${title} was already added by ${addedBy}${addedAt ? ` on ${addedAt}` : ''}, but hey! Great minds think alike, right?`,
+                            });
+                            return;
+                        } else if (queueEntry.status === 'error') {
+                            await interaction.editReply({
+                                content: `There was an error parsing this fic previously: ${queueEntry.error_message || 'Unknown error.'} You can try again later.`
+                            });
+                            return;
+                        }
                     }
                 }
                 throw err;
