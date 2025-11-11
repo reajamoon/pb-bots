@@ -100,8 +100,10 @@ async function pollQueue() {
   }
 }
 
+
 client.once('ready', () => {
-  console.log('[QueueWorker] Discord client ready. Starting queue polling...');
+  const now = new Date();
+  console.log(`[QueueWorker] Discord client ready. Starting queue polling... (${now.toISOString()})`);
   pollQueue();
 });
 
