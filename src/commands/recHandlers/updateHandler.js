@@ -133,6 +133,29 @@ async function handleUpdateRecommendation(interaction) {
                             content: 'That fic is already being processed! You’ll get a notification when it’s ready.'
                         });
                         return;
+                    } else if (queueEntry && queueEntry.status === 'done' && queueEntry.result) {
+                        // Return cached result (simulate embed)
+                        await processRecommendationJob({
+                            url: urlToUse,
+                            user: { id: interaction.user.id, username: interaction.user.username },
+                            manualFields: {},
+                            additionalTags: newTags || [],
+                            notes: newNotes || '',
+                            isUpdate: true,
+                            existingRec: recommendation,
+                            notify: async (embed) => {
+                                await interaction.editReply({
+                                    content: 'This fic was already parsed! Here are the details:',
+                                    embeds: [embed]
+                                });
+                            }
+                        });
+                        return;
+                    } else if (queueEntry && queueEntry.status === 'error') {
+                        await interaction.editReply({
+                            content: `There was an error parsing this fic previously: ${queueEntry.error_message || 'Unknown error.'} You can try again later.`
+                        });
+                        return;
                     }
                 }
                 throw err;
