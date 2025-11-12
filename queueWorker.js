@@ -152,10 +152,35 @@ async function pollQueue() {
       await sequelize.sync();
       const job = await ParseQueue.findOne({ where: { status: 'pending' }, order: [['created_at', 'ASC']] });
       if (job) {
+        // Simulate 'think time' before starting each job (0.5–2s)
+        const thinkTime = 500 + Math.floor(Math.random() * 1500);
+        await new Promise(res => setTimeout(res, thinkTime));
+
         await processQueueJob(job);
+
+        // Vary delay range (12–20s normal, 20–30s rare)
+        // Use a weighted random: 75% chance 12–20s, 25% chance 20–30s
+        let delayMs;
+        const r = Math.random();
+        if (r < 0.75) {
+          delayMs = 12000 + Math.floor(Math.random() * 8000); // 12–20s
+        } else {
+          delayMs = 20000 + Math.floor(Math.random() * 10000); // 20–30s
+        }
+
+        // Rare long pause: every 10–20 jobs, pause 1–3 min
+        pollQueue.jobCount = (pollQueue.jobCount || 0) + 1;
+        if (pollQueue.jobCount % (10 + Math.floor(Math.random() * 11)) === 0) {
+          const longPause = 60000 + Math.floor(Math.random() * 120000); // 1–3 min
+          console.log(`[QueueWorker] Taking a long pause for ${Math.round(longPause/1000)} seconds to mimic human behavior.`);
+          await new Promise(res => setTimeout(res, longPause));
+        } else {
+          await new Promise(res => setTimeout(res, delayMs));
+        }
       } else {
-        // No pending jobs, wait before polling again
-        await new Promise(res => setTimeout(res, 5000));
+        // No pending jobs, wait before polling again (randomize 4–7s)
+        const idleDelay = 4000 + Math.floor(Math.random() * 3000);
+        await new Promise(res => setTimeout(res, idleDelay));
       }
     } catch (err) {
       console.error('[QueueWorker] Polling error:', err);

@@ -1,6 +1,6 @@
 // scripts/batch-queue-recs-for-update.js
 // Adds all recommendations to the parsing queue for batch metadata update
-// Run this script to backfill archive_warnings and other fields using the current pipeline
+// Run this script to backfill archive_warnings
 
 const path = require('path');
 const { Sequelize } = require('sequelize');
@@ -21,23 +21,30 @@ const QueueEntry = require('../src/models/QueueEntry') ? require('../src/models/
     console.log('Database connection established.');
     const recs = await Recommendation.findAll();
     let added = 0;
+    let processed = 0;
+    const BATCH_SIZE = 50;
     for (const rec of recs) {
-      // Check if already in queue (optional, depending on your queue schema)
+      if (added >= BATCH_SIZE) break;
       let alreadyQueued = false;
-      if (QueueEntry) {
-        alreadyQueued = await QueueEntry.findOne({ where: { url: rec.url } });
+      try {
+        if (QueueEntry) {
+          alreadyQueued = await QueueEntry.findOne({ where: { url: rec.url } });
+        }
+        if (!alreadyQueued) {
+          // Use model method for insert
+          await QueueEntry.create({ url: rec.url, status: 'pending' });
+          added++;
+          console.log(`Queued rec ID ${rec.id} (${rec.url}) for update.`);
+        }
+      } catch (err) {
+        console.error(`Error queueing rec ID ${rec.id} (${rec.url}):`, err.message);
       }
-      if (!alreadyQueued) {
-        // Insert into queue (adjust fields as needed for your queue schema)
-        await sequelize.query(
-          'INSERT INTO queue (url, status, createdAt, updatedAt) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-          { replacements: [rec.url, 'pending'] }
-        );
-        added++;
-        console.log(`Queued rec ID ${rec.id} (${rec.url}) for update.`);
+      processed++;
+      if (processed % 10 === 0) {
+        console.log(`Processed ${processed} recs so far, ${added} added to queue.`);
       }
     }
-    console.log(`Batch queue complete. Added ${added} recommendations to the parsing queue.`);
+    console.log(`Batch queue complete. Added ${added} recommendations to the parsing queue (processed ${processed} total).`);
     await sequelize.close();
   } catch (err) {
     console.error('Error during batch queue:', err);

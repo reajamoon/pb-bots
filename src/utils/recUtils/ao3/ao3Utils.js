@@ -123,12 +123,27 @@ async function getLoggedInAO3Page() {
     }
     // Go to login page
     console.log('[AO3] Navigating to login page...');
-    await page.goto(AO3_LOGIN_URL, { waitUntil: 'domcontentloaded' });
+    // Try navigating to login page with longer timeout and retry on timeout
+    const gotoLogin = async () => {
+        try {
+            await page.goto(AO3_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        } catch (err) {
+            if (err.name === 'TimeoutError' || (err.message && err.message.includes('timeout'))) {
+                console.warn('[AO3] Login page navigation timed out, retrying after 5s...');
+                await new Promise(res => setTimeout(res, 5000));
+                await page.goto(AO3_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            } else {
+                throw err;
+            }
+        }
+    };
+    await gotoLogin();
     try {
         let pageContent = await page.content();
         // detect 'New Session' title in <head>
         if (await isNewSessionTitle(page)) {
-            await page.goto(AO3_LOGIN_URL, { waitUntil: 'domcontentloaded' });
+            // Retry navigation to login page if 'New Session' interstitial
+            await gotoLogin();
             pageContent = await page.content();
         }
         // Try main login form first
