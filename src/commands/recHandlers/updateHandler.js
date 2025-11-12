@@ -91,7 +91,25 @@ async function handleUpdateRecommendation(interaction) {
         // --- Fic Parsing Queue Logic ---
         const { ParseQueue, ParseQueueSubscriber } = require('../../models');
         // Always use the queue for any update that requires a metadata fetch
-        const needsMetadataFetch = newUrl || (!newTitle && !newAuthor && !newSummary && !newRating && !newStatus && !newWordCount);
+        // Determine which update logic to use
+        const hasTitle = typeof newTitle === 'string' && newTitle.trim().length > 0;
+        const hasAuthor = typeof newAuthor === 'string' && newAuthor.trim().length > 0;
+        const hasManualFields = [newSummary, newRating, newStatus]
+            .some(f => typeof f === 'string' && f.trim().length > 0)
+            || (typeof newWordCount === 'number' && !isNaN(newWordCount))
+            || (Array.isArray(newTags) && newTags.length > 0)
+            || (typeof newNotes === 'string' && newNotes.trim().length > 0);
+
+        let updateMode = 'fetch';
+        if (newUrl) {
+            updateMode = 'fetch'; // Always fetch for new URL
+        } else if (hasTitle && hasAuthor) {
+            updateMode = 'manualOnly'; // Override fetch, update only manual fields
+        } else if ((hasTitle || hasAuthor || hasManualFields)) {
+            updateMode = 'manualAndFetch'; // Update manual fields and fetch
+        } else {
+            updateMode = 'fetchOnlyOrCooldown'; // Only ID/URL provided
+        }
         if (needsMetadataFetch) {
             let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
             if (queueEntry) {
