@@ -3,6 +3,8 @@
 // Run this script to backfill archive_warnings
 
 const path = require('path');
+// Load environment variables from .env if present
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const { Sequelize } = require('sequelize');
 const dbConfig = require('../config/config.json');
 const env = process.env.NODE_ENV || 'development';
