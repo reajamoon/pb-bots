@@ -47,25 +47,32 @@ const ParseQueue = require('../src/models/ParseQueue')(sequelize);
   try {
     await sequelize.authenticate();
     console.log('Database connection established.');
+
+    // 1. Clear all 'done' ParseQueue entries
+    const deleted = await ParseQueue.destroy({ where: { status: 'done' } });
+    console.log(`Cleared ${deleted} 'done' entries from ParseQueue.`);
+
+    // 2. Fetch all recs
     const recs = await Recommendation.findAll();
     let added = 0;
     let processed = 0;
-    const BATCH_SIZE = 50;
+    const BATCH_SIZE = 10;
     for (const rec of recs) {
       if (added >= BATCH_SIZE) break;
+      // 3. Normalize fic_url: remove /chapters/12345 if present
+      let ficUrl = rec.url.replace(/\/chapters\/\d+$/, '');
       let alreadyQueued = false;
       try {
         if (ParseQueue) {
-          alreadyQueued = await ParseQueue.findOne({ where: { fic_url: rec.url } });
+          alreadyQueued = await ParseQueue.findOne({ where: { fic_url: ficUrl } });
         }
         if (!alreadyQueued) {
-          // Use model method for insert
-          await ParseQueue.create({ fic_url: rec.url, status: 'pending', requested_by: rec.recommendedBy });
+          await ParseQueue.create({ fic_url: ficUrl, status: 'pending', requested_by: rec.recommendedBy });
           added++;
-          console.log(`Queued rec ID ${rec.id} (${rec.url}) for update.`);
+          console.log(`Queued rec ID ${rec.id} (${ficUrl}) for update.`);
         }
       } catch (err) {
-        console.error(`Error queueing rec ID ${rec.id} (${rec.url}):`, err.message);
+        console.error(`Error queueing rec ID ${rec.id} (${ficUrl}):`, err.message);
       }
       processed++;
       if (processed % 10 === 0) {
