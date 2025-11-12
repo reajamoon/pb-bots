@@ -78,6 +78,11 @@ async function handleUpdateRecommendation(interaction) {
     // Support append mode for additional tags
     const appendAdditional = interaction.options.getBoolean('append');
 
+        console.log('[rec update] Calling findRecommendationByIdOrUrl with:', {
+            recId,
+            findUrl,
+            findAo3Id
+        });
         const recommendation = await findRecommendationByIdOrUrl(interaction, recId, findUrl, findAo3Id);
         if (!recommendation) {
             await interaction.editReply({
