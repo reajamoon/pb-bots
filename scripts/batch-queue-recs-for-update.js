@@ -7,6 +7,10 @@ const { Sequelize } = require('sequelize');
 const dbConfig = require('../config/config.json');
 const env = process.env.NODE_ENV || 'development';
 const config = dbConfig[env];
+if (!config) {
+  console.error(`No database config found for environment '${env}'. Please set NODE_ENV to match a section in config.json (e.g., 'production').`);
+  process.exit(1);
+}
 let sequelize;
 if (config.use_env_variable) {
   sequelize = new Sequelize(process.env[config.use_env_variable], {
