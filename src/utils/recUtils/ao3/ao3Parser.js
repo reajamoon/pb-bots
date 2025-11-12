@@ -9,6 +9,19 @@ function isAnonymousAO3Fic(html) {
 }
 
 function parseAO3Metadata(html, url, includeRawHtml = false) {
+        // Archive Warnings (extract all <a class="tag"> inside <dd class="warning tags">)
+        const warningsBlockMatch = metaBlock.match(/<dd class="warning tags">([\s\S]*?)<\/dd>/i);
+        metadata.archiveWarnings = [];
+        if (warningsBlockMatch) {
+            const warningsBlock = warningsBlockMatch[1];
+            const warningTagRegex = /<a[^>]*class="tag"[^>]*>([^<]+)<\/a>/g;
+            let m;
+            while ((m = warningTagRegex.exec(warningsBlock)) !== null) {
+                metadata.archiveWarnings.push(m[1].trim());
+            }
+        }
+        // Debug log
+        console.log('[AO3 PARSER] archiveWarnings for', url, ':', metadata.archiveWarnings);
     const fs = require('fs');
     const path = require('path');
 
