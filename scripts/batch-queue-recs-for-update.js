@@ -40,8 +40,8 @@ if (config.use_env_variable) {
 }
 const Recommendation = require('../src/models/Recommendation')(sequelize);
 
-// Import your queue model or utility
-const QueueEntry = require('../src/models/QueueEntry') ? require('../src/models/QueueEntry')(sequelize) : null;
+// Import ParseQueue model (was QueueEntry)
+const ParseQueue = require('../src/models/ParseQueue')(sequelize);
 
 (async () => {
   try {
@@ -55,12 +55,12 @@ const QueueEntry = require('../src/models/QueueEntry') ? require('../src/models/
       if (added >= BATCH_SIZE) break;
       let alreadyQueued = false;
       try {
-        if (QueueEntry) {
-          alreadyQueued = await QueueEntry.findOne({ where: { url: rec.url } });
+        if (ParseQueue) {
+          alreadyQueued = await ParseQueue.findOne({ where: { fic_url: rec.url } });
         }
         if (!alreadyQueued) {
           // Use model method for insert
-          await QueueEntry.create({ url: rec.url, status: 'pending' });
+          await ParseQueue.create({ fic_url: rec.url, status: 'pending', requested_by: rec.recommendedBy });
           added++;
           console.log(`Queued rec ID ${rec.id} (${rec.url}) for update.`);
         }
