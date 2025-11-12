@@ -95,6 +95,7 @@ async function handleUpdateRecommendation(interaction) {
                     const manualFieldsRequested = newTitle || newAuthor || newSummary || newRating || newStatus || newWordCount || (newTags && newTags.length > 0) || newNotes;
                     const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                     if (manualFieldsRequested) {
+                        let resultEmbed = null;
                         await processRecommendationJob({
                             url: urlToUse,
                             user: { id: interaction.user.id, username: interaction.user.username },
@@ -111,12 +112,19 @@ async function handleUpdateRecommendation(interaction) {
                             isUpdate: true,
                             existingRec: updatedRec || recommendation,
                             notify: async (embed) => {
-                                await interaction.editReply({
-                                    content: 'This fic was just updated! Here’s the latest info.',
-                                    embeds: [embed]
-                                });
+                                resultEmbed = embed;
                             }
                         });
+                        if (resultEmbed) {
+                            await interaction.editReply({
+                                content: 'This fic was just updated! Here’s the latest info.',
+                                embeds: [resultEmbed]
+                            });
+                        } else {
+                            await interaction.editReply({
+                                content: 'This fic was just updated! (No embed was generated.)'
+                            });
+                        }
                         return;
                     }
                     // Only enforce cooldown for metadata re-fetches
