@@ -49,8 +49,8 @@ const ParseQueue = require('../src/models/ParseQueue')(sequelize);
     console.log('Database connection established.');
 
     // 1. Clear all 'done' ParseQueue entries
-    const deleted = await ParseQueue.destroy({ where: { status: 'done' } });
-    console.log(`Cleared ${deleted} 'done' entries from ParseQueue.`);
+    // const deleted = await ParseQueue.destroy({ where: { status: 'done' } });
+    // console.log(`Cleared ${deleted} 'done' entries from ParseQueue.`);
 
     // 2. Fetch all recs
     const recs = await Recommendation.findAll();
