@@ -12,7 +12,7 @@ const normalizeAO3Url = require('./normalizeAO3Url');
  * @param {Object} options - Job options
  * @param {string} options.url - Fic URL
  * @param {Object} options.user - User context (id, username, etc.)
- * @param {Object} [options.manualFields] - Manual fields (title, author, summary, etc.)
+ * @param {Object} [options.manualFields] - Manual fields (title, authors, summary, etc.)
  * @param {string[]} [options.additionalTags] - Additional tags
  * @param {string} [options.notes] - Notes
  * @param {boolean} [options.isUpdate] - If true, update existing rec; else, create new
@@ -37,7 +37,7 @@ async function processRecommendationJob({
   if (bypassManual) {
     metadata = {
       title: manualFields.title,
-      authors: [manualFields.author],
+  authors: manualFields.authors || (manualFields.author ? [manualFields.author] : undefined),
       summary: manualFields.summary || 'Manually added recommendation',
       tags: [],
       rating: manualFields.rating || 'Not Rated',
@@ -72,7 +72,8 @@ async function processRecommendationJob({
     }
     // Allow manual override of individual fields
     if (manualFields.title) metadata.title = manualFields.title;
-    if (manualFields.author) metadata.authors = [manualFields.author];
+  if (manualFields.authors) metadata.authors = manualFields.authors;
+  else if (manualFields.author) metadata.authors = [manualFields.author];
     if (manualFields.summary) metadata.summary = manualFields.summary;
     if (manualFields.wordCount) metadata.wordCount = manualFields.wordCount;
     if (manualFields.rating) metadata.rating = manualFields.rating;
@@ -114,8 +115,12 @@ async function processRecommendationJob({
     const updateFields = {};
     if (existingRec.url !== url) updateFields.url = url;
     if (existingRec.title !== metadata.title) updateFields.title = metadata.title;
-    const newAuthor = (metadata.authors && metadata.authors[0]) || metadata.author || 'Unknown Author';
-    if (existingRec.author !== newAuthor) updateFields.author = newAuthor;
+  // Always update authors array
+  let newAuthors = metadata.authors || (metadata.author ? [metadata.author] : ['Unknown Author']);
+  if (JSON.stringify(existingRec.authors) !== JSON.stringify(newAuthors)) updateFields.authors = JSON.stringify(newAuthors);
+  // For legacy support, update author field to first author
+  const newAuthor = newAuthors[0] || 'Unknown Author';
+  if (existingRec.author !== newAuthor) updateFields.author = newAuthor;
     if (existingRec.summary !== metadata.summary) updateFields.summary = metadata.summary;
     if (JSON.stringify(oldTags) !== JSON.stringify(mergedTags)) updateFields.tags = JSON.stringify(mergedTags);
     if (existingRec.rating !== metadata.rating) updateFields.rating = metadata.rating;
@@ -157,7 +162,10 @@ async function processRecommendationJob({
       recommendation = await Recommendation.create({
         url,
         title: metadata.title,
-        author: (metadata.authors && metadata.authors[0]) || metadata.author || 'Unknown Author',
+  // Deprecated: author (for legacy)
+  author: (metadata.authors && metadata.authors[0]) || metadata.author || 'Unknown Author',
+  // Canonical: authors array
+  authors: JSON.stringify(metadata.authors || (metadata.author ? [metadata.author] : ['Unknown Author'])),
         summary: metadata.summary,
         tags: JSON.stringify(Array.isArray(metadata.tags) ? metadata.tags : []),
         rating: metadata.rating,

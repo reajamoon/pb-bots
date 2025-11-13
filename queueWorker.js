@@ -12,14 +12,11 @@ async function cleanupOldQueueJobs() {
   const now = new Date();
   // Remove 'done' jobs older than 3 hours
   const doneCutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  await ParseQueue.destroy({ where: { status: 'done', updated_at: { [Op.lt]: doneCutoff } } });
-
-  // Fetch config once
-  const configEntry = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-  const channelId = configEntry ? configEntry.value : null;
-  let channel = null;
-  if (channelId) {
-    channel = await client.channels.fetch(channelId).catch(() => null);
+  const doneDeleted = await ParseQueue.destroy({ where: { status: 'done', updated_at: { [Op.lt]: doneCutoff } } });
+  if (doneDeleted > 0) {
+    console.log(`[QueueWorker] Cleanup: Removed ${doneDeleted} 'done' jobs older than 3 hours.`);
+  } else {
+    console.log('[QueueWorker] Cleanup: No old done jobs to remove.');
   }
 
   // Find 'pending' or 'processing' jobs older than 15 minutes
@@ -34,15 +31,27 @@ async function cleanupOldQueueJobs() {
   const allSubscribers = await ParseQueueSubscriber.findAll({ where: { queue_id: allJobIds } });
   // Batch fetch all users for these subscribers
   const { User } = require('./src/models');
-  const allUserIds = [...new Set(allSubscribers.map(sub => sub.user_id))];
-  const allUsers = await User.findAll({ where: { discordId: allUserIds } });
-  const userMap = new Map(allUsers.map(u => [u.discordId, u]));
-
-  // Group subscribers by job
-  const subsByJob = {};
-  for (const sub of allSubscribers) {
-    if (!subsByJob[sub.queue_id]) subsByJob[sub.queue_id] = [];
-    subsByJob[sub.queue_id].push(sub);
+  if (stuckJobs.length > 0) {
+    console.log(`[QueueWorker] Cleanup: Found ${stuckJobs.length} stuck 'pending' or 'processing' jobs older than 15 minutes.`);
+  } else {
+    console.log('[QueueWorker] Cleanup: No stuck pending/processing jobs to remove.');
+  }
+  for (const job of stuckJobs) {
+    // Notify all subscribers (respect queueNotifyTag)
+    const subscribers = await ParseQueueSubscriber.findAll({ where: { queue_id: job.id } });
+    const configEntry = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+    if (configEntry && subscribers.length > 0) {
+      const channel = await client.channels.fetch(configEntry.value).catch(() => null);
+      if (channel && channel.isTextBased()) {
+        const mentions = await getTagMentions(subscribers, User);
+        await channel.send({
+          content: `${mentions}\nSorry, something went wrong while processing your fic parsing job for <${job.fic_url}>. Please try again.\n\n*Oh and if you want: to toggle queue notifications on|off, you just use the /rec notifytag command.*`,
+        });
+      }
+    }
+    await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+    await job.destroy();
+    console.log(`[QueueWorker] Cleanup: Dropped stuck job id=${job.id} (status: ${job.status}, url: ${job.fic_url})`);
   }
 
   // Notify and clean up for each job
@@ -215,8 +224,12 @@ client.once('ready', () => {
   console.log(`[QueueWorker] Discord client ready. Starting queue polling... (${now.toISOString()})`);
   pollQueue();
   // Run cleanup every 15 minutes
-  setInterval(cleanupOldQueueJobs, 15 * 60 * 1000);
+  setInterval(() => {
+    console.log('[QueueWorker] Running scheduled cleanup of old queue jobs...');
+    cleanupOldQueueJobs();
+  }, 15 * 60 * 1000);
   // Also run once at startup
+  console.log('[QueueWorker] Running initial cleanup of old queue jobs...');
   cleanupOldQueueJobs();
 });
 
