@@ -32,7 +32,7 @@
     "sequelize": "^6.35.0",
     "sqlite3": "^5.1.6",
     "winston": "^3.11.0",
-    "zod": "^4.1.12"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "eslint": "^9.39.1",
