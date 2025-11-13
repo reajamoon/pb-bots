@@ -38,9 +38,28 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             }
             // Bypass 'stay logged in' interstitial if present
             await bypassStayLoggedInInterstitial(page, ao3Url);
+            // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
+            const pageTitle = await page.title();
+            const errorText = await page.evaluate(() => {
+                const selectors = ['.error', '.notice', 'h1', 'h2', '#main .wrapper h1', '#main .wrapper h2'];
+                let found = '';
+                for (const sel of selectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent) found += el.textContent + '\n';
+                }
+                return found;
+            });
+            const rateLimitMatch =
+                (pageTitle && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(pageTitle)) ||
+                (errorText && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(errorText));
+            if (rateLimitMatch) {
+                console.warn('[AO3] Rate limit or CAPTCHA detected during fetch (title or error container).');
+                await page.close();
+                html = null;
+                return false;
+            }
             html = await page.content();
             // Extra check: ensure not still on login/interstitial page
-            const pageTitle = await page.title();
             if (
                 html.includes('<form id="loginform"') ||
                 /New\s*Session/i.test(pageTitle) ||
