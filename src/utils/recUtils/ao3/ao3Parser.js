@@ -82,8 +82,7 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
             }
         }
 
-    const fs = require('fs');
-    const path = require('path');
+    // ...existing code...
 
     try {
         if (!html) return null;
