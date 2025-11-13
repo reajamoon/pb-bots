@@ -26,9 +26,7 @@ async function handleUpdateRecommendation(interaction) {
     try {
         console.log('[rec update] Handler called', {
             user: interaction.user?.id,
-            id: interaction.options.getInteger('id'),
-            find_url: interaction.options.getString('find_url'),
-            find_ao3_id: interaction.options.getInteger('find_ao3_id'),
+            identifier: interaction.options.getString('identifier'),
             options: interaction.options.data
         });
 
@@ -48,12 +46,10 @@ async function handleUpdateRecommendation(interaction) {
         await interaction.deferReply();
 
         const normalizeAO3Url = require('../../utils/recUtils/normalizeAO3Url');
-        const recId = interaction.options.getInteger('id');
-        const findUrl = interaction.options.getString('find_url');
-        const findAo3Id = interaction.options.getInteger('find_ao3_id');
-        if (!recId && !findUrl && !findAo3Id) {
+        const identifier = interaction.options.getString('identifier');
+        if (!identifier) {
             await interaction.editReply({
-                content: 'You need to provide at least one identifier: `id`, `find_url`, or `find_ao3_id`.'
+                content: 'You must provide an identifier (fic ID, AO3 WorkId, or URL).'
             });
             return;
         }
@@ -74,14 +70,15 @@ async function handleUpdateRecommendation(interaction) {
         if (newTags) {
             newTags = Array.from(new Set(newTags.map(t => t.toLowerCase())));
         }
-    const newNotes = interaction.options.getString('notes');
-    // Support append mode for additional tags
-    const appendAdditional = interaction.options.getBoolean('append');
+        const newNotes = interaction.options.getString('notes');
+        // Support append mode for additional tags
+        const appendAdditional = interaction.options.getBoolean('append');
 
-        const recommendation = await findRecommendationByIdOrUrl(interaction, recId, findUrl, findAo3Id);
+        const recommendation = await findRecommendationByIdOrUrl(interaction, identifier, null, null);
         if (!recommendation) {
             await interaction.editReply({
-                content: `I couldn't find a recommendation with ID ${recId} in our library. Use \`/rec stats\` to see what's available.`
+                content: `I couldn't find a recommendation with identifier \
+\`${identifier}\` in our library. Use \`/rec stats\` to see what's available.`
             });
             return;
         }
