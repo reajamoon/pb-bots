@@ -13,7 +13,7 @@ module.exports = {
       SET authors =
         CASE
           WHEN author IS NOT NULL AND author != ''
-            THEN json('[' || quote(author) || ']')
+            THEN json('[' || quote_literal(author) || ']')
           ELSE NULL
         END
     `);
