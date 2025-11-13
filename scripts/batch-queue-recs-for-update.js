@@ -58,6 +58,8 @@ const ParseQueue = require('../src/models/ParseQueue')(sequelize);
     let processed = 0;
     const BATCH_SIZE = 10;
     for (const rec of recs) {
+  // Debug: log rec.id and rec.recommendedBy to diagnose 'Unknown User' issue
+  console.log(`Rec ID ${rec.id} recommendedBy:`, rec.recommendedBy);
       if (added >= BATCH_SIZE) break;
       // 3. Normalize fic_url: remove /chapters/12345 if present
       let ficUrl = rec.url.replace(/\/chapters\/\d+$/, '');

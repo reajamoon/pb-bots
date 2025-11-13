@@ -60,7 +60,8 @@ module.exports = (sequelize) => {
         },
         recommendedBy: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: false,
+            field: 'recommended_by'
         },
         recommendedByUsername: {
             type: DataTypes.STRING,

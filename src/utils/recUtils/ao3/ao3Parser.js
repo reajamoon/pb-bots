@@ -1,3 +1,14 @@
+// Utility to decode basic HTML entities in summaries
+function decodeHtmlEntities(str) {
+    if (!str) return str;
+    return str
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+}
 const { parseAnonymousAO3Fic } = require('./anon');
 
 function isAnonymousAO3Fic(html) {
@@ -139,7 +150,9 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
         // Summary
         const summaryMatch = html.match(/<div class="summary module">[\s\S]*?<blockquote class="userstuff">([\s\S]*?)<\/blockquote>/);
         if (summaryMatch) {
-            metadata.summary = summaryMatch[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+                        metadata.summary = decodeHtmlEntities(
+                            summaryMatch[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+                        );
         }
 
         // Fandom
