@@ -14,60 +14,44 @@ const { parseTagList } = require('./parseTagList');
 function parseMetaGroup($) {
     const metadata = {};
     const metaFields = {};
-    let lastLabel = null;
     let warnings = [];
     const unknownFields = {};
-    // Find all <dt> and <dd> pairs in the document, but skip those inside forms or fieldsets
-    const allDtDd = [];
-    $('dt, dd').each((i, el) => {
+    // Use class-based mapping for AO3 meta fields
+    $('dt[class], dd[class]').each((i, el) => {
         const $el = $(el);
-        if ($el.closest('form, fieldset').length === 0) {
-            allDtDd.push(el);
-        }
-    });
-    allDtDd.forEach((el) => {
-        const $el = $(el);
+        if ($el.closest('form, fieldset').length > 0) return;
         if (el.tagName === 'dt') {
-            let label = $el.text().replace(/[:\s\(\)]+/g, '_').toLowerCase().replace(/_+$/,'').replace(/^_+/, '');
-            if (lastLabel) {
-                warnings.push(`Warning: <dt> '${lastLabel}' missing corresponding <dd> in meta block.`);
+            // Use the first class as the field key
+            const classList = ($el.attr('class') || '').split(/\s+/);
+            if (!classList.length) return;
+            $el.data('ao3FieldKey', classList[0]);
+        } else if (el.tagName === 'dd') {
+            // Find the previous <dt> with a class (and not inside a form/fieldset)
+            let prev = el.previousSibling;
+            while (prev && (prev.tagName !== 'dt' || !$(prev).attr('class') || $(prev).closest('form, fieldset').length > 0)) {
+                prev = prev.previousSibling;
             }
-            lastLabel = label;
-        } else if (el.tagName === 'dd' && lastLabel) {
-            if (lastLabel === 'stats') {
-                lastLabel = null;
-                return;
-            }
-            const mapped = AO3_FIELD_MAP[lastLabel];
-            if (mapped) {
-                // For tag fields, use parseTagList to extract arrays
-                if ([
-                    'freeform_tags',
-                    'archive_warnings',
-                    'relationship_tags',
-                    'character_tags',
-                    'category_tags',
-                    'fandom_tags',
-                    'required_tags',
-                    'collections'
-                ].includes(mapped)) {
-                    metaFields[mapped] = parseTagList($, $el);
-                } else {
-                    metaFields[mapped] = decodeHtmlEntities($el.text().replace(/\s+/g, ' ').trim());
-                }
+            if (!prev) return;
+            const dtClass = ($(prev).attr('class') || '').split(/\s+/)[0];
+            if (!dtClass) return;
+            if (dtClass === 'stats') return; // skip stats block
+            const mapped = AO3_FIELD_MAP[dtClass] || dtClass;
+            if ([
+                'freeform_tags',
+                'archive_warnings',
+                'relationship_tags',
+                'character_tags',
+                'category_tags',
+                'fandom_tags',
+                'required_tags',
+                'collections'
+            ].includes(mapped)) {
+                metaFields[mapped] = parseTagList($, $el);
             } else {
-                const value = $el.text().replace(/\s+/g, ' ').trim();
-                unknownFields[lastLabel] = decodeHtmlEntities(value);
-                warnings.push(`Unknown meta field: '${lastLabel}' found in meta block.`);
+                metaFields[mapped] = decodeHtmlEntities($el.text().replace(/\s+/g, ' ').trim());
             }
-            lastLabel = null;
         }
     });
-    if (lastLabel) {
-        warnings.push(`Warning: <dt> '${lastLabel}' missing corresponding <dd> at end of meta block.`);
-    }
-    if (warnings.length > 0) metadata.warnings = warnings;
-    if (Object.keys(unknownFields).length > 0) metadata.unknownFields = unknownFields;
     metadata.metaFields = metaFields;
     return metadata;
 }
