@@ -1,7 +1,5 @@
 // AO3 schema validation
 const AO3Schema = require('./ao3Schema');
-
-
 // Tag extraction utilities
 const {
     freeformTags,
@@ -46,38 +44,9 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
         };
     }
 
+
     // Always declare metadata object at the top
     const metadata = { url: url };
-    // Try to find meta block, but don't fail if not found
-    const metaBlockMatch = html.match(/<dl class="work meta group">([\s\S]*?)<\/dl>/);
-    const metaBlock = metaBlockMatch ? metaBlockMatch[0] : '';
-    if (!metaBlock) {
-        // Log the first 500 chars of HTML for debugging
-        const logDir = path.join(process.cwd(), 'logs', 'ao3_failed_html');
-        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-        const fname = `parser_nometa_${Date.now()}_${url.replace(/[^a-zA-Z0-9]/g, '_').slice(-60)}.txt`;
-        const fpath = path.join(logDir, fname);
-        try {
-            fs.writeFileSync(fpath, html.slice(0, 500), 'utf8');
-            console.warn(`[AO3 PARSER] No meta block found for ${url}, first 500 chars saved to ${fpath}`);
-        } catch (err) {
-            console.warn('[AO3 PARSER] Failed to save meta block debug:', err);
-        }
-    }
-
-        // Archive Warnings (extract all <a class="tag"> inside <dd class="warning tags">)
-        metadata.archiveWarnings = [];
-        if (metaBlock) {
-            const warningsBlockMatch = metaBlock.match(/<dd class="warning tags">([\s\S]*?)<\/dd>/i);
-            if (warningsBlockMatch) {
-                const warningsBlock = warningsBlockMatch[1];
-                const warningTagRegex = /<a[^>]*class="tag"[^>]*>([^<]+)<\/a>/g;
-                let m;
-                while ((m = warningTagRegex.exec(warningsBlock)) !== null) {
-                    metadata.archiveWarnings.push(m[1].trim());
-                }
-            }
-        }
 
     // ...existing code...
 
@@ -120,159 +89,17 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
             };
         }
         const metadata = { url: url };
-        // Use Cheerio to find the meta block
-        const metaBlock = $('dl.work.meta.group').first();
-        if (!metaBlock || metaBlock.length === 0) {
-            // Fallback: log and return parse error as before
-            // Log a summary of the HTML for debugging (avoid logging full HTML in prod)
-            if (typeof console !== 'undefined' && console.warn) {
-                const snippet = html ? html.slice(0, 500) : '[no html]';
-                console.warn('[AO3Parser] Meta block missing. HTML snippet:', snippet);
-            }
-            return {
-                error: true,
-                message: 'Failed to locate AO3 meta block',
-                url
-            };
-        }
 
+    // Use modular parser for meta group: pass Cheerio root ($) to parse all <dt>/<dd> pairs
+    const { parseMetaGroup } = require('./ao3MetaGroupParser');
+    const metaGroupData = parseMetaGroup($);
+    // Merge metaGroupData into metadata
+    Object.assign(metadata, metaGroupData);
 
-        // Iterate <dt>/<dd> pairs in meta block using Cheerio
-        const metaFields = {};
-        let lastLabel = null;
-        let warnings = [];
-        const unknownFields = {};
-        // AO3 field label to normalized key mapping
-        // This mapping is used to translate normalized AO3 <dt> labels to canonical output keys.
-        // Unknown fields are added dynamically to unknownFields.
-        const AO3_FIELD_MAP = {
-            'rating': 'rating',
-            'ratings': 'rating',
-            'archive_warning': 'archive_warnings',
-            'archive_warnings': 'archive_warnings',
-            'category': 'category_tags',
-            'categories': 'category_tags',
-            'fandom': 'fandom_tags',
-            'fandoms': 'fandom_tags',
-            'relationship': 'relationship_tags',
-            'relationships': 'relationship_tags',
-            'character': 'character_tags',
-            'characters': 'character_tags',
-            'additional_tags': 'freeform_tags',
-            'freeform_tags': 'freeform_tags',
-            'language': 'language',
-            'collections': 'collections',
-            'published': 'published',
-            'updated': 'updated',
-            'completed': 'completed',
-            'words': 'word_count',
-            'word_count': 'word_count',
-            'chapters': 'chapters',
-            'comments': 'comments',
-            'kudos': 'kudos',
-            'bookmarks': 'bookmarks',
-            'hits': 'hits',
-            // Add more mappings as needed
-        };
-        metaBlock.children().each((i, el) => {
-            const $el = $(el);
-            if (el.tagName === 'dt') {
-                // Normalize label: get text, lowercase, trim, replace spaces/colons/parentheses with underscores
-                let label = $el.text().replace(/[:\s\(\)]+/g, '_').toLowerCase().replace(/_+$/,'').replace(/^_+/, '');
-                // If previous <dt> was not followed by <dd>, log a warning
-                if (lastLabel) {
-                    warnings.push(`Warning: <dt> '${lastLabel}' missing corresponding <dd> in meta block.`);
-                }
-                lastLabel = label;
-            } else if (el.tagName === 'dd' && lastLabel) {
-                if (lastLabel === 'stats') {
-                    // Skip stats field in meta block; handled separately
-                    lastLabel = null;
-                    return;
-                }
-                if (AO3_FIELD_MAP[lastLabel]) {
-                    metaFields[lastLabel] = $el;
-                } else {
-                    // Unknown field: log and store
-                    const value = $el.text().replace(/\s+/g, ' ').trim();
-                    unknownFields[lastLabel] = decodeHtmlEntities(value);
-                    warnings.push(`Unknown meta field: '${lastLabel}' found in meta block.`);
-                }
-                lastLabel = null;
-            }
-        });
-        // If the last <dt> is not followed by a <dd>, log a warning
-        if (lastLabel) {
-            warnings.push(`Warning: <dt> '${lastLabel}' missing corresponding <dd> at end of meta block.`);
-        }
-        // Only attach warnings if present (do not attach metaFields, which contains Cheerio objects)
-        if (warnings.length > 0) metadata.warnings = warnings;
-        // Attach unknownFields if any
-        if (Object.keys(unknownFields).length > 0) {
-            metadata.unknownFields = unknownFields;
-        }
-
-        // Stats: use parseStatsBlock utility
-        const parseStatsBlock = require('./parseStatsBlock');
-        const statsBlock = $('dl.stats').first();
-        const { stats, unknownStats } = parseStatsBlock($, statsBlock);
-        // Fix published date: extract from <dd class="published"> and save as Date object if possible
-        const publishedElem = metaBlock.find('dd.published').first();
-        if (publishedElem.length > 0) {
-            let publishedText = publishedElem.attr('title') || publishedElem.text().trim();
-            if (/^\d{4}$/.test(publishedText)) {
-                const titleAttr = publishedElem.attr('title');
-                if (titleAttr && /^\d{4}-\d{2}-\d{2}$/.test(titleAttr)) {
-                    publishedText = titleAttr;
-                }
-            }
-            if (/^\d{4}-\d{2}-\d{2}$/.test(publishedText)) {
-                // Always save as Date object (UTC, no time)
-                const [year, month, day] = publishedText.split('-').map(Number);
-                if (year && month && day) {
-                    stats.published = new Date(Date.UTC(year, month - 1, day));
-                } else {
-                    stats.published = publishedText;
-                }
-            } else if (/^\d{4}$/.test(publishedText)) {
-                stats.published = publishedText;
-            }
-        }
-        // Fix updated date: extract from <dd class="status"> or <dd class="updated"> and save as Date object if possible
-        let updatedElem = metaBlock.find('dd.status').first();
-        if (!updatedElem.length) updatedElem = metaBlock.find('dd.updated').first();
-        if (updatedElem.length > 0) {
-            let updatedText = updatedElem.attr('title') || updatedElem.text().trim();
-            if (/^\d{4}$/.test(updatedText)) {
-                const titleAttr = updatedElem.attr('title');
-                if (titleAttr && /^\d{4}-\d{2}-\d{2}$/.test(titleAttr)) {
-                    updatedText = titleAttr;
-                }
-            }
-            if (/^\d{4}-\d{2}-\d{2}$/.test(updatedText)) {
-                // Always save as Date object (UTC, no time)
-                const [year, month, day] = updatedText.split('-').map(Number);
-                if (year && month && day) {
-                    stats.updated = new Date(Date.UTC(year, month - 1, day));
-                } else {
-                    stats.updated = updatedText;
-                }
-            } else if (/^\d{4}$/.test(updatedText)) {
-                stats.updated = updatedText;
-            }
-        }
-        // Fix chapters: ensure format is N/N or N/? as string
-        const chaptersElem = metaBlock.find('dd.chapters').first();
-        if (chaptersElem.length > 0) {
-            let chaptersText = chaptersElem.text().trim();
-            // AO3 format is N/N or N/?
-            if (/^\d+\s*\/\s*(\d+|\?)$/.test(chaptersText)) {
-                stats.chapters = chaptersText.replace(/\s+/g, '');
-            } else if (/^\d+$/.test(chaptersText)) {
-                // If only a single number, treat as N/?
-                stats.chapters = chaptersText + '/?';
-            }
-        }
+    // Stats: use modular parser for stats group
+    const { parseStatsGroup } = require('./ao3StatsGroupParser');
+    const { stats, unknownStats } = parseStatsGroup($);
+        // These fields are now handled by the modular stats/meta group parsers
         if (Object.keys(stats).length > 0) {
             metadata.stats = stats;
         }
@@ -302,13 +129,14 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
                 // Tag fields: use named tag extraction utilities (always include, even if empty)
 
     // Tag fields: decode all tag strings
-    metadata.freeform_tags = (freeformTags($, metaBlock) || []).map(decodeHtmlEntities);
-    metadata.archive_warnings = (archiveWarnings($, metaBlock) || []).map(decodeHtmlEntities);
-    metadata.relationship_tags = (relationshipTags($, metaBlock) || []).map(decodeHtmlEntities);
-    metadata.character_tags = (characterTags($, metaBlock) || []).map(decodeHtmlEntities);
-    metadata.category_tags = (categoryTags($, metaBlock) || []).map(decodeHtmlEntities);
-    metadata.fandom_tags = (fandomTags($, metaBlock) || []).map(decodeHtmlEntities);
-    metadata.required_tags = (requiredTags($, metaBlock) || []).map(decodeHtmlEntities);
+    // Scan the entire document for tag fields, not just the meta block
+    metadata.freeform_tags = (freeformTags($) || []).map(decodeHtmlEntities);
+    metadata.archive_warnings = (archiveWarnings($) || []).map(decodeHtmlEntities);
+    metadata.relationship_tags = (relationshipTags($) || []).map(decodeHtmlEntities);
+    metadata.character_tags = (characterTags($) || []).map(decodeHtmlEntities);
+    metadata.category_tags = (categoryTags($) || []).map(decodeHtmlEntities);
+    metadata.fandom_tags = (fandomTags($) || []).map(decodeHtmlEntities);
+    metadata.required_tags = (requiredTags($) || []).map(decodeHtmlEntities);
 
                 // Fandom: always as array (from fandom_tags if present)
                 if (metadata.fandom_tags && metadata.fandom_tags.length > 0) {
@@ -367,9 +195,14 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
         // Authors: Use Cheerio for robust extraction
         let authorMatches = [];
         // Try <a rel="author"> in meta block first
-        $("dl.work.meta.group a[rel='author']").each((i, el) => {
-            authorMatches.push(decodeHtmlEntities($(el).text().trim()));
-        });
+        if (typeof extractMetaGroupFromCheerio === 'function') {
+            const metaGroup = extractMetaGroupFromCheerio($);
+            if (metaGroup) {
+                metaGroup.find("a[rel='author']").each((i, el) => {
+                    authorMatches.push(decodeHtmlEntities($(el).text().trim()));
+                });
+            }
+        }
         // If not found, try global <a rel="author">
         if (authorMatches.length === 0) {
             $("a[rel='author']").each((i, el) => {

@@ -21,39 +21,39 @@ function parseTagList($, ddElem) {
 // Each expects a Cheerio object for the <dl> or <dd> containing the relevant tags
 
 // Freeform tags ("Additional Tags")
-function freeformTags($, dlElem) {
-    return parseTagList($, dlElem.find('dd.freeform.tags'));
+function excludeChapters($, selector) {
+    // Select all matching elements not inside #chapters
+    return $(selector).filter(function () {
+        return $(this).closest('#chapters').length === 0;
+    });
 }
 
-// Archive Warnings
-function archiveWarnings($, dlElem) {
-    return parseTagList($, dlElem.find('dd.warning.tags'));
+function freeformTags($) {
+    return parseTagList($, excludeChapters($, 'dd.freeform.tags'));
 }
 
-// Relationship tags
-function relationshipTags($, dlElem) {
-    return parseTagList($, dlElem.find('dd.relationship.tags'));
+function archiveWarnings($) {
+    return parseTagList($, excludeChapters($, 'dd.warning.tags'));
 }
 
-// Character tags
-function characterTags($, dlElem) {
-    return parseTagList($, dlElem.find('dd.character.tags'));
+function relationshipTags($) {
+    return parseTagList($, excludeChapters($, 'dd.relationship.tags'));
 }
 
-// Category tags (e.g., F/M, Gen)
-function categoryTags($, dlElem) {
-    return parseTagList($, dlElem.find('dd.category.tags'));
+function characterTags($) {
+    return parseTagList($, excludeChapters($, 'dd.character.tags'));
 }
 
-// Fandom tags
-function fandomTags($, dlElem) {
-    return parseTagList($, dlElem.find('dd.fandom.tags'));
+function categoryTags($) {
+    return parseTagList($, excludeChapters($, 'dd.category.tags'));
 }
 
-// Required Tags (AO3's four required warnings, as a string array)
-function requiredTags($, dlElem) {
-    // AO3 sometimes puts these in dd.required.tags
-    return parseTagList($, dlElem.find('dd.required.tags'));
+function fandomTags($) {
+    return parseTagList($, excludeChapters($, 'dd.fandom.tags'));
+}
+
+function requiredTags($) {
+    return parseTagList($, excludeChapters($, 'dd.required.tags'));
 }
 
 // General utility for custom tag class
