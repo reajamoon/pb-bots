@@ -129,13 +129,6 @@ async function getLoggedInAO3Page() {
         } catch (err) {
             logBrowserEvent('[AO3] Failed to load cookies, will attempt fresh login. ' + (err && err.message ? err.message : ''));
             try { fs.unlinkSync(COOKIES_PATH); } catch {}
-        } finally {
-            // Always close the page if not returning early
-            if (page && !page.isClosed()) {
-                try { await page.close(); logBrowserEvent('[AO3] Closed page after failed cookie login.'); } catch (e) { logBrowserEvent('Error closing page after cookie login: ' + e.message); }
-            }
-            // Open a new page for fresh login
-            page = await browser.newPage();
         }
     }
     logBrowserEvent('[AO3] Performing fresh login (no valid cookies found).');
