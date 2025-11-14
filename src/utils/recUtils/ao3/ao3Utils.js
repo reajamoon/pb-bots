@@ -121,7 +121,8 @@ async function getLoggedInAO3Page() {
             const refreshThreshold = 24 * 60 * 60; // 1 day in seconds
             if (Array.isArray(cookies)) {
                 for (const c of cookies) {
-                    if (c.expires && c.expires > 0 && c.expires - now < refreshThreshold) {
+                    // Only consider cookies with a valid, nonzero expiry
+                    if (typeof c.expires === 'number' && c.expires > 0 && c.expires - now < refreshThreshold) {
                         needsRefresh = true;
                         break;
                     }
