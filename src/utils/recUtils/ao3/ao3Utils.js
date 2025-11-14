@@ -297,6 +297,14 @@ async function getLoggedInAO3Page() {
     }
     // Open a new page for the caller to use
     page = await browser.newPage();
+    // Always set the user agent and headers on the returned page to ensure session/cookie consistency
+    const { getCurrentUserAgent } = require('./ao3BrowserManager');
+    await page.setUserAgent(getCurrentUserAgent());
+    await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Upgrade-Insecure-Requests': '1',
+        'X-Sam-Bot-Info': 'Hi AO3 devs! This is Sam, a hand-coded Discord bot for a single small server. I only fetch header metadata for user recs and do not retrieve fic content. Contact: https://github.com/reajamoon/sam-bot'
+    });
     return { browser, page };
 }
 
