@@ -120,7 +120,32 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             attempts++;
         }
         if (ok && html) {
-            return parseAO3Metadata(html, ao3Url, includeRawHtml);
+            let parsed = parseAO3Metadata(html, ao3Url, includeRawHtml);
+            // If parser detects AO3 session required, retry login/fetch once
+            if (parsed && parsed.error === 'AO3 session required' && attempts < maxAttempts) {
+                console.warn('[AO3] Parser detected session page after fetch. Retrying login/fetch.');
+                // Defensive: delete cookies and reset in-memory cookies
+                const COOKIES_PATH = 'ao3_cookies.json';
+                if (fs.existsSync(COOKIES_PATH)) {
+                    try { fs.unlinkSync(COOKIES_PATH); console.warn('[AO3] Deleted cookies file due to parser session detection.'); } catch {}
+                }
+                if (global.__samInMemoryCookies) {
+                    global.__samInMemoryCookies = null;
+                    console.warn('[AO3] In-memory cookies reset due to parser session detection.');
+                }
+                retried = true;
+                try {
+                    ok = await doLoginAndFetch();
+                    if (ok && html) {
+                        parsed = parseAO3Metadata(html, ao3Url, includeRawHtml);
+                    }
+                } catch (err) {
+                    lastError = err;
+                    ok = false;
+                }
+                attempts++;
+            }
+            return parsed;
         }
         // If we failed all attempts, log and return a clear error
         const cooldownMs = 60000; // 1 minute cooldown after repeated failures
