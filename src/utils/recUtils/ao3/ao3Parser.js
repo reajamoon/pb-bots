@@ -15,6 +15,26 @@ const {
 const decodeHtmlEntities = require('../decodeHtmlEntities');
 
 function parseAO3Metadata(html, url, includeRawHtml = false) {
+    // Debug: log extracted title, authors, and summary for troubleshooting
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const debugLogDir = path.join(process.cwd(), 'logs', 'ao3_parser_debug');
+        if (!fs.existsSync(debugLogDir)) fs.mkdirSync(debugLogDir, { recursive: true });
+        const debugObj = {
+            url,
+            extractedTitle: metadata.title,
+            extractedAuthors: metadata.authors,
+            extractedSummary: metadata.summary,
+            allMetadata: metadata
+        };
+        const fname = `parser_debug_${Date.now()}_${url.replace(/[^a-zA-Z0-9]/g, '_').slice(-60)}.json`;
+        const fpath = path.join(debugLogDir, fname);
+        fs.writeFileSync(fpath, JSON.stringify(debugObj, null, 2), 'utf8');
+        console.warn(`[AO3 PARSER DEBUG] Saved parser debug info for ${url} to ${fpath}`);
+    } catch (err) {
+        console.warn('[AO3 PARSER DEBUG] Failed to save parser debug info:', err);
+    }
     const fs = require('fs');
     const path = require('path');
     // Check for incomplete HTML (missing </html> or </body>)
@@ -38,7 +58,7 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
         const updateMessages = require('../../../commands/recHandlers/updateMessages');
         return {
             error: true,
-            message: 'AO3 returned a search results page instead of a fic. The link may be incorrect or AO3 redirected the request.',
+            message: 'AO3 returned a search heading.',
             url,
             details: updateMessages.parseError
         };
@@ -47,9 +67,6 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
 
     // Always declare metadata object at the top
     const metadata = { url: url };
-
-    // ...existing code...
-
     try {
         if (!html) return null;
         const cheerio = require('cheerio');
