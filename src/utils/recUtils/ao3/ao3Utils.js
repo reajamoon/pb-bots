@@ -80,14 +80,21 @@ async function getLoggedInAO3Page() {
     let page;
     try {
         // Limit open pages to prevent leaks
-        const openPages = await browser.pages();
+        let openPages = await browser.pages();
         if (openPages.length > 4) {
             logBrowserEvent(`[AO3] Too many open pages (${openPages.length}). Closing extras.`);
             for (let i = 1; i < openPages.length; i++) {
                 try { await openPages[i].close(); } catch (e) { logBrowserEvent('Error closing extra page: ' + e.message); }
             }
+            // After closing, re-fetch open pages to ensure browser state is stable
+            openPages = await browser.pages();
         }
         page = await browser.newPage();
+        // Defensive: check if page is not detached before proceeding
+        if (page.isClosed() || !page.mainFrame() || page.mainFrame()._detached) {
+            logBrowserEvent('New page is already closed or detached after creation. Retrying...');
+            page = await browser.newPage();
+        }
     } catch (err) {
         logBrowserEvent('Error creating new page: ' + err.message);
         // If browser is disconnected, force restart on next use
@@ -146,11 +153,33 @@ async function getLoggedInAO3Page() {
         let lastErr = null;
         while (attempt < LOGIN_RETRY_MAX) {
             try {
+                // Defensive: check if page is still open and not detached before navigation
+                if (page.isClosed() || !page.mainFrame() || page.mainFrame()._detached) {
+                    logBrowserEvent('Page is closed or detached before navigation, recreating page...');
+                    page = await browser.newPage();
+                    await page.setUserAgent(getCurrentUserAgent());
+                    await page.setExtraHTTPHeaders({
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Upgrade-Insecure-Requests': '1',
+                        'X-Sam-Bot-Info': 'Hi AO3 devs! This is Sam, a hand-coded Discord bot for a single small server. I only fetch header metadata for user recs and do not retrieve fic content. Contact: https://github.com/reajamoon/sam-bot'
+                    });
+                }
                 await page.goto(AO3_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT });
                 return;
             } catch (err) {
                 lastErr = err;
-                if (err.name === 'TimeoutError' || (err.message && err.message.includes('timeout'))) {
+                // Handle detached frame errors specifically
+                if ((err.message && (err.message.includes('detached') || err.message.includes('LifecycleWatcher disposed'))) || (err.name === 'Error' && err.message && err.message.includes('Frame'))) {
+                    logBrowserEvent('Frame was detached during navigation, recreating page and retrying...');
+                    if (!page.isClosed()) { try { await page.close(); } catch {} }
+                    page = await browser.newPage();
+                    await page.setUserAgent(getCurrentUserAgent());
+                    await page.setExtraHTTPHeaders({
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Upgrade-Insecure-Requests': '1',
+                        'X-Sam-Bot-Info': 'Hi AO3 devs! This is Sam, a hand-coded Discord bot for a single small server. I only fetch header metadata for user recs and do not retrieve fic content. Contact: https://github.com/reajamoon/sam-bot'
+                    });
+                } else if (err.name === 'TimeoutError' || (err.message && err.message.includes('timeout'))) {
                     const delay = LOGIN_RETRY_BASE_DELAY * Math.pow(2, attempt); // exponential backoff
                     console.warn(`[AO3] Login page navigation timed out (attempt ${attempt + 1}/${LOGIN_RETRY_MAX}), retrying after ${Math.round(delay/1000)}s...`);
                     await new Promise(res => setTimeout(res, delay));
