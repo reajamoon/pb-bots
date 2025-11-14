@@ -67,6 +67,17 @@ async function handleSearchRecommendations(interaction) {
         });
         return;
     }
+    if (allResults.length === 1) {
+        // Show full rec embed for exact match
+        const createRecommendationEmbed = require('../../utils/recUtils/createRecommendationEmbed');
+        const embed = await createRecommendationEmbed(allResults[0]);
+        await interaction.editReply({
+            content: `Found 1 fic matching your search.`,
+            embeds: [embed],
+            components: []
+        });
+        return;
+    }
     // Pagination: 3 results per page
     const page = 1;
     const perPage = 3;
