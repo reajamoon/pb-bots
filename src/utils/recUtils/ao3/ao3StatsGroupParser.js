@@ -60,7 +60,10 @@ function parseStatsGroup($) {
                 // For numeric/string stats, rating, and language, only overwrite if different
                 let val = $el.text().replace(/,/g, '').trim();
                 let value = val;
-                if (['words', 'chapters', 'comments', 'kudos', 'bookmarks', 'hits'].includes(mapped)) {
+                if (mapped === 'chapters') {
+                    // Always keep chapters as string (e.g., '1/1')
+                    value = val;
+                } else if (['words', 'comments', 'kudos', 'bookmarks', 'hits'].includes(mapped)) {
                     value = isNaN(parseInt(val, 10)) ? val : parseInt(val, 10);
                 }
                 if (stats[mapped] !== value) {
