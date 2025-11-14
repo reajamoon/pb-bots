@@ -7,8 +7,8 @@ function normalizeMetadata(metadata, source) {
     // Map AO3 fields to internal fields using the field map
     for (const [ao3Key, value] of Object.entries(metadata)) {
         const internalKey = AO3_FIELD_MAP[ao3Key] || ao3Key;
-        if (Array.isArray(value)) {
-            normalized[internalKey] = value;
+        if (internalKey === 'tags') {
+            normalized.tags = Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : (Array.isArray(value) ? value : []);
         } else {
             normalized[internalKey] = value;
         }
