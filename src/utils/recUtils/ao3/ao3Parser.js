@@ -360,10 +360,10 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
                 extractedSummary: metadata.summary,
                 allMetadata: metadata
             };
-            const fname = `parser_debug_${Date.now()}_${url ? url.replace(/[^a-zA-Z0-9]/g, '_').slice(-60) : 'no_url'}.json`;
-            const fpath = path.join(debugLogDir, fname);
-            fs.writeFileSync(fpath, JSON.stringify(debugObj, null, 2), 'utf8');
-            console.warn(`[AO3 PARSER DEBUG] Saved parser debug info for ${url} to ${fpath}`);
+            // const fname = `parser_debug_${Date.now()}_${url ? url.replace(/[^a-zA-Z0-9]/g, '_').slice(-60) : 'no_url'}.json`;
+            // const fpath = path.join(debugLogDir, fname);
+            // fs.writeFileSync(fpath, JSON.stringify(debugObj, null, 2), 'utf8');
+            // console.warn(`[AO3 PARSER DEBUG] Saved parser debug info for ${url} to ${fpath}`);
         } catch (err) {
             console.warn('[AO3 PARSER DEBUG] Failed to save parser debug info:', err);
         }
