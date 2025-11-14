@@ -27,6 +27,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
         fs.mkdirSync(FAILED_HTML_DIR, { recursive: true });
     }
     async function doLoginAndFetch() {
+        // Always delete cookies and reset in-memory cookies before each login attempt if previous attempt failed
         const loginResult = await getLoggedInAO3Page();
         browser = loginResult.browser;
         page = loginResult.page;
@@ -61,6 +62,16 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
         if (rateLimitMatch) {
             console.warn('[AO3] Rate limit or CAPTCHA detected during fetch (title or error container).');
             html = null;
+            // Defensive: always delete cookies and reset in-memory cookies on rate limit
+            const COOKIES_PATH = 'ao3_cookies.json';
+            const fs = require('fs');
+            if (fs.existsSync(COOKIES_PATH)) {
+                try { fs.unlinkSync(COOKIES_PATH); console.warn('[AO3] Deleted cookies file due to rate limit/CAPTCHA.'); } catch {}
+            }
+            if (global.__samInMemoryCookies) {
+                global.__samInMemoryCookies = null;
+                console.warn('[AO3] In-memory cookies reset due to rate limit/CAPTCHA.');
+            }
             return false;
         }
         html = await page.content();
@@ -70,6 +81,16 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             /New\s*Session/i.test(pageTitle) ||
             currentUrl.includes('/users/login')
         ) {
+            // Defensive: always delete cookies and reset in-memory cookies on login/interstitial page
+            const COOKIES_PATH = 'ao3_cookies.json';
+            const fs = require('fs');
+            if (fs.existsSync(COOKIES_PATH)) {
+                try { fs.unlinkSync(COOKIES_PATH); console.warn('[AO3] Deleted cookies file due to login/interstitial page.'); } catch {}
+            }
+            if (global.__samInMemoryCookies) {
+                global.__samInMemoryCookies = null;
+                console.warn('[AO3] In-memory cookies reset due to login/interstitial page.');
+            }
             return false;
         }
         loggedIn = isAO3LoggedInPage(html);

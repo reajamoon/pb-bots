@@ -125,10 +125,19 @@ async function getLoggedInAO3Page() {
                 // Not logged in, cookies are bad/expired
                 logBrowserEvent('[AO3] Cookies invalid or expired. Deleting cookies and forcing fresh login.');
                 fs.unlinkSync(COOKIES_PATH);
+                // Reset in-memory cookies if used
+                if (global.__samInMemoryCookies) {
+                    global.__samInMemoryCookies = null;
+                    logBrowserEvent('[AO3] In-memory cookies reset due to invalid file cookies.');
+                }
             }
         } catch (err) {
             logBrowserEvent('[AO3] Failed to load cookies, will attempt fresh login. ' + (err && err.message ? err.message : ''));
             try { fs.unlinkSync(COOKIES_PATH); } catch {}
+            if (global.__samInMemoryCookies) {
+                global.__samInMemoryCookies = null;
+                logBrowserEvent('[AO3] In-memory cookies reset due to cookie load failure.');
+            }
         }
     }
     logBrowserEvent('[AO3] Performing fresh login (no valid cookies found).');
@@ -266,6 +275,19 @@ async function getLoggedInAO3Page() {
     } catch (err) {
         loginError = err;
         console.error('[AO3] Login failed.', err);
+        // On any login failure, always delete cookies and reset in-memory cookies
+        try {
+            if (fs.existsSync(COOKIES_PATH)) {
+                fs.unlinkSync(COOKIES_PATH);
+                logBrowserEvent('[AO3] Deleted cookies file due to login failure.');
+            }
+        } catch (e) {
+            logBrowserEvent('[AO3] Failed to delete cookies file after login failure: ' + e.message);
+        }
+        if (global.__samInMemoryCookies) {
+            global.__samInMemoryCookies = null;
+            logBrowserEvent('[AO3] In-memory cookies reset after login failure.');
+        }
         throw new Error('AO3 login failed.' + (err && err.message ? ' ' + err.message : ''));
     } finally {
         // Always close the page after login attempt to prevent leaks

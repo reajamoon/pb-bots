@@ -119,6 +119,7 @@ async function processQueueJob(job) {
     if (channelId) {
       channel = await client.channels.fetch(channelId).catch(() => null);
     }
+    const updateMessages = require('./src/commands/recHandlers/updateMessages');
     await processRecommendationJob({
       url: job.fic_url,
       user,
@@ -129,7 +130,24 @@ async function processQueueJob(job) {
       existingRec,
       notify: async (embedOrError) => {
         if (!embedOrError || embedOrError.error) {
-          await job.update({ status: 'error', error_message: embedOrError?.error || 'Unknown error' });
+          // Bump-to-back logic for AO3 login/session errors
+          const errMsg = embedOrError?.error || '';
+          const loginMsg = updateMessages.loginMessage;
+          if (
+            /login|session/i.test(errMsg) ||
+            (typeof loginMsg === 'string' && errMsg.trim() === loginMsg.trim())
+          ) {
+            // Bump job to back of queue
+            await job.update({
+              status: 'pending',
+              created_at: new Date(),
+              error_message: errMsg
+            });
+            console.warn(`[QueueWorker] AO3 login/session error for job ${job.id}. Bumping to back of queue.`);
+            return;
+          }
+          // Otherwise, mark as error
+          await job.update({ status: 'error', error_message: errMsg || 'Unknown error' });
           return;
         }
         await job.update({ status: 'done', result: embedOrError.recommendation, error_message: null });
