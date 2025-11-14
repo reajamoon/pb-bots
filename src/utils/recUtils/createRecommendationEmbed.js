@@ -56,9 +56,10 @@ async function createRecommendationEmbed(rec) {
             text: `From the Profound Bond Library • Recommended by ${rec.recommendedByUsername} • ID: ${rec.id}`
         });
     if (rec.summary) {
+        const summaryText = rec.summary.length > 400 ? rec.summary.substring(0, 400) + '...' : rec.summary;
         embed.addFields({
             name: 'Summary',
-            value: rec.summary.length > 400 ? rec.summary.substring(0, 400) + '...' : rec.summary
+            value: `>>> ${summaryText}`
         });
     }
     const isLinkWorking = rec.deleted ? false : await quickLinkCheck(rec.url);
@@ -181,7 +182,7 @@ async function createRecommendationEmbed(rec) {
         });
     }
     if (rec.notes) {
-        embed.addFields({ name: 'Notes', value: rec.notes });
+        embed.addFields({ name: 'Recommender Notes', value: `>>> ${rec.notes}` });
     }
     // --- Row: Hits, Kudos, Bookmarks (all inline, same row) ---
     const engagementFields = [];
