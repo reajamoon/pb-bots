@@ -56,30 +56,35 @@ async function handleSearchRecommendations(interaction) {
     }
     if (tagsQuery) {
         // Advanced: allow mixing AND (+) and OR (,) logic
-        // For jsonb arrays, use only [Op.contains]
+        // Use partial, case-insensitive match for tags using jsonb_array_elements_text(tags) ILIKE
         // Example: 'canon divergence+bottom dean winchester, angst' means (canon divergence AND bottom dean winchester) OR (angst)
+        const { literal } = require('sequelize');
         const orGroups = tagsQuery.split(',').map(group => group.trim()).filter(Boolean);
         const tagOrClauses = [];
         for (const group of orGroups) {
             if (group.includes('+')) {
-                // AND group: all tags must be present
+                // AND group: all tags must be present (all must match)
                 const andTags = group.split('+').map(t => t.trim()).filter(Boolean);
                 if (andTags.length > 0) {
-                    tagOrClauses.push({ tags: { [Op.contains]: andTags } });
+                    // All tags in this group must be present (AND)
+                    tagOrClauses.push({
+                        [Op.and]: andTags.map(tag =>
+                            literal(`EXISTS (SELECT 1 FROM jsonb_array_elements_text("tags") AS t WHERE t ILIKE '%${tag.replace(/'/g, "''")}%')`)
+                        )
+                    });
                 }
             } else if (group.length) {
-                // Single tag (OR): use [Op.contains] with single-element array
-                tagOrClauses.push({ tags: { [Op.contains]: [group] } });
+                // Single tag (OR): match if any tag matches
+                const tag = group;
+                tagOrClauses.push(
+                    literal(`EXISTS (SELECT 1 FROM jsonb_array_elements_text("tags") AS t WHERE t ILIKE '%${tag.replace(/'/g, "''")}%')`)
+                );
             }
         }
-        // Only push valid clauses
-        const validTagOrClauses = tagOrClauses.filter(clause => {
-            return clause.tags && clause.tags[Op.contains] && Array.isArray(clause.tags[Op.contains]) && clause.tags[Op.contains].length > 0;
-        });
-        if (validTagOrClauses.length === 1) {
-            whereClauses.push(validTagOrClauses[0]);
-        } else if (validTagOrClauses.length > 1) {
-            whereClauses.push({ [Op.or]: validTagOrClauses });
+        if (tagOrClauses.length === 1) {
+            whereClauses.push(tagOrClauses[0]);
+        } else if (tagOrClauses.length > 1) {
+            whereClauses.push({ [Op.or]: tagOrClauses });
         }
     }
     if (ratingQuery) {
