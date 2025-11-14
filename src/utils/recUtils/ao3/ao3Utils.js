@@ -81,6 +81,14 @@ async function getLoggedInAO3Page() {
     }
     let page;
     try {
+        // Limit open pages to prevent leaks
+        const openPages = await browser.pages();
+        if (openPages.length > 4) {
+            logBrowserEvent(`[AO3] Too many open pages (${openPages.length}). Closing extras.`);
+            for (let i = 1; i < openPages.length; i++) {
+                try { await openPages[i].close(); } catch (e) { logBrowserEvent('Error closing extra page: ' + e.message); }
+            }
+        }
         page = await browser.newPage();
     } catch (err) {
         logBrowserEvent('Error creating new page: ' + err.message);
@@ -103,9 +111,26 @@ async function getLoggedInAO3Page() {
     });
 
     if (fs.existsSync(COOKIES_PATH)) {
+        let cookies = null;
+        let needsRefresh = false;
         try {
             logBrowserEvent('[AO3] Attempting to load cookies from file...');
-            const cookies = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
+            cookies = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
+            // Proactive refresh: check expiry
+            const now = Math.floor(Date.now() / 1000);
+            const refreshThreshold = 24 * 60 * 60; // 1 day in seconds
+            if (Array.isArray(cookies)) {
+                for (const c of cookies) {
+                    if (c.expires && c.expires > 0 && c.expires - now < refreshThreshold) {
+                        needsRefresh = true;
+                        break;
+                    }
+                }
+            }
+            if (needsRefresh) {
+                logBrowserEvent('[AO3] Cookies expiring soon, triggering proactive refresh.');
+                throw new Error('Cookies expiring soon, refreshing.');
+            }
             await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
             await page.setCookie(...cookies);
             await page.reload({ waitUntil: 'domcontentloaded' });
@@ -121,6 +146,13 @@ async function getLoggedInAO3Page() {
         } catch (err) {
             logBrowserEvent('[AO3] Failed to load cookies, will attempt fresh login. ' + (err && err.message ? err.message : ''));
             try { fs.unlinkSync(COOKIES_PATH); } catch {}
+        } finally {
+            // Always close the page if not returning early
+            if (page && !page.isClosed()) {
+                try { await page.close(); logBrowserEvent('[AO3] Closed page after failed cookie login.'); } catch (e) { logBrowserEvent('Error closing page after cookie login: ' + e.message); }
+            }
+            // Open a new page for fresh login
+            page = await browser.newPage();
         }
     }
     logBrowserEvent('[AO3] Performing fresh login (no valid cookies found).');
@@ -149,6 +181,7 @@ async function getLoggedInAO3Page() {
         throw lastErr || new Error('AO3 login navigation failed after retries');
     };
     await gotoLogin();
+    let loginError = null;
     try {
         // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
         const pageTitle = await page.title();
@@ -255,9 +288,17 @@ async function getLoggedInAO3Page() {
             }
         }
     } catch (err) {
+        loginError = err;
         console.error('[AO3] Login failed.', err);
         throw new Error('AO3 login failed.' + (err && err.message ? ' ' + err.message : ''));
+    } finally {
+        // Always close the page after login attempt to prevent leaks
+        if (page && !page.isClosed()) {
+            try { await page.close(); logBrowserEvent('[AO3] Closed page after login attempt.'); } catch (e) { logBrowserEvent('Error closing page after login attempt: ' + e.message); }
+        }
     }
+    // Open a new page for the caller to use
+    page = await browser.newPage();
     return { browser, page };
 }
 
