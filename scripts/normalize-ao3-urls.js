@@ -16,27 +16,33 @@ function normalizeAo3Url(url) {
 
 async function main() {
     const recs = await Recommendation.findAll({ order: [['createdAt', 'ASC']] });
-    const seen = new Map(); // normalizedUrl -> Recommendation
-    const toDelete = [];
-    let updated = 0;
+    // Step 1: Normalize all URLs in memory
     for (const rec of recs) {
-        const origUrl = rec.url;
-        const normUrl = normalizeAo3Url(origUrl);
-        if (origUrl !== normUrl) {
-            // Update the URL if it was normalized
-            rec.url = normUrl;
+        rec._normalizedUrl = normalizeAo3Url(rec.url);
+    }
+    // Step 2: Group by normalized URL, keep oldest, mark others for deletion
+    const seen = new Map(); // normalizedUrl -> Recommendation (oldest)
+    const toDelete = [];
+    for (const rec of recs) {
+        const normUrl = rec._normalizedUrl;
+        if (seen.has(normUrl)) {
+            toDelete.push(rec.id);
+        } else {
+            seen.set(normUrl, rec);
+        }
+    }
+    // Step 3: Delete duplicates
+    if (toDelete.length) {
+        await Recommendation.destroy({ where: { id: { [Op.in]: toDelete } } });
+    }
+    // Step 4: Update remaining recs to have normalized URL if needed
+    let updated = 0;
+    for (const rec of seen.values()) {
+        if (rec.url !== rec._normalizedUrl) {
+            rec.url = rec._normalizedUrl;
             await rec.save();
             updated++;
         }
-        if (seen.has(normUrl)) {
-            // Duplicate found, mark for deletion (keep the first/oldest)
-            toDelete.push(rec.id);
-        } else {
-            seen.set(normUrl, rec.id);
-        }
-    }
-    if (toDelete.length) {
-        await Recommendation.destroy({ where: { id: { [Op.in]: toDelete } } });
     }
     console.log(`Normalized ${updated} URLs. Removed ${toDelete.length} duplicates.`);
 }
