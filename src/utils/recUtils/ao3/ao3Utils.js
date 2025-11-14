@@ -66,7 +66,7 @@ async function getLoggedInAO3Page() {
     const fs = require('fs');
     const COOKIES_PATH = 'ao3_cookies.json';
     // Configurable timeouts (ms)
-    const NAV_TIMEOUT = parseInt(process.env.AO3_NAV_TIMEOUT, 10) || 60000;
+    const NAV_TIMEOUT = parseInt(process.env.AO3_NAV_TIMEOUT, 10) || 90000;
     const LOGIN_RETRY_MAX = parseInt(process.env.AO3_LOGIN_RETRY_MAX, 10) || 3;
     const LOGIN_RETRY_BASE_DELAY = parseInt(process.env.AO3_LOGIN_RETRY_BASE_DELAY, 10) || 5000;
     if (!username || !password) {
