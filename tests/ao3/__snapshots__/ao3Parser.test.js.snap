@@ -3,15 +3,18 @@
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work1_anonlocked.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "No Archive Warnings Apply",
     ],
     "authors": [
       "raeldaza",
     ],
+    "bookmarks": 618,
+    "category": "M/M",
     "category_tags": [
       "M/M",
     ],
+    "chapters": "1/1",
     "character_tags": [
       "Castiel",
       "Dean Winchester",
@@ -22,6 +25,7 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work1_anonlocked.html 1
       "The Destiel Fan Survey Favs Collection",
       "Anonymous",
     ],
+    "comments": 124,
     "fandom_tags": [
       "Supernatural",
     ],
@@ -33,22 +37,19 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work1_anonlocked.html 1
       "Pining",
       "Case Fic",
     ],
+    "hits": 48043,
+    "kudos": 4031,
+    "publishedDate": "2013-06-01",
+    "rating": "Mature",
     "relationship_tags": [
       "Castiel/Dean Winchester",
     ],
     "required_tags": [],
-    "stats": {
-      "bookmarks": 618,
-      "chapters": "1",
-      "comments": 124,
-      "hits": 48043,
-      "kudos": 4031,
-      "published": "2013-06-01",
-      "words": 11393,
-    },
+    "status": "Unknown",
     "summary": "Castiel is captured by a djinn. Dean goes slightly crazy, and Cas discovers a thing or two about himself.",
     "title": "only if for a night",
     "url": "test://dummy.url",
+    "wordCount": 11393,
   },
 }
 `;
@@ -56,7 +57,7 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work1_anonlocked.html 1
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work2_easymode.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "No Archive Warnings Apply",
     ],
     "authors": [
@@ -64,9 +65,12 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work2_easymode.html 1`]
       "echo_tai",
       "Peggy_Gaugh",
     ],
+    "bookmarks": 1704,
+    "category": "M/M",
     "category_tags": [
       "M/M",
     ],
+    "chapters": "1/1",
     "character_tags": [
       "Castiel",
       "Dean Winchester",
@@ -82,6 +86,7 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work2_easymode.html 1`]
       "The Destiel Fan Survey Favs Collection",
       "ProfoundBond Fic Club",
     ],
+    "comments": 389,
     "fandom_tags": [
       "Supernatural",
     ],
@@ -96,22 +101,19 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work2_easymode.html 1`]
       "Getting Together",
       "Communication",
     ],
+    "hits": 93251,
+    "kudos": 5143,
+    "publishedDate": "2014-11-18",
+    "rating": "Mature",
     "relationship_tags": [
       "Castiel/Dean Winchester",
     ],
     "required_tags": [],
-    "stats": {
-      "bookmarks": 1704,
-      "chapters": "1",
-      "comments": 389,
-      "hits": 93251,
-      "kudos": 5143,
-      "published": "2014-11-18",
-      "words": 52738,
-    },
+    "status": "Unknown",
     "summary": "The angels have fallen, leaving Castiel graceless and Dean with, well, more of other people’s problems. When a string of couples goes missing on the east coast, Dean and Cas decide to investigate—and find themselves trapped and hunted on a couples’ counseling cruise. Although battling monsters at sea is dangerous enough, sorting through emotional baggage proves to be far more deadly. (And, in which Cas embarks to find his missing grace and Dean is put out. Not necessarily in that order.)Art by anobviousaside.",
     "title": "any port in a storm",
     "url": "test://dummy.url",
+    "wordCount": 52738,
   },
 }
 `;
@@ -119,16 +121,19 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work2_easymode.html 1`]
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work3_warningsexplicit.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "Graphic Depictions Of Violence",
     ],
     "authors": [
       "MollyC",
       "litrapod (litra)",
     ],
+    "bookmarks": 952,
+    "category": "M/M",
     "category_tags": [
       "M/M",
     ],
+    "chapters": "3/3",
     "character_tags": [
       "Dean Winchester",
       "Sam Winchester",
@@ -156,6 +161,7 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work3_warningsexplicit.
       "Primus Inter Pares",
       "ProfoundBondFanfic Tumblr Fic Recs",
     ],
+    "comments": 335,
     "fandom_tags": [
       "Supernatural",
     ],
@@ -176,22 +182,19 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work3_warningsexplicit.
       "Technically includes major char death",
       "But it doesn't stick because SPN",
     ],
+    "hits": 61161,
+    "kudos": 2772,
+    "publishedDate": "2013-10-03",
+    "rating": "Explicit",
     "relationship_tags": [
       "Dean/Cas",
     ],
     "required_tags": [],
-    "stats": {
-      "bookmarks": 952,
-      "chapters": "3",
-      "comments": 335,
-      "hits": 61161,
-      "kudos": 2772,
-      "published": "2013-10-03",
-      "words": 78107,
-    },
+    "status": "Unknown",
     "summary": "Cas never expected to live through Dean's last plan. Now, he's not only alive, he's in the past--before Dean went to Hell, before he made the deal at all. Can a fallen angel and a couple of hunters change the future by altering the past?",
     "title": "Every Man's Got A Right",
     "url": "test://dummy.url",
+    "wordCount": 78107,
   },
 }
 `;
@@ -199,20 +202,24 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work3_warningsexplicit.
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work4_regularlocked.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "No Archive Warnings Apply",
     ],
     "authors": [
       "microcomets",
     ],
+    "bookmarks": 330,
+    "category": "M/M",
     "category_tags": [
       "M/M",
     ],
+    "chapters": "3/3",
     "character_tags": [
       "Castiel",
       "Dean Winchester",
       "Sam Winchester",
     ],
+    "comments": 91,
     "fandom_tags": [
       "Supernatural",
     ],
@@ -224,22 +231,19 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work4_regularlocked.htm
       "Witches",
       "Temporary Amnesia",
     ],
+    "hits": 18914,
+    "kudos": 1864,
+    "publishedDate": "2013-09-01",
+    "rating": "Teen And Up Audiences",
     "relationship_tags": [
       "Castiel/Dean Winchester",
     ],
     "required_tags": [],
-    "stats": {
-      "bookmarks": 330,
-      "chapters": "3",
-      "comments": 91,
-      "hits": 18914,
-      "kudos": 1864,
-      "published": "2013-09-01",
-      "words": 12188,
-    },
+    "status": "Unknown",
     "summary": "Dean wakes up with a wedding ring and without a clue where he is.",
     "title": "what happens in vegas",
     "url": "test://dummy.url",
+    "wordCount": 12188,
   },
 }
 `;
@@ -247,15 +251,18 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work4_regularlocked.htm
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work5_regularexplicit.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "No Archive Warnings Apply",
     ],
     "authors": [
       "xylodemon",
     ],
+    "bookmarks": 659,
+    "category": "M/M",
     "category_tags": [
       "M/M",
     ],
+    "chapters": "1/1",
     "character_tags": [
       "Dean Winchester",
       "Castiel (Supernatural)",
@@ -264,6 +271,7 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work5_regularexplicit.h
       "The Destiel Fan Survey Favs Collection",
       "SPN Best Works",
     ],
+    "comments": 225,
     "fandom_tags": [
       "Supernatural",
     ],
@@ -274,22 +282,19 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work5_regularexplicit.h
       "Angst and Humor",
       "Ghosts",
     ],
+    "hits": 30038,
+    "kudos": 3080,
+    "publishedDate": "2018-05-26",
+    "rating": "Explicit",
     "relationship_tags": [
       "Castiel/Dean Winchester",
     ],
     "required_tags": [],
-    "stats": {
-      "bookmarks": 659,
-      "chapters": "1",
-      "comments": 225,
-      "hits": 30038,
-      "kudos": 3080,
-      "published": "2018-05-26",
-      "words": 22012,
-    },
+    "status": "Unknown",
     "summary": ""Goddamned ghosts," Dean snaps, stabbing his shovel into the dirt. "Goddamned Heaven."(or: the one with the Ghost Apocalypse)",
     "title": "Rest in Pieces",
     "url": "test://dummy.url",
+    "wordCount": 22012,
   },
 }
 `;
@@ -297,18 +302,21 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work5_regularexplicit.h
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work6_orphanwithname.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "No Archive Warnings Apply",
     ],
     "authors": [
       "testy (orphan_account)",
     ],
+    "bookmarks": 5,
     "category_tags": [],
+    "chapters": "1/1",
     "character_tags": [
       "Tony Stark",
       "Pigeons - Character",
       "socks - Character",
     ],
+    "comments": 9,
     "fandom_tags": [
       "Original Work",
     ],
@@ -317,20 +325,17 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work6_orphanwithname.ht
       "what happens when you can only see the last twenty percent of what came before",
       "all roads lead to surreality",
     ],
+    "hits": 3039,
+    "kudos": 87,
+    "publishedDate": "2025-04-01",
+    "rating": "General Audiences",
     "relationship_tags": [],
     "required_tags": [],
-    "stats": {
-      "bookmarks": 5,
-      "chapters": "1",
-      "comments": 9,
-      "hits": 3039,
-      "kudos": 87,
-      "published": "2025-04-01",
-      "words": 830,
-    },
+    "status": "Unknown",
     "summary": "With a magical, self-sustaining supply of pigeons and a penchant for the dramatic, Socks is going to need all the snacks they can get to survive the bizarre world around them. The only thing they can count on is that things will only get weirder from here.",
     "title": "Testing (for breaks in reality)",
     "url": "test://dummy.url",
+    "wordCount": 830,
   },
 }
 `;
@@ -338,7 +343,7 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work6_orphanwithname.ht
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work7_multipleauthors.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "Creator Chose Not To Use Archive Warnings",
     ],
     "authors": [
@@ -348,24 +353,26 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work7_multipleauthors.h
       "cjrecord",
       "testy",
     ],
+    "bookmarks": 0,
     "category_tags": [],
+    "chapters": "1/?",
     "character_tags": [],
+    "comments": 0,
     "fandom_tags": [
       "Testing",
     ],
     "freeform_tags": [],
+    "hits": 76,
+    "kudos": 5,
+    "publishedDate": "2016-05-19",
+    "rating": "Not Rated",
     "relationship_tags": [],
     "required_tags": [],
-    "stats": {
-      "chapters": "1",
-      "hits": 76,
-      "kudos": 5,
-      "published": "2016-05-19",
-      "words": 6,
-    },
+    "status": "Unknown",
     "summary": "test block",
     "title": "1623",
     "url": "test://dummy.url",
+    "wordCount": 6,
   },
 }
 `;
@@ -373,21 +380,25 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work7_multipleauthors.h
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work8_lockedorphan.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "Graphic Depictions Of Violence",
     ],
     "authors": [
       "orphan_account",
     ],
+    "bookmarks": 0,
+    "category": "F/M",
     "category_tags": [
       "F/M",
     ],
+    "chapters": "1/1",
     "character_tags": [
       "Gestalt(s) (SIGNALIS)",
       "Original Gestalt(s) (SIGNALIS)",
       "Storch | STCR Unit(s)",
       "Original Replika Unit(s) (SIGNALIS)",
     ],
+    "comments": 0,
     "fandom_tags": [
       "SIGNALIS (Video Game)",
     ],
@@ -397,19 +408,19 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work8_lockedorphan.html
       "Giants",
       "Gentle Storch",
     ],
+    "hits": 4,
+    "kudos": 0,
+    "publishedDate": "2025-11-13",
+    "rating": "Not Rated",
     "relationship_tags": [
       "Gestalt(s)/Storch | STCR Unit(s)",
     ],
     "required_tags": [],
-    "stats": {
-      "chapters": "1",
-      "hits": 4,
-      "published": "2025-11-13",
-      "words": 1025,
-    },
+    "status": "Unknown",
     "summary": "STCR-266 isn't like the other Storches. She feels things other than anger.",
     "title": "Bad Dreams",
     "url": "test://dummy.url",
+    "wordCount": 1025,
   },
 }
 `;
@@ -417,20 +428,24 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work8_lockedorphan.html
 exports[`AO3 Parser Integration parses AO3 HTML fixture: work9_regularorphan.html 1`] = `
 {
   "metadata": {
-    "archive_warnings": [
+    "archiveWarnings": [
       "Creator Chose Not To Use Archive Warnings",
     ],
     "authors": [
       "orphan_account",
     ],
+    "bookmarks": 0,
+    "category": "M/M",
     "category_tags": [
       "M/M",
     ],
+    "chapters": "1/1",
     "character_tags": [
       "Kim Kanghoon | Yesung",
       "Kim Heechul (Super Junior)",
       "Park Jungsoo | Leeteuk",
     ],
+    "comments": 0,
     "fandom_tags": [
       "Super Junior",
     ],
@@ -446,6 +461,10 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work9_regularorphan.htm
       "Alternate Universe",
       "Hurt/Comfort",
     ],
+    "hits": 14,
+    "kudos": 1,
+    "publishedDate": "2025-11-13",
+    "rating": "Teen And Up Audiences",
     "relationship_tags": [
       "Kim Heechul/Kim Kanghoon | Yesung",
       "Kim Kanghoon | Yesung/Park Jungsoo | Leeteuk",
@@ -453,16 +472,11 @@ exports[`AO3 Parser Integration parses AO3 HTML fixture: work9_regularorphan.htm
       "Kim Heechul/Kim Kanghoon | Yesung/Park Jungsoo | Leeteuk",
     ],
     "required_tags": [],
-    "stats": {
-      "chapters": "1",
-      "hits": 14,
-      "kudos": 1,
-      "published": "2025-11-13",
-      "words": 1282,
-    },
+    "status": "Unknown",
     "summary": "Yesung found comfort and himself again, since an unexpected encounter with a stranger.",
     "title": "When the world falls sideways",
     "url": "test://dummy.url",
+    "wordCount": 1282,
   },
 }
 `;

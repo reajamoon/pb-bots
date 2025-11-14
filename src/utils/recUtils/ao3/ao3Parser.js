@@ -231,60 +231,94 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
 
         // --- Promote all required fields to top-level for Zod/schema alignment ---
         if (!metadata.stats) metadata.stats = {};
-        // Promote stats fields to top-level with expected names
-        // Check for canonical AO3 abandoned tag in freeform tags
-        // If status is still not set, infer from chapters field (N/N where N == N means complete)
+        // --- Robust status extraction ---
+        // 1. Check for AO3 'complete-yes'/'complete-no' icons
+        let statusFromIcon = null;
+        if (typeof $ === 'function') {
+            if ($('img[src$="complete-yes.png"]').length > 0) statusFromIcon = 'Complete';
+            else if ($('img[src$="complete-no.png"]').length > 0) statusFromIcon = 'In Progress';
+            }
+        // 2. Parse chapters field for N/N, N/?, ?/?
+        let statusFromChapters = null;
         if (typeof metadata.chapters === 'string') {
-            const match = metadata.chapters.match(/^(\d+)\s*\/\s*(\d+)$/);
+            const match = metadata.chapters.match(/^(\d+)\s*\/\s*(\d+|\?)/);
             if (match) {
                 const num1 = parseInt(match[1], 10);
-                const num2 = parseInt(match[2], 10);
-                if (!isNaN(num1) && !isNaN(num2) && num1 === num2 && num1 > 0) {
-                    metadata.status = 'Complete';
-                }
+                const num2 = match[2] === '?' ? null : parseInt(match[2], 10);
+                if (num2 && num1 === num2 && num1 > 0) statusFromChapters = 'Complete';
+                else if (num2 === null || num1 < (num2 || 0)) statusFromChapters = 'In Progress';
+                    }
             }
-        }
+        // 3. Abandoned tag
         const abandonedTag = 'Abandoned Work - Unfinished and Discontinued';
         let freeformTagsArr = [];
         if (Array.isArray(metadata.freeform_tags)) {
             freeformTagsArr = metadata.freeform_tags.map(t => t.trim().toLowerCase());
-        } else if (Array.isArray(metadata.tags)) {
+            } else if (Array.isArray(metadata.tags)) {
             freeformTagsArr = metadata.tags.map(t => t.trim().toLowerCase());
-        }
-        if (freeformTagsArr.includes(abandonedTag.toLowerCase())) {
-            if (!metadata.status || metadata.status.toLowerCase() !== 'deleted') {
-                metadata.status = 'Abandoned';
+            } let statusFromAbandoned = null;
+            if (freeformTagsArr.includes(abandonedTag.toLowerCase())) {
+            statusFromAbandoned = 'Abandoned';
             }
-        }
-        if (metadata.stats.rating) metadata.rating = metadata.stats.rating;
-        if (metadata.stats.words) metadata.wordCount = metadata.stats.words;
-        if (metadata.stats.chapters) metadata.chapters = metadata.stats.chapters;
-        // AO3 does not provide a direct status field; infer from completed
+        // 4. Completed date field
+        let statusFromCompleted = null;
         if (typeof metadata.stats.completed !== 'undefined') {
-            // AO3 marks completed as a date string if complete, or empty/undefined if not
-            if (metadata.stats.completed && metadata.stats.completed.trim() !== '') {
-                metadata.status = 'Complete';
-                metadata.completedDate = metadata.stats.completed;
+        if (metadata.stats.completed && metadata.stats.completed.trim() !== '') {
+            statusFromCompleted = 'Complete';
+            metadata.completedDate = metadata.stats.completed;
             } else {
-                metadata.status = 'In Progress';
+            statusFromCompleted = 'In Progress';
             }
         }
-        if (metadata.stats.status) metadata.status = metadata.stats.status; // fallback if present
-        if (metadata.stats.published) metadata.publishedDate = metadata.stats.published;
-        if (metadata.stats.updated) metadata.updatedDate = metadata.stats.updated;
-        if (metadata.stats.kudos) metadata.kudos = metadata.stats.kudos;
-        if (metadata.stats.hits) metadata.hits = metadata.stats.hits;
-        if (metadata.stats.bookmarks) metadata.bookmarks = metadata.stats.bookmarks;
-        if (metadata.stats.comments) metadata.comments = metadata.stats.comments;
-        // Promote category if present
-        if (metadata.category_tags && metadata.category_tags.length > 0) {
-            metadata.category = metadata.category_tags[0];
+        // 5. Fallback to stats.status if present
+        let statusFromStats = null;
+        if (metadata.stats.status) statusFromStats = metadata.stats.status;
+
+        // Priority: Abandoned > Complete > In Progress > Unknown
+        // Normalize status to a fixed set
+        function normalizeStatus(val) {
+            if (!val) return 'Unknown';
+            const v = String(val).toLowerCase();
+            if (v.includes('abandon')) return 'Abandoned';
+            if (v === 'complete' || v === 'completed') return 'Complete';
+            if (v === 'in progress' || v === 'work in progress' || v === 'wip' || v === 'incomplete') return 'In Progress';
+            return 'Unknown';
         }
+        metadata.status = normalizeStatus(
+            statusFromAbandoned
+            || statusFromIcon
+            || statusFromChapters
+            || statusFromCompleted
+            || statusFromStats
+            || 'Unknown'
+        );
+
+        // Promote stats fields to top-level with expected names
+            if (metadata.stats.rating) metadata.rating = metadata.stats.rating;
+            if (metadata.stats.words) metadata.wordCount = metadata.stats.words;
+            if (metadata.stats.chapters) metadata.chapters = metadata.stats.chapters;
+            if (metadata.stats.published) metadata.publishedDate = metadata.stats.published;
+            if (metadata.stats.updated) metadata.updatedDate = metadata.stats.updated;
+            if (metadata.stats.kudos) metadata.kudos = metadata.stats.kudos;
+            if (metadata.stats.published) metadata.publishedDate = metadata.stats.published;
+            if (metadata.stats.updated) metadata.updatedDate = metadata.stats.updated;
+            if (metadata.stats.kudos) metadata.kudos = metadata.stats.kudos;
+        metadata.kudos = (typeof metadata.stats.kudos === 'number') ? metadata.stats.kudos : 0;
+        metadata.hits = (typeof metadata.stats.hits === 'number') ? metadata.stats.hits : 0;
+        metadata.bookmarks = (typeof metadata.stats.bookmarks === 'number') ? metadata.stats.bookmarks : 0;
+        metadata.comments = (typeof metadata.stats.comments === 'number') ? metadata.stats.comments : 0;
+        // Promote category if present
+            if (metadata.category_tags && metadata.category_tags.length > 0) {
+                    metadata.category = metadata.category_tags[0];
+                    }
         // Promote archive_warnings to archiveWarnings (camelCase for normalization)
-        if (metadata.archive_warnings) metadata.archiveWarnings = metadata.archive_warnings;
+            if (metadata.archive_warnings) {
+                    metadata.archiveWarnings = metadata.archive_warnings;
+                        delete metadata.archive_warnings;
+                        }
         // Always include url field
-        metadata.url = url || metadata.url || null;
-        if (includeRawHtml) metadata.rawHtml = html;
+            metadata.url = url || metadata.url || null;
+            if (includeRawHtml) metadata.rawHtml = html;
 
         // If we failed to extract a title or author, treat as parse failure
         if (metadata.title === 'Unknown Title' || !metadata.authors || metadata.authors[0] === 'Unknown Author') {
