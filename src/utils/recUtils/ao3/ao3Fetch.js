@@ -30,107 +30,105 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
         const loginResult = await getLoggedInAO3Page();
         browser = loginResult.browser;
         page = loginResult.page;
-        try {
-            // If logged in with cookies, always navigate to the fic URL
-            if (loginResult.loggedInWithCookies) {
-                console.log('[AO3] Navigated with cookies.');
-                await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-            }
-            // Check for login redirect
-            let currentUrl = page.url();
-            if (currentUrl.includes('/users/login?restricted=true&return_to=')) {
-                // Perform login (should already be logged in, but just in case)
-                // After login, go back to the original work URL
-                await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-            }
-            // Bypass 'stay logged in' interstitial if present
-            await bypassStayLoggedInInterstitial(page, ao3Url);
-            // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
-            const pageTitle = await page.title();
-            const errorText = await page.evaluate(() => {
-                const selectors = ['.error', '.notice', 'h1', 'h2', '#main .wrapper h1', '#main .wrapper h2'];
-                let found = '';
-                for (const sel of selectors) {
-                    const el = document.querySelector(sel);
-                    if (el && el.textContent) found += el.textContent + '\n';
-                }
-                return found;
-            });
-            const rateLimitMatch =
-                (pageTitle && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(pageTitle)) ||
-                (errorText && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(errorText));
-            if (rateLimitMatch) {
-                console.warn('[AO3] Rate limit or CAPTCHA detected during fetch (title or error container).');
-                await page.close();
-                html = null;
-                return false;
-            }
-            html = await page.content();
-            // Extra check: ensure not still on login/interstitial page
-            if (
-                html.includes('<form id="loginform"') ||
-                /New\s*Session/i.test(pageTitle) ||
-                currentUrl.includes('/users/login')
-            ) {
-                await page.close();
-                return false;
-            }
-            loggedIn = isAO3LoggedInPage(html);
-            return true;
-        } finally {
-            if (page && !page.isClosed()) {
-                await page.close();
-            }
+        // If logged in with cookies, always navigate to the fic URL
+        if (loginResult.loggedInWithCookies) {
+            console.log('[AO3] Navigated with cookies.');
+            await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout: 15000 });
         }
+        // Check for login redirect
+        let currentUrl = page.url();
+        if (currentUrl.includes('/users/login?restricted=true&return_to=')) {
+            // Perform login (should already be logged in, but just in case)
+            // After login, go back to the original work URL
+            await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        }
+        // Bypass 'stay logged in' interstitial if present
+        await bypassStayLoggedInInterstitial(page, ao3Url);
+        // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
+        const pageTitle = await page.title();
+        const errorText = await page.evaluate(() => {
+            const selectors = ['.error', '.notice', 'h1', 'h2', '#main .wrapper h1', '#main .wrapper h2'];
+            let found = '';
+            for (const sel of selectors) {
+                const el = document.querySelector(sel);
+                if (el && el.textContent) found += el.textContent + '\n';
+            }
+            return found;
+        });
+        const rateLimitMatch =
+            (pageTitle && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(pageTitle)) ||
+            (errorText && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(errorText));
+        if (rateLimitMatch) {
+            console.warn('[AO3] Rate limit or CAPTCHA detected during fetch (title or error container).');
+            html = null;
+            return false;
+        }
+        html = await page.content();
+        // Extra check: ensure not still on login/interstitial page
+        if (
+            html.includes('<form id="loginform"') ||
+            /New\s*Session/i.test(pageTitle) ||
+            currentUrl.includes('/users/login')
+        ) {
+            return false;
+        }
+        loggedIn = isAO3LoggedInPage(html);
+        return true;
     }
 
     let ok = false;
     let attempts = 1;
     const maxAttempts = 2;
     let lastError = null;
-    ok = await doLoginAndFetch();
-    while ((!ok || !html) && attempts < maxAttempts) {
-        // If we failed, delete cookies and try again
-        const COOKIES_PATH = 'ao3_cookies.json';
-        if (fs.existsSync(COOKIES_PATH)) {
-            console.warn('[AO3] Detected login/interstitial page. Deleting cookies and retrying login.');
-            try { fs.unlinkSync(COOKIES_PATH); } catch {}
+    try {
+        ok = await doLoginAndFetch();
+        while ((!ok || !html) && attempts < maxAttempts) {
+            // If we failed, delete cookies and try again
+            const COOKIES_PATH = 'ao3_cookies.json';
+            if (fs.existsSync(COOKIES_PATH)) {
+                console.warn('[AO3] Detected login/interstitial page. Deleting cookies and retrying login.');
+                try { fs.unlinkSync(COOKIES_PATH); } catch {}
+            }
+            retried = true;
+            try {
+                ok = await doLoginAndFetch();
+            } catch (err) {
+                lastError = err;
+                ok = false;
+            }
+            attempts++;
         }
-        retried = true;
-        try {
-            ok = await doLoginAndFetch();
-        } catch (err) {
-            lastError = err;
-            ok = false;
+        if (ok && html) {
+            return parseAO3Metadata(html, ao3Url, includeRawHtml);
         }
-        attempts++;
-    }
-    if (ok && html) {
-        return parseAO3Metadata(html, ao3Url, includeRawHtml);
-    }
-    // If we failed all attempts, log and return a clear error
-    const cooldownMs = 60000; // 1 minute cooldown after repeated failures
-    console.error('[AO3] AO3 fetch failed after multiple attempts. Entering cooldown. Last error:', lastError ? lastError.message : '(none)');
-    if (LOG_FAILED_HTML && html) {
-        try {
-            const safeUrl = ao3Url.replace(/[^a-zA-Z0-9]/g, '_').slice(-60);
-            const fname = `fail_${Date.now()}_${safeUrl}.html`;
-            const fpath = path.join(FAILED_HTML_DIR, fname);
-            fs.writeFileSync(fpath, html, 'utf8');
-            console.warn(`[AO3] Saved failed HTML to ${fpath}`);
-        } catch (err) {
-            console.warn('[AO3] Failed to save failed HTML:', err);
+        // If we failed all attempts, log and return a clear error
+        const cooldownMs = 60000; // 1 minute cooldown after repeated failures
+        console.error('[AO3] AO3 fetch failed after multiple attempts. Entering cooldown. Last error:', lastError ? lastError.message : '(none)');
+        if (LOG_FAILED_HTML && html) {
+            try {
+                const safeUrl = ao3Url.replace(/[^a-zA-Z0-9]/g, '_').slice(-60);
+                const fname = `fail_${Date.now()}_${safeUrl}.html`;
+                const fpath = path.join(FAILED_HTML_DIR, fname);
+                fs.writeFileSync(fpath, html, 'utf8');
+                console.warn(`[AO3] Saved failed HTML to ${fpath}`);
+            } catch (err) {
+                console.warn('[AO3] Failed to save failed HTML:', err);
+            }
+        }
+        // Cooldown to avoid hammering AO3 if something is wrong
+        await new Promise(res => setTimeout(res, cooldownMs));
+        return {
+            title: 'Unknown Title',
+            author: 'Unknown Author',
+            url: ao3Url,
+            error: lastError ? `AO3 session or login failed: ${lastError.message}` : 'AO3 session or login required',
+            summary: updateMessages.loginMessage
+        };
+    } finally {
+        if (page && !page.isClosed()) {
+            await page.close();
         }
     }
-    // Cooldown to avoid hammering AO3 if something is wrong
-    await new Promise(res => setTimeout(res, cooldownMs));
-    return {
-        title: 'Unknown Title',
-        author: 'Unknown Author',
-        url: ao3Url,
-        error: lastError ? `AO3 session or login failed: ${lastError.message}` : 'AO3 session or login required',
-        summary: updateMessages.loginMessage
-    };
 }
 
 module.exports = { fetchAO3MetadataWithFallback, isAO3LoggedInPage };
