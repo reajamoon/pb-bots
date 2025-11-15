@@ -8,6 +8,8 @@ let sharedBrowser = null;
 let sharedBrowserUseCount = 0;
 const SHARED_BROWSER_MAX_USES = 25; // Restart browser after this many uses
 
+const fs = require('fs');
+const path = require('path');
 // User-agent pool for randomization
 const userAgents = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:118.0) Gecko/20100101 Firefox/118.0',
@@ -20,6 +22,7 @@ const userAgents = [
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 ];
 let currentUserAgent = null;
+const COOKIES_META_PATH = path.join(process.cwd(), 'ao3_cookies_meta.json');
 
 function logBrowserEvent(msg) {
     const now = new Date().toISOString();
@@ -46,9 +49,25 @@ async function getSharedBrowser() {
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         sharedBrowserUseCount = 1;
-        // Pick a new user-agent for this browser session
-        currentUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
-        logBrowserEvent('Browser launched. User-Agent: ' + currentUserAgent);
+        // Try to load user-agent from meta file if it exists
+        if (fs.existsSync(COOKIES_META_PATH)) {
+            try {
+                const meta = JSON.parse(fs.readFileSync(COOKIES_META_PATH, 'utf8'));
+                if (meta && meta.userAgent && userAgents.includes(meta.userAgent)) {
+                    currentUserAgent = meta.userAgent;
+                    logBrowserEvent('Browser launched. User-Agent (from meta): ' + currentUserAgent);
+                } else {
+                    currentUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+                    logBrowserEvent('Browser launched. User-Agent (random): ' + currentUserAgent);
+                }
+            } catch (err) {
+                currentUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+                logBrowserEvent('Browser launched. User-Agent (random, meta load failed): ' + currentUserAgent);
+            }
+        } else {
+            currentUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+            logBrowserEvent('Browser launched. User-Agent (random, no meta): ' + currentUserAgent);
+        }
         sharedBrowser.on('disconnected', () => {
             logBrowserEvent('Browser disconnected! Will restart on next use.');
             sharedBrowser = null;
@@ -59,6 +78,15 @@ async function getSharedBrowser() {
     } catch (err) {
         logBrowserEvent('Error launching browser: ' + err.message);
         throw err;
+    }
+}
+// Utility to save user-agent to meta file (call this when saving cookies)
+function saveUserAgentMeta(userAgent) {
+    try {
+        fs.writeFileSync(COOKIES_META_PATH, JSON.stringify({ userAgent }), 'utf8');
+        logBrowserEvent('Saved user-agent to meta file: ' + userAgent);
+    } catch (err) {
+        logBrowserEvent('Failed to save user-agent meta: ' + err.message);
     }
 }
 
@@ -104,5 +132,6 @@ function getCurrentUserAgent() {
 module.exports = {
     getSharedBrowser,
     logBrowserEvent,
-    getCurrentUserAgent
+    getCurrentUserAgent,
+    saveUserAgentMeta
 };
