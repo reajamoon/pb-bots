@@ -54,7 +54,7 @@ async function debugLoginAndFetchWork(workUrl) {
  * Logs in to AO3 and returns a logged-in Puppeteer page.
  * @returns {Promise<{ browser: import('puppeteer').Browser, page: import('puppeteer').Page }>}
  */
-async function getLoggedInAO3Page() {
+async function getLoggedInAO3Page(ficUrl) {
     // Helper: check if page is 'New Session' interstitial by title
     async function isNewSessionTitle(page) {
         const title = await page.title();
