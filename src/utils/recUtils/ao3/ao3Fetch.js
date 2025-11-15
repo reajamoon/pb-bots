@@ -28,7 +28,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
     }
     async function doLoginAndFetch() {
         // Always delete cookies and reset in-memory cookies before each login attempt if previous attempt failed
-        const loginResult = await getLoggedInAO3Page();
+        const loginResult = await getLoggedInAO3Page(ao3Url);
         browser = loginResult.browser;
         page = loginResult.page;
         // Always navigate to the fic URL after login, regardless of login method
