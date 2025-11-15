@@ -43,9 +43,8 @@ async function cleanupOldQueueJobs() {
     if (configEntry && subscribers.length > 0) {
       const channel = await client.channels.fetch(configEntry.value).catch(() => null);
       if (channel && channel.isTextBased()) {
-        const mentions = await getTagMentions(subscribers, User);
         await channel.send({
-          content: `${mentions}\nSorry, something went wrong while processing your fic parsing job for <${job.fic_url}>. Please try again.\n\n*Oh and if you want: to toggle queue notifications on|off, you just use the /rec notifytag command.*`,
+          content: `Sorry, something went wrong while processing your fic parsing job for <${job.fic_url}>. Please try again.\n\n*Oh and if you want: to toggle queue notifications on|off, you just use the /rec notifytag command.*`,
         });
       }
     }
