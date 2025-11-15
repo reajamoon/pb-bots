@@ -53,23 +53,6 @@ async function cleanupOldQueueJobs() {
     console.log(`[QueueWorker] Cleanup: Dropped stuck job id=${job.id} (status: ${job.status}, url: ${job.fic_url})`);
   }
 
-  // Notify and clean up for each job
-  for (const job of allJobs) {
-    const subscribers = subsByJob[job.id] || [];
-    if (channel && subscribers.length > 0) {
-      let content;
-      if (job.status === 'error') {
-        const mentions = getTagMentions(subscribers, userMap);
-        content = `${mentions}\nThere was an error parsing your fic (<${job.fic_url}>): ${job.error_message || 'Unknown error.'}\n\n*So get this, to toggle queue notifications on|off, you just use the /rec notifytag command. Simple as.*`;
-      } else {
-        const mentions = getTagMentions(subscribers, userMap);
-        content = `${mentions}\nSorry, something went wrong while processing your fic parsing job for <${job.fic_url}>. Please try again.\n\n*Oh and if you want: to toggle queue notifications on|off, you just use the /rec notifytag command.*`;
-      }
-      if (channel.isTextBased()) {
-        await channel.send({ content });
-      }
-    }
-  }
   // Bulk destroy all subscribers and jobs
   await ParseQueueSubscriber.destroy({ where: { queue_id: allJobIds } });
   await ParseQueue.destroy({ where: { id: allJobIds } });
