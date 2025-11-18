@@ -2,7 +2,7 @@
 // All requires and constants at the very top to avoid ReferenceError and circular dependency issues
 const fs = require('fs');
 const COOKIES_PATH = 'ao3_cookies.json';
-const { getSharedBrowser, logBrowserEvent, getCurrentUserAgent } = require('./ao3BrowserManager');
+const { getSharedBrowser, logBrowserEvent, getCurrentUserAgent, saveUserAgentMeta } = require('./ao3BrowserManager');
 
 /**
  * Utility to bypass AO3 'stay logged in' interstitial by re-navigating to the target fic URL.
@@ -44,7 +44,8 @@ async function debugLoginAndFetchWork(workUrl) {
             });
         }
     } finally {
-        await browser.close();
+        try { if (page && !page.isClosed()) await page.close(); } catch (e) {}
+        try { if (browser && browser.isConnected()) await browser.close(); } catch (e) {}
     }
 }
 
@@ -54,7 +55,7 @@ async function debugLoginAndFetchWork(workUrl) {
  * Logs in to AO3 and returns a logged-in Puppeteer page.
  * @returns {Promise<{ browser: import('puppeteer').Browser, page: import('puppeteer').Page }>}
  */
-async function getLoggedInAO3Page() {
+async function getLoggedInAO3Page(ficUrl) {
     // Helper: check if page is 'New Session' interstitial by title
     async function isNewSessionTitle(page) {
         const title = await page.title();
@@ -102,7 +103,7 @@ async function getLoggedInAO3Page() {
         // If browser is disconnected, force restart on next use
         if (err.message && (err.message.includes('Target closed') || err.message.includes('browser has disconnected'))) {
             logBrowserEvent('Detected browser/page error, will restart browser.');
-            try { await browser.close(); logBrowserEvent('Browser closed after page error.'); } catch {}
+            try { if (browser && browser.isConnected()) await browser.close(); logBrowserEvent('Browser closed after page error.'); } catch (e) { logBrowserEvent('Error closing browser after page error: ' + e.message); }
             sharedBrowser = null;
             sharedBrowserUseCount = 0;
         }
@@ -116,37 +117,49 @@ async function getLoggedInAO3Page() {
         'X-Sam-Bot-Info': 'Hi AO3 devs! This is Sam, a hand-coded Discord bot for a single small server. I only fetch header metadata for user recs and do not retrieve fic content. Contact: https://github.com/reajamoon/sam-bot'
     });
 
-    if (fs.existsSync(COOKIES_PATH)) {
-        try {
-            logBrowserEvent('[AO3] Attempting to load cookies from file...');
-            const cookies = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
-            await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
-            await page.setCookie(...cookies);
-            await page.reload({ waitUntil: 'domcontentloaded' });
-            const content = await page.content();
-            if (content.includes('Log Out') || content.includes('My Dashboard')) {
-                logBrowserEvent('[AO3] Successfully logged in with cookies. No fresh login needed.');
-                return { browser, page, loggedInWithCookies: true };
-            } else {
-                // Not logged in, cookies are bad/expired
-                logBrowserEvent('[AO3] Cookies invalid or expired. Deleting cookies and forcing fresh login.');
-                fs.unlinkSync(COOKIES_PATH);
-                // Reset in-memory cookies if used
-                if (global.__samInMemoryCookies) {
-                    global.__samInMemoryCookies = null;
-                    logBrowserEvent('[AO3] In-memory cookies reset due to invalid file cookies.');
-                }
-            }
-        } catch (err) {
-            logBrowserEvent('[AO3] Failed to load cookies, will attempt fresh login. ' + (err && err.message ? err.message : ''));
-            try { fs.unlinkSync(COOKIES_PATH); } catch {}
+    // Load cookies and user-agent meta if available
+    const path = require('path');
+    const COOKIES_META_PATH = path.join(process.cwd(), 'ao3_cookies_meta.json');
+if (fs.existsSync(COOKIES_PATH) && fs.existsSync(COOKIES_META_PATH)) {
+    try {
+        logBrowserEvent('[AO3] Attempting to load cookies and user-agent from file...');
+        const cookies = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
+        const meta = JSON.parse(fs.readFileSync(COOKIES_META_PATH, 'utf8'));
+        if (meta && meta.userAgent) {
+            await page.setUserAgent(meta.userAgent);
+        } else {
+            await page.setUserAgent(getCurrentUserAgent());
+        }
+        await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
+        await page.setCookie(...cookies);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        // Always try to skip stay logged in page and land on fic
+        if (ficUrl) await bypassStayLoggedInInterstitial(page, ficUrl);
+        const content = await page.content();
+        if (content.includes('Log Out') || content.includes('My Dashboard')) {
+            logBrowserEvent('[AO3] Successfully logged in with cookies. No fresh login needed.');
+            return { browser, page, loggedInWithCookies: true };
+        } else {
+            // Not logged in, cookies are bad/expired
+            logBrowserEvent('[AO3] Cookies invalid or expired. Deleting cookies and forcing fresh login.');
+            fs.unlinkSync(COOKIES_PATH);
+            fs.unlinkSync(COOKIES_META_PATH);
+            // Reset in-memory cookies if used
             if (global.__samInMemoryCookies) {
                 global.__samInMemoryCookies = null;
-                logBrowserEvent('[AO3] In-memory cookies reset due to cookie load failure.');
+                logBrowserEvent('[AO3] In-memory cookies reset due to invalid file cookies.');
             }
         }
+    } catch (err) {
+        logBrowserEvent('[AO3] Failed to load cookies/meta, will attempt fresh login. ' + (err && err.message ? err.message : ''));
+        try { fs.unlinkSync(COOKIES_PATH); } catch {}
+        try { fs.unlinkSync(COOKIES_META_PATH); } catch {}
+        if (global.__samInMemoryCookies) {
+            global.__samInMemoryCookies = null;
+            logBrowserEvent('[AO3] In-memory cookies reset due to cookie/meta load failure.');
+        }
     }
-    logBrowserEvent('[AO3] Performing fresh login (no valid cookies found).');
+} logBrowserEvent('[AO3] Performing fresh login (no valid cookies found).');
     // Go to login page
     console.log('[AO3] Navigating to login page...');
     // Try navigating to login page with exponential backoff and multiple retries
@@ -173,7 +186,7 @@ async function getLoggedInAO3Page() {
                 // Handle detached frame errors specifically
                 if ((err.message && (err.message.includes('detached') || err.message.includes('LifecycleWatcher disposed'))) || (err.name === 'Error' && err.message && err.message.includes('Frame'))) {
                     logBrowserEvent('Frame was detached during navigation, recreating page and retrying...');
-                    if (!page.isClosed()) { try { await page.close(); } catch {} }
+                    if (page && !page.isClosed()) { try { await page.close(); } catch (e) {} }
                     page = await browser.newPage();
                     await page.setUserAgent(getCurrentUserAgent());
                     await page.setExtraHTTPHeaders({
@@ -300,16 +313,17 @@ async function getLoggedInAO3Page() {
         if (!(postLoginErrorText.includes('Incorrect username or password') || postLoginErrorText.includes('error'))) {
             // Save cookies after successful login (atomic write)
             const cookies = await page.cookies();
-            const path = require('path');
             const absPath = path.resolve(COOKIES_PATH);
             const tmpPath = absPath + '.tmp';
             let cookiesInMemory = null;
             try {
                 fs.writeFileSync(tmpPath, JSON.stringify(cookies, null, 2));
                 fs.renameSync(tmpPath, absPath);
-                console.log(`[AO3] Login successful, cookies saved atomically at: ${absPath}`);
+                // Save user-agent meta for this session
+                saveUserAgentMeta(await page.browser().userAgent() || getCurrentUserAgent());
+                console.log(`[AO3] Login successful, cookies and user-agent meta saved at: ${absPath}`);
             } catch (err) {
-                console.error(`[AO3] ERROR: Failed to atomically save cookies to ${absPath}:`, err);
+                console.error(`[AO3] ERROR: Failed to atomically save cookies/meta to ${absPath}:`, err);
                 cookiesInMemory = cookies;
                 // Optionally, you could notify an admin or set a global flag here
                 console.warn('[AO3] WARNING: Cookies will be kept in memory for this session only. They will not persist after restart.');
@@ -369,6 +383,9 @@ async function getLoggedInAO3Page() {
             logBrowserEvent('[AO3] Failed to set cookies on new page after login: ' + e.message);
         }
     }
+    // After login, always try to skip stay logged in page and land on fic
+    await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
+    if (ficUrl) await bypassStayLoggedInInterstitial(page, ficUrl);
     return { browser, page };
 }
 
