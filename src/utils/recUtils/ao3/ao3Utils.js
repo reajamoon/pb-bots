@@ -44,7 +44,8 @@ async function debugLoginAndFetchWork(workUrl) {
             });
         }
     } finally {
-        await browser.close();
+        try { if (page && !page.isClosed()) await page.close(); } catch (e) {}
+        try { if (browser && browser.isConnected()) await browser.close(); } catch (e) {}
     }
 }
 
@@ -102,7 +103,7 @@ async function getLoggedInAO3Page(ficUrl) {
         // If browser is disconnected, force restart on next use
         if (err.message && (err.message.includes('Target closed') || err.message.includes('browser has disconnected'))) {
             logBrowserEvent('Detected browser/page error, will restart browser.');
-            try { await browser.close(); logBrowserEvent('Browser closed after page error.'); } catch {}
+            try { if (browser && browser.isConnected()) await browser.close(); logBrowserEvent('Browser closed after page error.'); } catch (e) { logBrowserEvent('Error closing browser after page error: ' + e.message); }
             sharedBrowser = null;
             sharedBrowserUseCount = 0;
         }
@@ -185,7 +186,7 @@ if (fs.existsSync(COOKIES_PATH) && fs.existsSync(COOKIES_META_PATH)) {
                 // Handle detached frame errors specifically
                 if ((err.message && (err.message.includes('detached') || err.message.includes('LifecycleWatcher disposed'))) || (err.name === 'Error' && err.message && err.message.includes('Frame'))) {
                     logBrowserEvent('Frame was detached during navigation, recreating page and retrying...');
-                    if (!page.isClosed()) { try { await page.close(); } catch {} }
+                    if (page && !page.isClosed()) { try { await page.close(); } catch (e) {} }
                     page = await browser.newPage();
                     await page.setUserAgent(getCurrentUserAgent());
                     await page.setExtraHTTPHeaders({

@@ -41,7 +41,7 @@ async function getSharedBrowser() {
     }
     if (sharedBrowser) {
         logBrowserEvent('Restarting browser due to use threshold or error.');
-        try { await sharedBrowser.close(); logBrowserEvent('Browser closed.'); } catch (err) { logBrowserEvent('Error closing browser: ' + err.message); }
+        try { if (sharedBrowser && sharedBrowser.isConnected()) await sharedBrowser.close(); logBrowserEvent('Browser closed.'); } catch (err) { logBrowserEvent('Error closing browser: ' + err.message); }
     }
     try {
         sharedBrowser = await puppeteer.launch({
@@ -94,7 +94,7 @@ function setupBrowserShutdown() {
     const shutdown = async () => {
         if (sharedBrowser) {
             logBrowserEvent('Shutting down browser due to process exit.');
-            try { await sharedBrowser.close(); logBrowserEvent('Browser closed.'); } catch (err) { logBrowserEvent('Error closing browser: ' + err.message); }
+            try { if (sharedBrowser && sharedBrowser.isConnected()) await sharedBrowser.close(); logBrowserEvent('Browser closed.'); } catch (err) { logBrowserEvent('Error closing browser: ' + err.message); }
         }
         process.exit(0);
     };
@@ -114,11 +114,11 @@ setInterval(async () => {
         // Health check: try to create and close a blank page
         try {
             const testPage = await sharedBrowser.newPage();
-            await testPage.close();
+            try { await testPage.close(); } catch (e) { logBrowserEvent('Error closing test page during health check: ' + e.message); }
             logBrowserEvent('Health check: browser is healthy.');
         } catch (err) {
             logBrowserEvent('Health check failed, restarting browser: ' + err.message);
-            try { await sharedBrowser.close(); logBrowserEvent('Browser closed after failed health check.'); } catch (closeErr) { logBrowserEvent('Error closing browser after health check: ' + closeErr.message); }
+            try { if (sharedBrowser && sharedBrowser.isConnected()) await sharedBrowser.close(); logBrowserEvent('Browser closed after failed health check.'); } catch (closeErr) { logBrowserEvent('Error closing browser after health check: ' + closeErr.message); }
             sharedBrowser = null;
             sharedBrowserUseCount = 0;
         }

@@ -26,13 +26,16 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
     if (LOG_FAILED_HTML && !fs.existsSync(FAILED_HTML_DIR)) {
         fs.mkdirSync(FAILED_HTML_DIR, { recursive: true });
     }
-    async function doLoginAndFetch() {
+    async function doLoginAndFetch(attempt = 1) {
         // Always delete cookies and reset in-memory cookies before each login attempt if previous attempt failed
         const loginResult = await getLoggedInAO3Page(ao3Url);
         browser = loginResult.browser;
         page = loginResult.page;
-        // Always navigate to the fic URL after login, regardless of login method
-        await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        // Exponential backoff for timeout: 15s, 30s, 60s, max 90s
+        const baseTimeout = 15000;
+        const maxTimeout = 90000;
+        const timeout = Math.min(baseTimeout * Math.pow(2, attempt - 1), maxTimeout);
+        await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout });
         // Bypass 'stay logged in' interstitial if present
         await bypassStayLoggedInInterstitial(page, ao3Url);
         // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
@@ -93,7 +96,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
     const maxAttempts = 2;
     let lastError = null;
     try {
-        ok = await doLoginAndFetch();
+        ok = await doLoginAndFetch(attempts);
         while ((!ok || !html) && attempts < maxAttempts) {
             // If we failed, delete cookies and try again
             const COOKIES_PATH = 'ao3_cookies.json';
@@ -103,10 +106,14 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             }
             retried = true;
             try {
-                ok = await doLoginAndFetch();
+                ok = await doLoginAndFetch(attempts);
             } catch (err) {
                 lastError = err;
                 ok = false;
+                // Robust: always close browser on fatal error
+                if (browser && browser.isConnected()) {
+                    try { await browser.close(); console.warn('[AO3] Closed browser after fatal error in doLoginAndFetch.'); } catch (e) { console.warn('[AO3] Failed to close browser after fatal error:', e); }
+                }
             }
             attempts++;
         }
@@ -133,6 +140,10 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 } catch (err) {
                     lastError = err;
                     ok = false;
+                    // Robust: always close browser on fatal error
+                    if (browser && browser.isConnected()) {
+                        try { await browser.close(); console.warn('[AO3] Closed browser after fatal error in parser session retry.'); } catch (e) { console.warn('[AO3] Failed to close browser after fatal error:', e); }
+                    }
                 }
                 attempts++;
             }
@@ -151,6 +162,10 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             } catch (err) {
                 console.warn('[AO3] Failed to save failed HTML:', err);
             }
+        }
+        // Robust: always close browser on fatal error
+        if (browser && browser.isConnected()) {
+            try { await browser.close(); console.warn('[AO3] Closed browser after repeated fatal errors.'); } catch (e) { console.warn('[AO3] Failed to close browser after repeated fatal errors:', e); }
         }
         // Cooldown to avoid hammering AO3 if something is wrong
         await new Promise(res => setTimeout(res, cooldownMs));
