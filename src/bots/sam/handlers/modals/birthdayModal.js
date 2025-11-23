@@ -37,10 +37,8 @@ async function handleBirthdayModal(interaction, originalMessageId = null) {
         birthdayToStore = `${month.padStart(2, '0')}/${day.padStart(2, '0')}/${year}`;
     } else if (formats.privacySlash.test(birthdayInput)) {
         const [, month, day] = birthdayInput.match(formats.privacySlash);
-        // For privacy mode, we store without year and set privacy flags
-        birthdayToStore = `${month.padStart(2, '0')}/${day.padStart(2, '0')}`;
+        birthdayToStore = `1900-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         isPrivacyMode = true;
-        // Create a date for validation (using current year)
         parsedDate = new Date(new Date().getFullYear(), parseInt(month) - 1, parseInt(day));
     } else if (formats.twoDigitSlash.test(birthdayInput)) {
         const [, month, day, shortYear] = birthdayInput.match(formats.twoDigitSlash);
