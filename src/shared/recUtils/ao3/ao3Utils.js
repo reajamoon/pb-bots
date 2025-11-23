@@ -1,4 +1,4 @@
-
+const fs = require('fs');
 const COOKIES_PATH = 'ao3_cookies.json';
 const { getSharedBrowser, logBrowserEvent, getCurrentUserAgent } = require('./ao3BrowserManager');
 /**
