@@ -3,8 +3,13 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    // Remove the column if it exists
-    await queryInterface.removeColumn('recommendations', 'authorNotes');
+    // Remove the column only if it exists
+    const table = await queryInterface.describeTable('recommendations');
+    if (table.authorNotes) {
+      await queryInterface.removeColumn('recommendations', 'authorNotes');
+    } else {
+      console.log('Column authorNotes does not exist, skipping removal.');
+    }
   },
 
   down: async (queryInterface, Sequelize) => {
