@@ -1,4 +1,4 @@
-const updateMessages = require('../text/updateMessages');
+
 // processRecommendationJob.js
 // Shared utility for creating/updating recommendations (used by command handlers and queue worker)
 
@@ -6,7 +6,7 @@ const { Recommendation } = require('../../models');
 const { fetchFicMetadata } = require('./ficParser');
 const createRecommendationEmbed = require('./createRecommendationEmbed');
 const normalizeAO3Url = require('./normalizeAO3Url');
-
+const updateMessages = require('../text/updateMessages');
 /**
  * Processes a recommendation job (add or update) with shared logic.
  * @param {Object} options - Job options
