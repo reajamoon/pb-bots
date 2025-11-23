@@ -118,6 +118,12 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true
         },
+        // AO3 series: ordered list of works (array of {title, url, authors})
+        series_works: {
+            type: DataTypes.JSONB,
+            allowNull: true,
+            defaultValue: null
+        },
         deleted: {
             type: DataTypes.BOOLEAN,
             allowNull: false,

@@ -30,8 +30,13 @@ async function fetchFicMetadata(url, includeRawHtml = false) {
             let source = null;
 
             if (url.includes('archiveofourown.org')) {
-                metadata = await fetchAO3MetadataWithFallback(url, includeRawHtml);
-                if (metadata) source = 'ao3';
+                if (/archiveofourown\.org\/series\//.test(url)) {
+                    metadata = await require('./ao3Meta').fetchAO3SeriesMetadata(url, includeRawHtml);
+                    if (metadata) source = 'ao3-series';
+                } else {
+                    metadata = await fetchAO3MetadataWithFallback(url, includeRawHtml);
+                    if (metadata) source = 'ao3';
+                }
             } else if (url.includes('fanfiction.net')) {
                 metadata = await fetchFFNetMetadata(url, includeRawHtml);
                 source = 'ffnet';

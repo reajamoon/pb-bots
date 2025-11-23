@@ -37,14 +37,16 @@ async function processRecommendationJob({
   if (bypassManual) {
     metadata = {
       title: manualFields.title,
-  authors: manualFields.authors || (manualFields.author ? [manualFields.author] : undefined),
+      authors: manualFields.authors || (manualFields.author ? [manualFields.author] : undefined),
       summary: manualFields.summary || 'Manually added recommendation',
       tags: [],
       rating: manualFields.rating || 'Not Rated',
       language: 'English',
       wordCount: manualFields.wordCount,
       url,
-      archiveWarnings: []
+      archiveWarnings: [],
+      type: manualFields.type,
+      works: manualFields.works,
     };
   } else {
     try {
@@ -132,6 +134,11 @@ async function processRecommendationJob({
   }
 
   let recommendation;
+  // If this is an AO3 series, store the works list in series_works
+  let seriesWorks = null;
+  if (metadata && metadata.type === 'series' && Array.isArray(metadata.works)) {
+    seriesWorks = metadata.works;
+  }
   if (isUpdate && existingRec) {
     console.log('[PROCESS JOB] archiveWarnings before DB update:', metadata.archiveWarnings);
     // Merge tags: combine existing tags, new tags, and deduplicate
@@ -188,6 +195,8 @@ async function processRecommendationJob({
     if (existingRec.bookmarks !== metadata.bookmarks) updateFields.bookmarks = metadata.bookmarks;
     if (existingRec.comments !== metadata.comments) updateFields.comments = metadata.comments;
     if (existingRec.category !== metadata.category) updateFields.category = metadata.category;
+    // Update series_works if this is a series
+    if (seriesWorks) updateFields.series_works = seriesWorks;
 
     // Archive warnings update
     if (Array.isArray(metadata.archiveWarnings)) {
@@ -235,7 +244,8 @@ async function processRecommendationJob({
         hits: metadata.hits,
         bookmarks: metadata.bookmarks,
         comments: metadata.comments,
-        category: metadata.category
+        category: metadata.category,
+        series_works: seriesWorks
       });
     } catch (err) {
       console.error('[processRecommendationJob] Error creating recommendation:', {

@@ -1,0 +1,36 @@
+// ao3SeriesFetch.js
+// Fetches and parses AO3 series metadata
+
+const { getLoggedInAO3Page, bypassStayLoggedInInterstitial } = require('./ao3Utils');
+const { parseAO3SeriesMetadata } = require('./ao3SeriesParser');
+
+async function fetchAO3SeriesMetadata(url, includeRawHtml = false) {
+    let html, browser, page;
+    try {
+        const loginResult = await getLoggedInAO3Page(url);
+        browser = loginResult.browser;
+        page = loginResult.page;
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await bypassStayLoggedInInterstitial(page, url);
+        html = await page.content();
+        if (browser && browser.isConnected()) {
+            try { await browser.close(); } catch {}
+        }
+        const metadata = parseAO3SeriesMetadata(html, url);
+        if (includeRawHtml) metadata.rawHtml = html;
+        return metadata;
+    } catch (err) {
+        if (browser && browser.isConnected()) {
+            try { await browser.close(); } catch {}
+        }
+        return {
+            url,
+            type: 'series',
+            error: true,
+            message: 'Failed to fetch AO3 series metadata',
+            details: err && err.message ? err.message : err
+        };
+    }
+}
+
+module.exports = { fetchAO3SeriesMetadata };

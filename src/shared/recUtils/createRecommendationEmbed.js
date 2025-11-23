@@ -11,6 +11,27 @@ const ratingEmojis = {
 
 // Builds the embed for a rec. Checks if the link works, adds warnings if needed.
 async function createRecommendationEmbed(rec) {
+        if (Array.isArray(rec.series_works) && rec.series_works.length > 0) {
+            let worksList = '';
+            const maxToShow = 4;
+            for (let i = 0; i < Math.min(rec.series_works.length, maxToShow); i++) {
+                const work = rec.series_works[i];
+                if (work && work.title && work.url) {
+                    worksList += `${i + 1}. [${work.title}](${work.url})\n`;
+                } else if (work && work.title) {
+                    worksList += `${i + 1}. ${work.title}\n`;
+                }
+            }
+            if (rec.series_works.length > maxToShow) {
+                // Add "and more" link to series page
+                worksList += `... [and more](${rec.url})`;
+            }
+            embed.addFields({
+                name: 'Series Works',
+                value: worksList.trim(),
+                inline: false
+            });
+        }
     // DEBUG: Log the rec object and tag fields to inspect tag presence
     //console.log('[DEBUG] createRecommendationEmbed rec:', JSON.stringify(rec, null, 2));
     if (typeof rec.getParsedTags === 'function') {
