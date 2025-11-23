@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const COOKIES_PATH = 'ao3_cookies.json';
+const COOKIES_META_PATH = 'ao3_cookies_meta.json';
 const { getSharedBrowser, logBrowserEvent, getCurrentUserAgent } = require('./ao3BrowserManager');
 /**
  * Utility to bypass AO3 'stay logged in' interstitial by re-navigating to the target fic URL.
