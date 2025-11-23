@@ -122,31 +122,36 @@ async function getLoggedInAO3Page(ficUrl) {
             await page.reload({ waitUntil: 'domcontentloaded' });
             // Always try to skip stay logged in page and land on fic
             if (ficUrl) await bypassStayLoggedInInterstitial(page, ficUrl);
-            const content = await page.content();
-            if (content.includes('Log Out') || content.includes('My Dashboard')) {
+            // Use a precise selector to check for the 'Log Out' link
+            let loggedIn = false;
+            try {
+                loggedIn = await page.$eval('a[rel="nofollow"][href*="/logout"]', el => el && el.textContent && el.textContent.trim() === 'Log Out');
+            } catch (e) {
+                loggedIn = false;
+            }
+            if (loggedIn) {
                 logBrowserEvent('[AO3] Successfully logged in with cookies. No fresh login needed.');
-            return { browser, page, loggedInWithCookies: true };
-        } else {
-            // Not logged in, cookies are bad/expired
-            logBrowserEvent('[AO3] Cookies invalid or expired. Deleting cookies and forcing fresh login.');
-            fs.unlinkSync(COOKIES_PATH);
-            fs.unlinkSync(COOKIES_META_PATH);
-            // Reset in-memory cookies if used
+                return { browser, page, loggedInWithCookies: true };
+            } else {
+                // Not logged in, cookies are bad/expired
+                logBrowserEvent('[AO3] Cookies invalid or expired. Deleting cookies and forcing fresh login.');
+                fs.unlinkSync(COOKIES_PATH);
+                fs.unlinkSync(COOKIES_META_PATH);
+                if (global.__samInMemoryCookies) {
+                    global.__samInMemoryCookies = null;
+                    logBrowserEvent('[AO3] In-memory cookies reset due to invalid file cookies.');
+                }
+            }
+        } catch (err) {
+            logBrowserEvent('[AO3] Failed to load cookies/meta, will attempt fresh login. ' + (err && err.message ? err.message : ''));
+            try { fs.unlinkSync(COOKIES_PATH); } catch {}
+            try { fs.unlinkSync(COOKIES_META_PATH); } catch {}
             if (global.__samInMemoryCookies) {
                 global.__samInMemoryCookies = null;
-                logBrowserEvent('[AO3] In-memory cookies reset due to invalid file cookies.');
+                logBrowserEvent('[AO3] In-memory cookies reset due to cookie/meta load failure.');
             }
         }
-    } catch (err) {
-        logBrowserEvent('[AO3] Failed to load cookies/meta, will attempt fresh login. ' + (err && err.message ? err.message : ''));
-        try { fs.unlinkSync(COOKIES_PATH); } catch {}
-        try { fs.unlinkSync(COOKIES_META_PATH); } catch {}
-        if (global.__samInMemoryCookies) {
-            global.__samInMemoryCookies = null;
-            logBrowserEvent('[AO3] In-memory cookies reset due to cookie/meta load failure.');
-        }
-    }
-} logBrowserEvent('[AO3] Performing fresh login (no valid cookies found).');
+    } logBrowserEvent('[AO3] Performing fresh login (no valid cookies found).');
     // Go to login page
     console.log('[AO3] Navigating to login page...');
     // Try navigating to login page with exponential backoff and multiple retries
