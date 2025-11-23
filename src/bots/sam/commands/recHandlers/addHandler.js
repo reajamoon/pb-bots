@@ -37,7 +37,7 @@ async function handleAddRecommendation(interaction) {
     // --- Fic Parsing Queue Logic ---
     const { Recommendation } = require('../../../../models');
     const createOrJoinQueueEntry = require('../../../../shared/recUtils/createOrJoinQueueEntry');
-    // AO3 series batch parse logic
+    // AO3 series batch parse logic (queue only, never handled by Sam)
     if (/archiveofourown\.org\/series\//.test(url)) {
       // Check if series already exists
       const existingSeries = await Recommendation.findOne({ where: { url } });
@@ -47,23 +47,50 @@ async function handleAddRecommendation(interaction) {
           content: `*${existingSeries.title}* (series) is already in the library${addedDate ? `, since ${addedDate}` : ''}.`
         });
       }
-      // Batch parse and store series and all works
-      const batchSeriesRecommendationJob = require('../../../../shared/recUtils/batchSeriesRecommendationJob');
-      try {
-        await interaction.editReply({ content: 'Parsing AO3 series and all works. This may take a moment...' });
-        const { seriesRec, workRecs } = await batchSeriesRecommendationJob(url, {
-          id: interaction.user.id,
-          username: interaction.user.username
-        }, {
-          additionalTags,
-          notes
-        }, async (embed) => {
-          await interaction.editReply({ content: null, embeds: [embed] });
+      // Use modular queue utility for series
+      const createOrJoinQueueEntry = require('../../../../shared/recUtils/createOrJoinQueueEntry');
+      const { queueEntry, status, message } = await createOrJoinQueueEntry(url, interaction.user.id);
+      if (status === 'processing') {
+        return await interaction.editReply({
+          content: message || updateMessages.alreadyProcessing
         });
-        // Done!
+      } else if (status === 'done' && queueEntry.result) {
+        // Return cached result (simulate embed)
+        const { Recommendation } = require('../../../../models');
+        const createRecommendationEmbed = require('../../../../shared/recUtils/createRecommendationEmbed');
+        const rec = await Recommendation.findOne({ where: { url } });
+        if (rec) {
+          const embed = await createRecommendationEmbed(rec);
+          await interaction.editReply({
+            content: null,
+            embeds: [embed]
+          });
+        } else {
+          await interaction.editReply({
+            content: 'Recommendation found in queue but not in database. Please try again or contact an admin.'
+          });
+        }
         return;
-      } catch (err) {
-        return await interaction.editReply({ content: `Error parsing AO3 series: ${err.message}` });
+      } else if (status === 'error') {
+        return await interaction.editReply({
+          content: message || updateMessages.errorPreviously
+        });
+      } else if (status === 'created') {
+        // Optionally, update notes/additional_tags if provided (for new entry only)
+        if (notes || (additionalTags && additionalTags.length > 0)) {
+          await queueEntry.update({
+            notes: notes || '',
+            additional_tags: additionalTags
+          });
+        }
+        return await interaction.editReply({
+          content: updateMessages.addedToQueue
+        });
+      } else {
+        // Fallback for any other status
+        return await interaction.editReply({
+          content: message || updateMessages.alreadyInQueue
+        });
       }
     }
     // Check if fic is already in the library

@@ -56,8 +56,8 @@ async function batchSeriesRecommendationJob(seriesUrl, user, options = {}, notif
   for (let i = 0; i < workMetas.length; i++) {
     const { work, meta } = workMetas[i];
     const isPrimary = i === primaryIdx;
-    const manualFields = { ...work, notPrimaryWork: !isPrimary };
-    // Use processRecommendationJob to create rec for each work
+    // Pass all fields from meta (full fic metadata), plus notPrimaryWork flag
+    const manualFields = { ...meta, notPrimaryWork: !isPrimary };
     const { recommendation: workRec, error } = await processRecommendationJob({
       url: work.url,
       user,

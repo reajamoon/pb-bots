@@ -99,13 +99,21 @@ async function handleUpdateRecommendation(interaction) {
         // If this is a series rec, update series_works for all works in the series if needed
         if (recommendation.series_works && Array.isArray(recommendation.series_works) && recommendation.series_works.length > 0) {
             const { Recommendation } = require('../../../../models');
+            const createOrJoinQueueEntry = require('../../../../shared/recUtils/createOrJoinQueueEntry');
             const workUrls = recommendation.series_works.map(w => w.url);
             const worksToUpdate = await Recommendation.findAll({ where: { url: workUrls } });
             for (const work of worksToUpdate) {
-                // Optionally update fields for all works in the series (e.g., tags, notes, etc.)
-                // For now, just update series_works if changed
+                // Always update series_works if changed
                 if (JSON.stringify(work.series_works) !== JSON.stringify(recommendation.series_works)) {
                     await work.update({ series_works: recommendation.series_works });
+                }
+            }
+            // Queue a metadata refresh for every work in the series
+            for (const url of workUrls) {
+                try {
+                    await createOrJoinQueueEntry(url, interaction.user.id);
+                } catch (err) {
+                    console.error('[series update] Failed to queue refresh for', url, err);
                 }
             }
         }
