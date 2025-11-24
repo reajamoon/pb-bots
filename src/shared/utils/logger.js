@@ -1,5 +1,6 @@
-const winston = require('winston');
-const { join } = require('path');
+
+import winston from 'winston';
+import { join } from 'path';
 
 // Create logs directory if it doesn't exist
 const logsDir = join(__dirname, '../../logs');
@@ -38,4 +39,5 @@ if (process.env.NODE_ENV !== 'production') {
     }));
 }
 
-module.exports = logger;
+
+export default logger;

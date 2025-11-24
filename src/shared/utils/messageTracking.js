@@ -57,7 +57,8 @@ function getProfileOwnerIdFromInteraction(interaction) {
 function parsePrivacySettingsDoneCustomId(customId) {
     return {};
 }
-const logger = require('./logger'); // already correct, no change needed
+
+import logger from './logger.js';
 
 /**
  * Message tracking utilities for live profile updates
@@ -255,7 +256,8 @@ function buildInputCustomId(type, messageId) {
     return messageId ? `${type}_input_${messageId}` : `${type}_input`;
 }
 
-module.exports = {
+
+export {
     // General
     encodeMessageId,
     decodeMessageId,

@@ -74,7 +74,7 @@ function getChineseZodiacSign(year) {
     return `${animal.emoji} ${animal.name}`;
 }
 
-module.exports = {
+export {
     getZodiacSign,
     getChineseZodiacSign
 };

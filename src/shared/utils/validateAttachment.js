@@ -25,7 +25,7 @@ function validateAttachment(attachment, willBeDeleted) {
     return null;
 }
 
-module.exports = {
+export {
     validateAttachment,
     ALLOWED_TYPES,
     MAX_SIZE

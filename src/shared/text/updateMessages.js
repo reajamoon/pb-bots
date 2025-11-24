@@ -17,4 +17,4 @@ const updateMessages = {
     parseError: 'Uhh wait what was I supposed to be looking for? Can you give me just a second and run that by me again? I\'m *so* sorry!'
 };
 
-module.exports = updateMessages;
+export default updateMessages;

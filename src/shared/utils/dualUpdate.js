@@ -1,4 +1,5 @@
-const { updateOriginalProfile } = require('../../bots/sam/utils/updateOriginalProfile');
+
+import { updateOriginalProfile } from '../../bots/sam/utils/updateOriginalProfile.js';
 
 
 /**
@@ -76,8 +77,5 @@ async function performDualUpdate(interaction, ephemeralResponse, originalMessage
     }
 }
 
-module.exports = {
-    updateOriginalProfile,
-    extractMessageIdFromCustomId,
-    performDualUpdate
-};
+
+export { updateOriginalProfile, extractMessageIdFromCustomId, performDualUpdate };

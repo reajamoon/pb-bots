@@ -1,8 +1,6 @@
-let countries = require('country-region-data');
-if (!Array.isArray(countries)) {
-    // Sometimes country-region-data is weird. If this blows up, check the import. (Yep, it's happened.)
-    countries = countries.default || [];
-}
+
+import countriesData from 'country-region-data';
+const countries = Array.isArray(countriesData) ? countriesData : (countriesData.default || []);
 
 /**
  * Valid cities that should be kept as-is (with proper capitalization)
@@ -24,7 +22,7 @@ const VALID_CITIES = [
     // UK Cities
     'London', 'Manchester', 'Birmingham', 'Liverpool', 'Bristol', 'Leeds', 'Sheffield',
     'Edinburgh', 'Glasgow', 'Cardiff', 'Belfast',
-    
+
     // European Cities
     'Paris', 'Berlin', 'Munich', 'Hamburg', 'Cologne', 'Frankfurt',
     'Rome', 'Milan', 'Naples', 'Madrid', 'Barcelona', 'Valencia',
@@ -533,7 +531,8 @@ function getRegionsForCountry(countryName) {
     }));
 }
 
-module.exports = {
+
+export {
     validateRegion,
     getAllCountries,
     getRegionsForCountry,

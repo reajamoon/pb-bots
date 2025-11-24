@@ -1,5 +1,6 @@
-const { EmbedBuilder } = require('discord.js');
-const { getZodiacSign, getChineseZodiacSign } = require('./zodiacCalculator'); // already correct, no change needed
+
+import { EmbedBuilder } from 'discord.js';
+import { getZodiacSign, getChineseZodiacSign } from './zodiacCalculator.js';
 
 /**
  * Formats timezone info for the profile card. If it spits out nonsense, well, timezones are chaos.
@@ -452,13 +453,12 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
             hasStats: true
         };
     } catch (error) {
-        // Defensive: log and return empty stats on error
         console.error('Error generating server stats:', error);
         return { row2Fields: [], row3Fields: [], row4Fields: [], row6Fields: [], hasStats: false };
     }
 }
 
-module.exports = {
+export {
     generateServerStats,
     formatTimezoneForProfile,
     formatBirthdayForStats

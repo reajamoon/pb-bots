@@ -1,4 +1,4 @@
-const countries = require('country-region-data');
+import countries from 'country-region-data';
 
 /**
  * Map common regions/cities to their IANA timezone identifiers
@@ -433,7 +433,7 @@ function getRegionTimezone(countryName, regionName) {
     return getCountryDefaultTimezone(countryName);
 }
 
-module.exports = {
+export {
     validateTimezone,
     REGION_TIMEZONE_MAP,
     TIMEZONE_ABBREVIATIONS
