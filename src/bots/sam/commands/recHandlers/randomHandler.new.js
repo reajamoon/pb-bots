@@ -1,8 +1,7 @@
-
+// Integrate fetchRecWithSeries into randomHandler.js
 const { MessageFlags } = require('discord.js');
 const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
 const { isSeriesRec, createRecommendationEmbed } = require('../../../../shared/recUtils/createRecommendationEmbed');
-
 
 // Picks a random fic from the library. Filters by tag if you want.
 async function handleRandomRecommendation(interaction) {
@@ -14,9 +13,7 @@ async function handleRandomRecommendation(interaction) {
     }
     await interaction.deferReply();
     const tagFilter = interaction.options.getString('tag');
-    // Fetch all recs (could optimize for large DBs)
-    const { Recommendation } = require('../../../../models');
-    let recommendations = await Recommendation.findAll({ order: require('sequelize').literal('RANDOM()') });
+    let recommendations = await fetchRecWithSeries(null, false, true); // We'll filter below
 
     // Parse override options from command (e.g., allowWIP, allowDeleted, allowAbandoned)
     const allowWIP = interaction.options.getBoolean('allowWIP') || false;

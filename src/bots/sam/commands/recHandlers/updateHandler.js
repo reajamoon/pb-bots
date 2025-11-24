@@ -163,9 +163,11 @@ async function handleUpdateRecommendation(interaction) {
                     // For done/cached recs, fetch from DB and build embed directly (no AO3 access)
                     const { Recommendation } = require('../../../../models');
                     const createRecommendationEmbed = require('../../../../shared/recUtils/createRecommendationEmbed');
+                    const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
                     const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                     if (updatedRec) {
-                        const embed = await createRecommendationEmbed(updatedRec);
+                        const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
+                        const embed = await createRecommendationEmbed(recWithSeries);
                         await interaction.editReply({
                             content: 'This fic was just updated! Here’s the latest info.',
                             embeds: [embed]
@@ -216,13 +218,18 @@ async function handleUpdateRecommendation(interaction) {
                             // Return friendly duplicate message with details, robust fallback
                             let rec = null;
                             try {
+                                const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
                                 rec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                             } catch {}
-                            let addedBy = rec && rec.recommendedByUsername ? rec.recommendedByUsername : 'someone';
-                            let addedAt = rec && rec.createdAt ? new Date(rec.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : null;
-                            let title = rec && rec.title ? rec.title : 'This fic';
+                            let recWithSeries = rec;
+                            if (rec) {
+                                recWithSeries = await fetchRecWithSeries(rec.id, true);
+                            }
+                            let addedBy = recWithSeries && recWithSeries.recommendedByUsername ? recWithSeries.recommendedByUsername : 'someone';
+                            let addedAt = recWithSeries && recWithSeries.createdAt ? new Date(recWithSeries.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+                            let title = recWithSeries && recWithSeries.title ? recWithSeries.title : 'This fic';
                             let msg = `${title} was already added by ${addedBy}${addedAt ? ` on ${addedAt}` : ''}, but hey! Great minds think alike, right?`;
-                            if (!rec) msg = 'This fic was already added to the library! Great minds think alike, right?';
+                            if (!recWithSeries) msg = 'This fic was already added to the library! Great minds think alike, right?';
                             await interaction.editReply({
                                 content: msg
                             });
@@ -264,9 +271,11 @@ async function handleUpdateRecommendation(interaction) {
                             // Fetch the updated recommendation for embed (no AO3 access)
                             const { Recommendation } = require('../../../../models');
                             const createRecommendationEmbed = require('../../../../shared/recUtils/createRecommendationEmbed');
+                            const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
                             const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                             if (updatedRec) {
-                                resultEmbed = await createRecommendationEmbed(updatedRec);
+                                const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
+                                resultEmbed = await createRecommendationEmbed(recWithSeries);
                             }
                             foundDone = true;
                             break;
@@ -285,9 +294,11 @@ async function handleUpdateRecommendation(interaction) {
             if (finalQueue && finalQueue.result) {
                 const { Recommendation } = require('../../../../models');
                 const createRecommendationEmbed = require('../../../../shared/recUtils/createRecommendationEmbed');
+                const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
                 const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                 if (updatedRec) {
-                    const embed = await createRecommendationEmbed(updatedRec);
+                    const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
+                    const embed = await createRecommendationEmbed(recWithSeries);
                     await interaction.editReply({
                         content: 'That fic was already updated! Here’s the latest info:',
                         embeds: [embed]

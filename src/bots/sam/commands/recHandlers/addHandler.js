@@ -58,9 +58,11 @@ async function handleAddRecommendation(interaction) {
         // Return cached result (simulate embed)
         const { Recommendation } = require('../../../../models');
         const createRecommendationEmbed = require('../../../../shared/recUtils/createRecommendationEmbed');
+        const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
         const rec = await Recommendation.findOne({ where: { url } });
         if (rec) {
-          const embed = await createRecommendationEmbed(rec);
+          const recWithSeries = await fetchRecWithSeries(rec.id, true);
+          const embed = await createRecommendationEmbed(recWithSeries);
           await interaction.editReply({
             content: null,
             embeds: [embed]
@@ -122,9 +124,11 @@ async function handleAddRecommendation(interaction) {
       // Return cached result: fetch Recommendation and build embed directly (no AO3 access)
       const { Recommendation } = require('../../../../models');
       const createRecommendationEmbed = require('../../../../shared/recUtils/createRecommendationEmbed');
+      const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
       const rec = await Recommendation.findOne({ where: { url } });
       if (rec) {
-        const embed = await createRecommendationEmbed(rec);
+        const recWithSeries = await fetchRecWithSeries(rec.id, true);
+        const embed = await createRecommendationEmbed(recWithSeries);
         await interaction.editReply({
           content: null,
           embeds: [embed]
