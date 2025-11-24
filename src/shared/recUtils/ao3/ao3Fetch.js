@@ -30,8 +30,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
         let loggedIn = false;
         let retried = false;
         ao3Url = url;
-        import fs from 'fs';
-        import path from 'path';
+        // fs and path are already imported at the top if needed
         const LOG_FAILED_HTML = true;
         const FAILED_HTML_DIR = path.join(process.cwd(), 'logs', 'ao3_failed_html');
         if (LOG_FAILED_HTML && !fs.existsSync(FAILED_HTML_DIR)) {
@@ -68,7 +67,6 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 html = null;
                 // Defensive: always delete cookies and reset in-memory cookies on rate limit
                 const COOKIES_PATH = 'ao3_cookies.json';
-                const fs = require('fs');
                 if (fs.existsSync(COOKIES_PATH)) {
                     try { fs.unlinkSync(COOKIES_PATH); console.warn('[AO3] Deleted cookies file due to rate limit/CAPTCHA.'); } catch {}
                 }
@@ -88,7 +86,6 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             ) {
                 // Defensive: always delete cookies and reset in-memory cookies on login/interstitial page
                 const COOKIES_PATH = 'ao3_cookies.json';
-                const fs = require('fs');
                 if (fs.existsSync(COOKIES_PATH)) {
                     try { fs.unlinkSync(COOKIES_PATH); console.warn('[AO3] Deleted cookies file due to login/interstitial page.'); } catch {}
                 }

@@ -3,8 +3,8 @@
  * @module tumblrMeta
  */
 
-const { fetchHTML } = require('./fetchHtmlUtil');
-const updateMessages = require('../text/updateMessages');
+import { fetchHTML } from './fetchHtmlUtil.js';
+import updateMessages from '../text/updateMessages.js';
 
 /**
  * Fetches metadata from Tumblr
@@ -23,7 +23,7 @@ async function fetchTumblrMetadata(url, includeRawHtml = false) {
         if (html.includes('Enable JavaScript') || html.includes('cf-browser-verification')) {
             // Try Puppeteer fallback for JS-required/protected pages
             try {
-                const { fetchHTMLWithBrowser } = require('./fetchHtmlUtil');
+                const { fetchHTMLWithBrowser } = await import('./fetchHtmlUtil.js');
                 const browserHtml = await fetchHTMLWithBrowser(url);
                 if (browserHtml && browserHtml.length > 1000 && !browserHtml.includes('Enable JavaScript') && !browserHtml.includes('cf-browser-verification')) {
                     // Use browserHtml for parsing
@@ -277,7 +277,5 @@ function detectTumblrReblog(url, html) {
     return result;
 }
 
-module.exports = {
-    fetchTumblrMetadata,
-    detectTumblrReblog
-};
+
+export { fetchTumblrMetadata, detectTumblrReblog };

@@ -253,7 +253,6 @@ function addStatusField(fields, rec) {
 
 // Build the base embed structure shared by both work and series recs
 function buildBaseEmbed(rec, color) {
-    const { EmbedBuilder } = require('discord.js');
     return new EmbedBuilder()
         .setTitle(`📖 ${rec.title}`)
         .setDescription(`**By:** ${(rec.authors && Array.isArray(rec.authors)) ? rec.authors.join(', ') : (rec.author || 'Unknown Author')}`)

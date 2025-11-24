@@ -3,7 +3,7 @@ const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFla
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { parsePrivacySettingsCustomId, parsePrivacySettingsDoneCustomId, getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
-import { buildPrivacySettingsMenu } from './privacy.js';
+import { buildPrivacySettingsMenu } from './privacy/index.js';
 import { performDualUpdate } from '../../../../shared/utils/dualUpdate.js';
 import { handleInteractionNavigation } from '../../../../shared/utils/interactionNavigation.js';
 /**
@@ -62,25 +62,25 @@ export async function handlePrivacyButtons(interaction) {
 
     // Individual privacy toggles
     else if (interaction.customId.includes('toggle_birthday_mentions_privacy_settings_')) {
-        const { handleToggleBirthdayMentions } = await import('./privacy.js');
+        const { handleToggleBirthdayMentions } = await import('./privacy/index.js');
         await handleToggleBirthdayMentions(interaction);
     }
 
     // Toggle birthday lists (daily announcements)
     else if (interaction.customId.includes('toggle_birthday_lists_privacy_settings_')) {
-        const { handleToggleBirthdayLists } = await import('./privacy.js');
+        const { handleToggleBirthdayLists } = await import('./privacy/index.js');
         await handleToggleBirthdayLists(interaction);
     }
 
     // Toggle Privacy Mode (Full) - hides ALL birthday info
     else if (interaction.customId.includes('toggle_privacy_mode_full_privacy_settings_')) {
-        const { handleTogglePrivacyModeFull } = await import('./privacy.js');
+        const { handleTogglePrivacyModeFull } = await import('./privacy/index.js');
         await handleTogglePrivacyModeFull(interaction);
     }
 
     // Toggle Privacy Mode (Age Hidden) - hides only age, shows birthday/zodiac
     else if (interaction.customId.includes('toggle_privacy_mode_age_hidden_privacy_settings_')) {
-        const { handleTogglePrivacyModeAgeHidden } = await import('./privacy.js');
+        const { handleTogglePrivacyModeAgeHidden } = await import('./privacy/index.js');
         await handleTogglePrivacyModeAgeHidden(interaction);
     }
 
@@ -100,7 +100,7 @@ export async function handlePrivacyButtons(interaction) {
 
     // Toggle birthday hidden (profile birthday visibility)
     else if (interaction.customId.includes('toggle_birthday_hidden_privacy_settings_')) {
-        const { handleToggleBirthdayHidden } = await import('./privacy.js');
+        const { handleToggleBirthdayHidden } = await import('./privacy/index.js');
         await handleToggleBirthdayHidden(interaction);
     }
     // Additional privacy toggle handlers would go here...

@@ -344,8 +344,6 @@ function parseAO3Metadata(html, url, includeRawHtml = false) {
         const validation = AO3Schema.safeParse(metadata);
         // Debug: log extracted title, authors, and summary for troubleshooting (only if metadata exists)
         try {
-            const fs = require('fs');
-            const path = require('path');
             const debugLogDir = path.join(process.cwd(), 'logs', 'ao3_parser_debug');
             if (!fs.existsSync(debugLogDir)) fs.mkdirSync(debugLogDir, { recursive: true });
             const debugObj = {
