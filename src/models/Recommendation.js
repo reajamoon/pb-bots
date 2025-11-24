@@ -1,6 +1,30 @@
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
+    // Define Series model
+    const Series = sequelize.define('Series', {
+        id: {
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            autoIncrement: true
+        },
+        name: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        url: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        summary: {
+            type: DataTypes.TEXT,
+            allowNull: true
+        }
+    }, {
+        tableName: 'series',
+        timestamps: true
+    });
+
     const Recommendation = sequelize.define('Recommendation', {
         id: {
             type: DataTypes.INTEGER,
@@ -124,6 +148,20 @@ module.exports = (sequelize) => {
             allowNull: true,
             defaultValue: null
         },
+        // Foreign key to Series
+        seriesId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            references: {
+                model: 'series',
+                key: 'id'
+            }
+        },
+        // Part number in series
+        part: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
         deleted: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
@@ -153,6 +191,10 @@ module.exports = (sequelize) => {
             }
         ]
     });
+
+    // Associations
+    Recommendation.belongsTo(Series, { foreignKey: 'seriesId', as: 'series' });
+    Series.hasMany(Recommendation, { foreignKey: 'seriesId', as: 'works' });
 
     // Instance methods
     Recommendation.prototype.getParsedTags = function() {
