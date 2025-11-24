@@ -1,7 +1,8 @@
 {
   "name": "sam-bot",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "A Discord bot built with discord.js and Sequelize",
+  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "echo \"ERROR: Use PM2 to start the bot (npm run deploy or pm2 start ecosystem.config.js)\" && exit 1",
