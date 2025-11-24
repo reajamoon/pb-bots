@@ -100,10 +100,14 @@ async function handleUpdateRecommendation(interaction) {
         if (recommendation.series_works && Array.isArray(recommendation.series_works) && recommendation.series_works.length > 0) {
             const { Recommendation } = require('../../../../models');
             const createOrJoinQueueEntry = require('../../../../shared/recUtils/createOrJoinQueueEntry');
+            const createRecommendationEmbed = require('../../../../shared/recUtils/createRecommendationEmbed');
             const workUrls = recommendation.series_works.map(w => w.url);
-            const worksToUpdate = await Recommendation.findAll({ where: { url: workUrls } });
-            for (const work of worksToUpdate) {
-                // Always update series_works if changed
+            const worksInDb = await Recommendation.findAll({ where: { url: workUrls } });
+            const worksInDbUrls = new Set(worksInDb.map(w => w.url));
+            // Find new works (in series_works but not in DB)
+            const newWorks = recommendation.series_works.filter(w => w.url && !worksInDbUrls.has(w.url));
+            // Update series_works for all works in DB if changed
+            for (const work of worksInDb) {
                 if (JSON.stringify(work.series_works) !== JSON.stringify(recommendation.series_works)) {
                     await work.update({ series_works: recommendation.series_works });
                 }
@@ -115,6 +119,25 @@ async function handleUpdateRecommendation(interaction) {
                 } catch (err) {
                     console.error('[series update] Failed to queue refresh for', url, err);
                 }
+            }
+            // If there are new works, show a user-friendly message and update the embed
+            if (newWorks.length > 0) {
+                // Build a custom embed showing all works, marking new ones as pending
+                const embed = await createRecommendationEmbed({
+                    ...recommendation.toJSON(),
+                    series_works: recommendation.series_works.map(w => {
+                        if (w.url && !worksInDbUrls.has(w.url)) {
+                            return { ...w, title: `${w.title} _(Pending: parsing...)_` };
+                        }
+                        return w;
+                    })
+                });
+                await interaction.editReply({
+                    content: `New works detected in this series! They are being parsed and will appear in the library soon.\n\nThe embed below shows all works, with new ones marked as pending.`,
+                    embeds: [embed]
+                });
+                // Optionally, return here to avoid duplicate reply
+                return;
             }
         }
         let urlToUse = newUrl || recommendation.url;
