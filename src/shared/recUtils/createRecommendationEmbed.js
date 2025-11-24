@@ -1,3 +1,13 @@
+// Helper: Add status field (handles deleted, missing, etc)
+function addStatusField(fields, rec) {
+    if (rec.status) {
+        let statusValue = rec.status;
+        if (rec.deleted) statusValue += ' (Deleted)';
+        fields.push({ name: 'Status', value: statusValue, inline: true });
+    } else if (rec.deleted) {
+        fields.push({ name: 'Status', value: 'Deleted', inline: true });
+    }
+}
 
 import { EmbedBuilder } from 'discord.js';
 import quickLinkCheck from './quickLinkCheck.js';
@@ -240,44 +250,6 @@ function addStatsFields(embed, rec) {
     }
 }
 
-const embed = new EmbedBuilder()
-        .setTitle(`📖 ${rec.title}`)
-        .setDescription(`**By:** ${(rec.authors && Array.isArray(rec.authors)) ? rec.authors.join(', ') : (rec.author || 'Unknown Author')}`)
-        .setURL(rec.url)
-        .setColor(color)
-        .setTimestamp()
-        .setFooter({
-            text: `From the Profound Bond Library • Recommended by ${rec.recommendedByUsername} • ID: ${rec.id}`
-        });
-    if (rec.summary) {
-        const summaryText = rec.summary.length > 400 ? rec.summary.substring(0, 400) + '...' : rec.summary;
-        embed.addFields({
-            name: 'Summary',
-            value: `>>> ${summaryText}`
-        });
-    }
-    const isLinkWorking = rec.deleted ? false : await quickLinkCheck(rec.url);
-    const siteInfo = isValidFanficUrl(rec.url);
-    const linkText = buildStoryLinkText(rec, isLinkWorking, siteInfo);
-    // Story Link, Rating, and Status on the same line (inline fields)
-    const linkAndMetaFields = [
-        {
-            name: '🔗 Story Link',
-            value: linkText,
-            inline: true
-        }
-    ];
-    // Rating (inline)
-    if (rec.rating) {
-        let ratingValue = rec.rating;
-        if (typeof rec.rating === 'string') {
-            const key = rec.rating.trim().toLowerCase();
-            if (ratingEmojis[key]) {
-                ratingValue = `${ratingEmojis[key]} ${rec.rating}`;
-            }
-        }
-        linkAndMetaFields.push({ name: 'Rating', value: ratingValue, inline: true });
-    }
     // Status (inline)
     if (rec.status) {
         let statusValue = rec.status;
@@ -341,13 +313,13 @@ function buildBaseEmbed(rec, color) {
 
 // Builds the embed for a rec. Checks if the link works, adds warnings if needed.
 async function createRecommendationEmbed(rec) {
-        // If this work is part of a series, show series info
-        if (rec.series && typeof rec.series === 'object' && rec.series.name && rec.series.url && rec.series.part) {
-            embed.addFields({
-                name: 'Series',
-                value: `[Part ${rec.series.part} of ${rec.series.name}](${rec.series.url})`
-            });
-        }
+    // If this work is part of a series, show series info
+    if (rec.series && typeof rec.series === 'object' && rec.series.name && rec.series.url && rec.series.part) {
+        embed.addFields({
+            name: 'Series',
+            value: `[Part ${rec.series.part} of ${rec.series.name}](${rec.series.url})`
+        });
+    }
     if (isSeriesRec(rec)) {
         return await createSeriesRecommendationEmbed(rec);
     }
@@ -398,13 +370,7 @@ async function createRecommendationEmbed(rec) {
         if (effectiveRating) {
             linkAndMetaFields.push({ name: 'Rating', value: ratingValue, inline: true });
         }
-        if (rec.status) {
-            let statusValue = rec.status;
-            if (rec.deleted) statusValue += ' (Deleted)';
-            linkAndMetaFields.push({ name: 'Status', value: statusValue, inline: true });
-        } else if (rec.deleted) {
-            linkAndMetaFields.push({ name: 'Status', value: 'Deleted', inline: true });
-        }
+        addStatusField(linkAndMetaFields, rec);
         embed.addFields(linkAndMetaFields);
         addStatsFields(embed, rec);
         addSeriesWarningsField(embed, rec);
@@ -430,6 +396,7 @@ async function createRecommendationEmbed(rec) {
         }
         return embed;
     }
+
     // Use shared helper for rating and color
     const { ratingValue, color } = getRatingAndColor(rec.rating);
 
@@ -464,14 +431,7 @@ async function createRecommendationEmbed(rec) {
     if (rec.rating) {
         linkAndMetaFields.push({ name: 'Rating', value: ratingValue, inline: true });
     }
-    // Status (inline)
-    if (rec.status) {
-        let statusValue = rec.status;
-        if (rec.deleted) statusValue += ' (Deleted)';
-        linkAndMetaFields.push({ name: 'Status', value: statusValue, inline: true });
-    } else if (rec.deleted) {
-        linkAndMetaFields.push({ name: 'Status', value: 'Deleted', inline: true });
-    }
+    addStatusField(linkAndMetaFields, rec);
     embed.addFields(linkAndMetaFields);
     addStatsFields(embed, rec);
     addWorkWarningsField(embed, rec);
@@ -491,5 +451,6 @@ export {
     addTagsField,
     addNotesField,
     addEngagementFields,
-    addStatsFields
+    addStatsFields,
+    addStatusField
 };

@@ -11,7 +11,8 @@ import {
 	addTagsField,
 	addNotesField,
 	addEngagementFields,
-	addStatsFields
+	addStatsFields,
+	addStatusField
 } from './createRecommendationEmbed.js';
 
 // Async embed builder for a rec (single or series)
@@ -44,13 +45,7 @@ export async function createRecommendationEmbed(rec) {
 		{ name: '🔗 Story Link', value: linkText, inline: true }
 	];
 	if (rec.rating) linkAndMetaFields.push({ name: 'Rating', value: ratingValue, inline: true });
-	if (rec.status) {
-		let statusValue = rec.status;
-		if (rec.deleted) statusValue += ' (Deleted)';
-		linkAndMetaFields.push({ name: 'Status', value: statusValue, inline: true });
-	} else if (rec.deleted) {
-		linkAndMetaFields.push({ name: 'Status', value: 'Deleted', inline: true });
-	}
+	addStatusField(linkAndMetaFields, rec);
 	embed.addFields(linkAndMetaFields);
 	addStatsFields(embed, rec);
 	addWorkWarningsField(embed, rec);
@@ -99,13 +94,7 @@ export async function createSeriesRecommendationEmbed(rec) {
 		{ name: '🔗 Series Link', value: linkText, inline: true }
 	];
 	if (effectiveRating) linkAndMetaFields.push({ name: 'Rating', value: ratingValue, inline: true });
-	if (rec.status) {
-		let statusValue = rec.status;
-		if (rec.deleted) statusValue += ' (Deleted)';
-		linkAndMetaFields.push({ name: 'Status', value: statusValue, inline: true });
-	} else if (rec.deleted) {
-		linkAndMetaFields.push({ name: 'Status', value: 'Deleted', inline: true });
-	}
+	addStatusField(linkAndMetaFields, rec);
 	embed.addFields(linkAndMetaFields);
 	addStatsFields(embed, rec);
 	addSeriesWarningsField(embed, rec);

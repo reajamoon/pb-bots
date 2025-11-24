@@ -1,9 +1,7 @@
 
-const { MessageFlags } = require('discord.js');
-const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
-const { isSeriesRec } = require('../../../../shared/recUtils/createRecommendationEmbed');
-import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
-
+import { MessageFlags } from 'discord.js';
+import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
+import { isSeriesRec, createRecommendationEmbed } from '../../../../shared/recUtils/createRecommendationEmbed.js';
 
 // Picks a random fic from the library. Filters by tag if you want.
 async function handleRandomRecommendation(interaction) {
@@ -15,9 +13,7 @@ async function handleRandomRecommendation(interaction) {
     }
     await interaction.deferReply();
     const tagFilter = interaction.options.getString('tag');
-    // Fetch all recs (could optimize for large DBs)
-    const { Recommendation } = require('../../../../models');
-    let recommendations = await Recommendation.findAll({ order: require('sequelize').literal('RANDOM()') });
+    let recommendations = await fetchRecWithSeries(null, false, true); // We'll filter below
 
     // Parse override options from command (e.g., allowWIP, allowDeleted, allowAbandoned)
     const allowWIP = interaction.options.getBoolean('allowWIP') || false;
@@ -64,4 +60,4 @@ async function handleRandomRecommendation(interaction) {
     await interaction.editReply({ embeds: [embed] });
 }
 
-module.exports = handleRandomRecommendation;
+export default handleRandomRecommendation;
