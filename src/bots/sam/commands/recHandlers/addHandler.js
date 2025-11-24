@@ -57,7 +57,7 @@ async function handleAddRecommendation(interaction) {
       } else if (status === 'done' && queueEntry.result) {
         // Return cached result (simulate embed)
         const { Recommendation } = require('../../../../models');
-        const { createRecommendationEmbed } = require('../../../../shared/recUtils/asyncEmbeds');
+        import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
         const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
         const rec = await Recommendation.findOne({ where: { url } });
         if (rec) {
@@ -123,7 +123,7 @@ async function handleAddRecommendation(interaction) {
     } else if (status === 'done' && queueEntry.result) {
       // Return cached result: fetch Recommendation and build embed directly (no AO3 access)
       const { Recommendation } = require('../../../../models');
-      const { createRecommendationEmbed } = require('../../../../shared/recUtils/asyncEmbeds');
+      import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
       const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
       const rec = await Recommendation.findOne({ where: { url } });
       if (rec) {

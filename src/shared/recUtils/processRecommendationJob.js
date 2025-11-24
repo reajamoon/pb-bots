@@ -4,7 +4,7 @@
 
 const { Recommendation } = require('../../models');
 const { fetchFicMetadata } = require('./ficParser');
-const { createRecommendationEmbed } = require('./asyncEmbeds');
+import { createRecommendationEmbed } from './asyncEmbeds.js';
 const normalizeAO3Url = require('./normalizeAO3Url');
 const updateMessages = require('../text/updateMessages');
 /**

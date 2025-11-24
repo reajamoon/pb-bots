@@ -100,7 +100,7 @@ async function handleUpdateRecommendation(interaction) {
         if (recommendation.series_works && Array.isArray(recommendation.series_works) && recommendation.series_works.length > 0) {
             const { Recommendation } = require('../../../../models');
             const createOrJoinQueueEntry = require('../../../../shared/recUtils/createOrJoinQueueEntry');
-            const { createRecommendationEmbed } = require('../../../../shared/recUtils/asyncEmbeds');
+            import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
             const workUrls = recommendation.series_works.map(w => w.url);
             const worksInDb = await Recommendation.findAll({ where: { url: workUrls } });
             const worksInDbUrls = new Set(worksInDb.map(w => w.url));
@@ -162,7 +162,7 @@ async function handleUpdateRecommendation(interaction) {
                 } else if (queueEntry.status === 'done' && queueEntry.result) {
                     // For done/cached recs, fetch from DB and build embed directly (no AO3 access)
                     const { Recommendation } = require('../../../../models');
-                    const { createRecommendationEmbed } = require('../../../../shared/recUtils/asyncEmbeds');
+                    import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
                     const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
                     const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                     if (updatedRec) {
@@ -270,7 +270,7 @@ async function handleUpdateRecommendation(interaction) {
                         if (updatedQueue && updatedQueue.status === 'done' && updatedQueue.result) {
                             // Fetch the updated recommendation for embed (no AO3 access)
                             const { Recommendation } = require('../../../../models');
-                            const { createRecommendationEmbed } = require('../../../../shared/recUtils/asyncEmbeds');
+                            import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
                             const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
                             const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                             if (updatedRec) {
@@ -293,7 +293,7 @@ async function handleUpdateRecommendation(interaction) {
             const finalQueue = await ParseQueue.findOne({ where: { id: queueEntry.id, status: 'done' } });
             if (finalQueue && finalQueue.result) {
                 const { Recommendation } = require('../../../../models');
-                const { createRecommendationEmbed } = require('../../../../shared/recUtils/asyncEmbeds');
+                import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
                 const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
                 const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                 if (updatedRec) {

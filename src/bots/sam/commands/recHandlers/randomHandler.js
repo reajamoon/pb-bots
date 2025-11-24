@@ -2,7 +2,7 @@
 const { MessageFlags } = require('discord.js');
 const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
 const { isSeriesRec } = require('../../../../shared/recUtils/createRecommendationEmbed');
-const { createRecommendationEmbed } = require('../../../../shared/recUtils/asyncEmbeds');
+import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
 
 
 // Picks a random fic from the library. Filters by tag if you want.

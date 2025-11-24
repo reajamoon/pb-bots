@@ -1,7 +1,7 @@
 
-const { EmbedBuilder } = require('discord.js');
-const quickLinkCheck = require('./quickLinkCheck');
-const isValidFanficUrl = require('./isValidFanficUrl')
+import { EmbedBuilder } from 'discord.js';
+import quickLinkCheck from './quickLinkCheck.js';
+import isValidFanficUrl from './isValidFanficUrl.js';
 
 // Map AO3 normalized rating names to custom emoji
 const ratingEmojis = {
@@ -481,8 +481,7 @@ async function createRecommendationEmbed(rec) {
     return embed;
 }
 
-// Only export non-async helpers here to avoid ERR_REQUIRE_ASYNC_MODULE
-module.exports = {
+export {
     isSeriesRec,
     buildBaseEmbed,
     buildStoryLinkText,
