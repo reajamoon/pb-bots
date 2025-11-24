@@ -15,6 +15,17 @@ async function handleRandomRecommendation(interaction) {
     let recommendations = await Recommendation.findAll({
         order: require('sequelize').literal('RANDOM()')
     });
+    // Filter out notPrimaryWork fics unless they were recommended individually (i.e., not just as part of a series)
+    recommendations = recommendations.filter(rec => {
+        if (!rec.notPrimaryWork) return true;
+        // If it was recommended individually, it will have its own unique recommendedBy/recommendedByUsername/notes/etc.
+        // We'll consider it individually recommended if it has non-empty notes or additionalTags, or if it was added by a different user than the series rec.
+        // (You can adjust this logic as needed for your data model)
+        if (rec.notes && rec.notes.trim()) return true;
+        if (Array.isArray(rec.additionalTags) && rec.additionalTags.length > 0) return true;
+        // Otherwise, skip it
+        return false;
+    });
     if (tagFilter) {
         recommendations = recommendations.filter(rec => {
             const allTags = rec.getParsedTags();

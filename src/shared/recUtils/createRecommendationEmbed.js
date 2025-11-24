@@ -9,15 +9,25 @@ const ratingEmojis = {
     'explicit': '<:ratingexplicit:1133762272087506965>'
 };
 
-// Builds the embed for a rec. Checks if the link works, adds warnings if needed.
+// Builds the embed for a rec. Uses two functions: one for series recs, one for individual works.
 async function createRecommendationEmbed(rec) {
-    // Map fic ratings to embed colors
+    // If this is a series rec (type === 'series' or url includes '/series/' or has series_works and not notPrimaryWork), use series embed
+    const isSeries = (rec.type === 'series') || (rec.url && rec.url.includes('/series/')) || (Array.isArray(rec.series_works) && rec.series_works.length > 0 && !rec.notPrimaryWork);
+    if (isSeries) {
+        return await createSeriesEmbed(rec);
+    } else {
+        return await createWorkEmbed(rec);
+    }
+}
+
+// Embed for main series rec (shows series info and works list)
+async function createSeriesEmbed(rec) {
     const ratingColors = {
-        'general audiences': 0x43a047,      // Green
-        'teen and up audiences': 0xffeb3b, // Yellow
-        'mature': 0xff9800,                // Orange
-        'explicit': 0xd32f2f,              // Red
-        'not rated': 0x757575,             // Grey
+        'general audiences': 0x43a047,
+        'teen and up audiences': 0xffeb3b,
+        'mature': 0xff9800,
+        'explicit': 0xd32f2f,
+        'not rated': 0x757575,
         'unrated': 0x757575
     };
     let color = 0x333333;
@@ -29,13 +39,113 @@ async function createRecommendationEmbed(rec) {
     }
     const embed = new EmbedBuilder()
         .setTitle(`📖 ${rec.title}`)
-        .setDescription(`**By:** ${(rec.authors && Array.isArray(rec.authors)) ? rec.authors.join(', ') : (rec.author || 'Unknown Author')}`)
         .setURL(rec.url)
         .setColor(color)
         .setTimestamp()
         .setFooter({
             text: `From the Profound Bond Library • Recommended by ${rec.recommendedByUsername} • ID: ${rec.id}`
         });
+    let authorLine = (rec.authors && Array.isArray(rec.authors)) ? rec.authors.join(', ') : (rec.author || 'Unknown Author');
+    let desc = `**By:** ${authorLine}`;
+    let summary = rec.summary;
+    if (!summary && Array.isArray(rec.series_works) && rec.series_works.length > 0) {
+        // Use summary from the first work in the series that is not flagged with notPrimaryWork
+        const primaryWork = rec.series_works.find(w => !w.notPrimaryWork);
+        summary = primaryWork?.summary;
+    }
+    if (summary) {
+        desc += `\n\n${summary}`;
+    }
+    embed.setDescription(desc);
+    // Determine rating: use series rating, or highest from works if not rated
+    let ratingToShow = rec.rating;
+    if (!ratingToShow && Array.isArray(rec.series_works) && rec.series_works.length > 0) {
+        // Priority: explicit > mature > teen and up audiences > general audiences > not rated
+        const ratingOrder = [
+            'explicit',
+            'mature',
+            'teen and up audiences',
+            'general audiences',
+            'not rated',
+            'unrated'
+        ];
+        const found = {};
+        for (const work of rec.series_works) {
+            if (work.rating && typeof work.rating === 'string') {
+                const key = work.rating.trim().toLowerCase();
+                found[key] = true;
+            }
+        }
+        ratingToShow = ratingOrder.find(r => found[r]);
+    }
+    if (ratingToShow && typeof ratingToShow === 'string') {
+        const ratingKey = ratingToShow.trim().toLowerCase();
+        if (ratingEmojis[ratingKey]) {
+            embed.addFields({ name: 'Rating', value: `${ratingEmojis[ratingKey]} ${ratingToShow}`, inline: true });
+        } else {
+            embed.addFields({ name: 'Rating', value: ratingToShow, inline: true });
+        }
+    }
+    if (Array.isArray(rec.tags) && rec.tags.length > 0) {
+        embed.addFields({
+            name: 'Tags',
+            value: rec.tags.slice(0, 8).join(', ') + (rec.tags.length > 8 ? '...' : ''),
+            inline: false
+        });
+    }
+
+    // Archive warnings: concatenate and deduplicate from all works in the series
+    let allWarnings = [];
+    if (Array.isArray(rec.series_works) && rec.series_works.length > 0) {
+        for (const work of rec.series_works) {
+            if (Array.isArray(work.archive_warnings)) {
+                allWarnings.push(...work.archive_warnings);
+            } else if (Array.isArray(work.archiveWarnings)) {
+                allWarnings.push(...work.archiveWarnings);
+            }
+        }
+    }
+    // Also include series-level warnings if present
+    if (Array.isArray(rec.archive_warnings)) {
+        allWarnings.push(...rec.archive_warnings);
+    } else if (Array.isArray(rec.archiveWarnings)) {
+        allWarnings.push(...rec.archiveWarnings);
+    }
+    allWarnings = allWarnings.map(w => (typeof w === 'string' ? w.trim() : '')).filter(Boolean);
+    allWarnings = [...new Set(allWarnings)];
+    const majorWarningEmoji = '<:warn_yes:1142772202379415622>';
+    const maybeWarningEmoji = '<:warn_maybe:1142772269156933733>';
+    const majorWarningsList = [
+        'Graphic Depictions of Violence',
+        'Major Character Death',
+        'Rape/Non-Con',
+        'Underage',
+        'Underage Sex'
+    ];
+    const filtered = allWarnings.filter(w => w.toLowerCase() !== 'no archive warnings apply');
+    if (filtered.length > 0) {
+        let fieldValue = '';
+        if (
+            filtered.length === 1 &&
+            filtered[0].toLowerCase() === 'creator chose not to use archive warnings'
+        ) {
+            fieldValue = `${maybeWarningEmoji} Creator Chose Not To Use Archive Warnings`;
+        } else {
+            const hasMajor = filtered.some(w =>
+                majorWarningsList.some(mw => w.toLowerCase().includes(mw.toLowerCase()))
+            );
+            if (hasMajor) {
+                fieldValue = `${majorWarningEmoji} ${filtered.join(', ')}`;
+            } else {
+                fieldValue = filtered.join(', ');
+            }
+        }
+        embed.addFields({
+            name: 'Major Content Warnings',
+            value: fieldValue
+        });
+    }
+    // Show works in series
     if (Array.isArray(rec.series_works) && rec.series_works.length > 0) {
         let worksList = '';
         const maxToShow = 4;
@@ -48,7 +158,6 @@ async function createRecommendationEmbed(rec) {
             }
         }
         if (rec.series_works.length > maxToShow) {
-            // Add "and more" link to series page
             worksList += `... [and more](${rec.url})`;
         }
         embed.addFields({
@@ -57,6 +166,58 @@ async function createRecommendationEmbed(rec) {
             inline: false
         });
     }
+    return embed;
+}
+
+// Embed for individual works (shows only work info, not series list)
+async function createWorkEmbed(rec) {
+    const ratingColors = {
+        'general audiences': 0x43a047,
+        'teen and up audiences': 0xffeb3b,
+        'mature': 0xff9800,
+        'explicit': 0xd32f2f,
+        'not rated': 0x757575,
+        'unrated': 0x757575
+    };
+    let color = 0x333333;
+    if (rec.rating && typeof rec.rating === 'string') {
+        const key = rec.rating.trim().toLowerCase();
+        if (ratingColors[key]) {
+            color = ratingColors[key];
+        }
+    }
+    const embed = new EmbedBuilder()
+        .setTitle(`📖 ${rec.title}`)
+        .setURL(rec.url)
+        .setColor(color)
+        .setTimestamp()
+        .setFooter({
+            text: `From the Profound Bond Library • Recommended by ${rec.recommendedByUsername} • ID: ${rec.id}`
+        });
+    let authorLine = (rec.authors && Array.isArray(rec.authors)) ? rec.authors.join(', ') : (rec.author || 'Unknown Author');
+    let desc = `**By:** ${authorLine}`;
+    if (rec.summary) {
+        desc += `\n\n${rec.summary}`;
+    }
+    embed.setDescription(desc);
+    if (rec.rating && typeof rec.rating === 'string') {
+        const ratingKey = rec.rating.trim().toLowerCase();
+        if (ratingEmojis[ratingKey]) {
+            embed.addFields({ name: 'Rating', value: `${ratingEmojis[ratingKey]} ${rec.rating}`, inline: true });
+        } else {
+            embed.addFields({ name: 'Rating', value: rec.rating, inline: true });
+        }
+    }
+    if (Array.isArray(rec.tags) && rec.tags.length > 0) {
+        embed.addFields({
+            name: 'Tags',
+            value: rec.tags.slice(0, 8).join(', ') + (rec.tags.length > 8 ? '...' : ''),
+            inline: false
+        });
+    }
+    // Do NOT show series_works for individual works
+    return embed;
+}
     // DEBUG: Log the rec object and tag fields to inspect tag presence
     //console.log('[DEBUG] createRecommendationEmbed rec:', JSON.stringify(rec, null, 2));
     if (typeof rec.getParsedTags === 'function') {
