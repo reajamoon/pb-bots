@@ -2,8 +2,8 @@
 // Usage: node scripts/normalize-ao3-urls.js
 // Normalizes AO3 URLs in the Recommendation table by removing trailing /chapters/* and deduplicates, keeping the oldest entry.
 
-const { Recommendation } = require('../src/models');
-const { Op } = require('sequelize');
+import { Recommendation } from '../src/models/index.js';
+import { Op } from 'sequelize';
 
 function normalizeAo3Url(url) {
     // Only normalize AO3 URLs
