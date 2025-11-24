@@ -1,9 +1,9 @@
 // PM2 ecosystem file for Jack (queue worker)
-module.exports = {
+export default {
   apps: [
     {
       name: 'jack',
-  script: './src/bots/jack/jack.js',
+      script: './src/bots/jack/jack.js',
       instances: 1,
       autorestart: true,
       watch: false,
@@ -13,7 +13,7 @@ module.exports = {
       restart_delay: 10000,
       env: {
         NODE_ENV: 'production',
+      }
     }
-}
   ],
 };

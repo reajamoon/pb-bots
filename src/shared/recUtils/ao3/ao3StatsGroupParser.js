@@ -1,7 +1,7 @@
 
 
-const AO3_FIELD_MAP = require('./ao3FieldMap');
-const { parseTagList } = require('./parseTagList');
+import AO3_FIELD_MAP from './ao3FieldMap.js';
+import { parseTagList } from './parseTagList.js';
 
 /**
  * Parses all <dt>/<dd> pairs in the document to extract AO3 stats fields, not just in stats blocks.
@@ -78,4 +78,5 @@ function parseStatsGroup($) {
     return { stats, unknownStats };
 }
 
-module.exports = { parseStatsGroup };
+
+export { parseStatsGroup };

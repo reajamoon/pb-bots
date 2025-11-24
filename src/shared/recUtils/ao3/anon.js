@@ -146,6 +146,5 @@ function parseAnonymousAO3Fic(html, url = null) {
     return metadata;
 }
 
-module.exports = {
-    parseAnonymousAO3Fic
-};
+
+export { parseAnonymousAO3Fic };

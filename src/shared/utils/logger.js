@@ -1,9 +1,15 @@
 
 import winston from 'winston';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
 
-// Create logs directory if it doesn't exist
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const logsDir = join(__dirname, '../../logs');
+if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+}
 
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',

@@ -16,4 +16,5 @@ async function ao3RateLimit() {
     return queue;
 }
 
-module.exports = { ao3RateLimit };
+
+export { ao3RateLimit };

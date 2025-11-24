@@ -40,4 +40,5 @@ async function handleInteractionNavigation(interaction, options = {}) {
     }
 }
 
-module.exports = { handleInteractionNavigation };
+
+export { handleInteractionNavigation };

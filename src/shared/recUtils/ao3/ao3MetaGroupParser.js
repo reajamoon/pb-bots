@@ -2,9 +2,9 @@
 // Extracts and parses AO3 meta group block into a metadata object
 
 
-const decodeHtmlEntities = require('../decodeHtmlEntities');
-const AO3_FIELD_MAP = require('./ao3FieldMap');
-const { parseTagList } = require('./parseTagList');
+import decodeHtmlEntities from '../decodeHtmlEntities.js';
+import AO3_FIELD_MAP from './ao3FieldMap.js';
+import { parseTagList } from './parseTagList.js';
 
 /**
  * Parses all <dt>/<dd> pairs in the entire Cheerio document to extract AO3 metadata fields.
@@ -56,4 +56,5 @@ function parseMetaGroup($) {
     return metadata;
 }
 
-module.exports = { parseMetaGroup };
+
+export { parseMetaGroup };

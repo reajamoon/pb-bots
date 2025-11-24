@@ -1,10 +1,14 @@
 // scripts/clear-commands.js
-const { REST, Routes } = require('discord.js');
-require('dotenv').config();
+
+import { REST, Routes } from 'discord.js';
+import dotenv from 'dotenv';
+dotenv.config();
+
 
 const token = process.env.BOT_TOKEN;
 const clientId = process.env.CLIENT_ID;
 const guildId = process.env.GUILD_ID;
+
 
 const rest = new REST({ version: '10' }).setToken(token);
 
