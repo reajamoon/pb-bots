@@ -1,6 +1,6 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { encodeMessageId } = require('../../../shared/utils/messageTracking');
-const { buildButtonId } = require('../../../shared/utils/buttonId');
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { encodeMessageId } from '../../../shared/utils/messageTracking.js';
+import { buildButtonId } from '../../../shared/utils/buttonId.js';
 
 /**
  * Shared navigation button logic for profile help menus
@@ -75,6 +75,4 @@ function createHelpWithBackButton(embed, interaction) {
     return { embed, components: [row1, row2, navRow] };
 }
 
-module.exports = {
-    createHelpWithBackButton
-};
+export { createHelpWithBackButton };

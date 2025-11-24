@@ -1,6 +1,6 @@
-const { User } = require('../../../models');
-const { generateProfileCard, createProfileButtons } = require('./profileCard');
-const logger = require('../../../shared/utils/logger');
+import { User } from '../../../models/index.js';
+import { generateProfileCard, createProfileButtons } from './profileCard.js';
+import logger from '../../../shared/utils/logger.js';
 
 /**
  * Update the original profile message with fresh user data (Sam-specific)
@@ -64,4 +64,4 @@ async function updateOriginalProfile(interaction, originalMessageId, actionDescr
     }
 }
 
-module.exports = { updateOriginalProfile };
+export { updateOriginalProfile };

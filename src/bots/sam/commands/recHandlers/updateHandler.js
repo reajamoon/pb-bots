@@ -63,8 +63,6 @@ export default async function handleUpdateRecommendation(interaction) {
         };
         console.log('[rec update] Option values:', debugFields);
         await interaction.deferReply();
-
-    const normalizeAO3Url = require('../../../../shared/recUtils/normalizeAO3Url');
         const identifier = interaction.options.getString('identifier');
         if (!identifier) {
             await interaction.editReply({
@@ -103,9 +101,9 @@ export default async function handleUpdateRecommendation(interaction) {
         }
         // If this is a series rec, update series_works for all works in the series if needed
         if (recommendation.series_works && Array.isArray(recommendation.series_works) && recommendation.series_works.length > 0) {
-            const { Recommendation } = require('../../../../models');
-            const createOrJoinQueueEntry = require('../../../../shared/recUtils/createOrJoinQueueEntry');
-            import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
+            const { Recommendation } = await import('../../../../models/index.js');
+            const createOrJoinQueueEntry = (await import('../../../../shared/recUtils/createOrJoinQueueEntry.js')).default;
+            const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
             const workUrls = recommendation.series_works.map(w => w.url);
             const worksInDb = await Recommendation.findAll({ where: { url: workUrls } });
             const worksInDbUrls = new Set(worksInDb.map(w => w.url));
@@ -149,7 +147,7 @@ export default async function handleUpdateRecommendation(interaction) {
         urlToUse = normalizeAO3Url(urlToUse);
 
         // --- Fic Parsing Queue Logic ---
-        const { ParseQueue, ParseQueueSubscriber } = require('../../../../models');
+        const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
         // Always use the queue for any update that requires a metadata fetch
         const needsMetadataFetch = newUrl || (!newTitle && !newAuthor && !newSummary && !newRating && !newStatus && !newWordCount);
         if (needsMetadataFetch) {
@@ -166,9 +164,9 @@ export default async function handleUpdateRecommendation(interaction) {
                     return;
                 } else if (queueEntry.status === 'done' && queueEntry.result) {
                     // For done/cached recs, fetch from DB and build embed directly (no AO3 access)
-                    const { Recommendation } = require('../../../../models');
-                    import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
-                    const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
+                    const { Recommendation } = await import('../../../../models/index.js');
+                    const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
+                    const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
                     const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                     if (updatedRec) {
                         const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
@@ -223,7 +221,7 @@ export default async function handleUpdateRecommendation(interaction) {
                             // Return friendly duplicate message with details, robust fallback
                             let rec = null;
                             try {
-                                const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
+                                const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
                                 rec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                             } catch {}
                             let recWithSeries = rec;
@@ -257,7 +255,7 @@ export default async function handleUpdateRecommendation(interaction) {
             }
             await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
             // Poll for instant completion (duration matches suppression threshold in config)
-            const { Config } = require('../../../../models');
+            const { Config } = await import('../../../../models/index.js');
             let pollTimeout = 3000; // default 3 seconds
             try {
                 const thresholdConfig = await Config.findOne({ where: { key: 'instant_queue_suppress_threshold_ms' } });
@@ -274,9 +272,9 @@ export default async function handleUpdateRecommendation(interaction) {
                 const updatedQueue = await ParseQueue.findOne({ where: { id: queueEntry.id } });
                         if (updatedQueue && updatedQueue.status === 'done' && updatedQueue.result) {
                             // Fetch the updated recommendation for embed (no AO3 access)
-                            const { Recommendation } = require('../../../../models');
-                            import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
-                            const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
+                            const { Recommendation } = await import('../../../../models/index.js');
+                            const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
+                            const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
                             const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                             if (updatedRec) {
                                 const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
@@ -297,9 +295,9 @@ export default async function handleUpdateRecommendation(interaction) {
             // Final fallback: check if the job is now done in the DB (worker may have been too fast)
             const finalQueue = await ParseQueue.findOne({ where: { id: queueEntry.id, status: 'done' } });
             if (finalQueue && finalQueue.result) {
-                const { Recommendation } = require('../../../../models');
-                import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
-                const { fetchRecWithSeries } = require('../../../../models/fetchRecWithSeries');
+                const { Recommendation } = await import('../../../../models/index.js');
+                const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
+                const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
                 const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
                 if (updatedRec) {
                     const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);

@@ -1,9 +1,9 @@
 
-const { EmbedBuilder } = require('discord.js');
-const { createHelpWithBackButton } = require('./profileHelpButtons');
-const fs = require('fs');
-const path = require('path');
-const helpTexts = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../shared/text/helpTexts.json'), 'utf8'));
+import { EmbedBuilder } from 'discord.js';
+import { createHelpWithBackButton } from './profileHelpButtons.js';
+import fs from 'fs';
+import path from 'path';
+const helpTexts = JSON.parse(fs.readFileSync(path.join(path.dirname(import.meta.url.replace('file://', '')), '../../../shared/text/helpTexts.json'), 'utf8'));
 
 /**
  * Create birthday help embed
@@ -21,4 +21,4 @@ function createBirthdayHelp(interaction) {
     return createHelpWithBackButton(embed, interaction);
 }
 
-module.exports = { createBirthdayHelp };
+export { createBirthdayHelp };

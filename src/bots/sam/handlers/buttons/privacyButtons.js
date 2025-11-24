@@ -1,20 +1,17 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, InteractionFlags } = require('discord.js');
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, InteractionFlags } from 'discord.js';
 const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
-const { User } = require('../../../../models');
-const logger = require('../../../../shared/utils/logger');
-const { parsePrivacySettingsCustomId, parsePrivacySettingsDoneCustomId } = require('../../../../shared/utils/messageTracking');
-const { buildPrivacySettingsMenu } = require('./privacy');
-
-const { performDualUpdate } = require('../../../../shared/utils/dualUpdate');
-
-const { getProfileMessageId } = require('../../../../shared/utils/messageTracking');
-const { handleInteractionNavigation } = require('../../../../shared/utils/interactionNavigation');
+import { User } from '../../../../models/index.js';
+import logger from '../../../../shared/utils/logger.js';
+import { parsePrivacySettingsCustomId, parsePrivacySettingsDoneCustomId, getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
+import { buildPrivacySettingsMenu } from './privacy.js';
+import { performDualUpdate } from '../../../../shared/utils/dualUpdate.js';
+import { handleInteractionNavigation } from '../../../../shared/utils/interactionNavigation.js';
 /**
  * Handle privacy and settings button interactions
  */
 async function handlePrivacyButtons(interaction) {
     // Extract userId and messageId from customId using utility
-    const { getProfileOwnerIdFromInteraction } = require('../../../../shared/utils/messageTracking');
+    const { getProfileOwnerIdFromInteraction } = await import('../../../../shared/utils/messageTracking.js');
     const trackedData = parsePrivacySettingsCustomId(interaction.customId);
     const profileOwnerId = getProfileOwnerIdFromInteraction(interaction);
     // Use robust tracker for message ID
@@ -65,25 +62,25 @@ async function handlePrivacyButtons(interaction) {
 
     // Individual privacy toggles
     else if (interaction.customId.includes('toggle_birthday_mentions_privacy_settings_')) {
-        const { handleToggleBirthdayMentions } = require('./privacy');
+        const { handleToggleBirthdayMentions } = await import('./privacy.js');
         await handleToggleBirthdayMentions(interaction);
     }
 
     // Toggle birthday lists (daily announcements)
     else if (interaction.customId.includes('toggle_birthday_lists_privacy_settings_')) {
-        const { handleToggleBirthdayLists } = require('./privacy');
+        const { handleToggleBirthdayLists } = await import('./privacy.js');
         await handleToggleBirthdayLists(interaction);
     }
 
     // Toggle Privacy Mode (Full) - hides ALL birthday info
     else if (interaction.customId.includes('toggle_privacy_mode_full_privacy_settings_')) {
-        const { handleTogglePrivacyModeFull } = require('./privacy');
+        const { handleTogglePrivacyModeFull } = await import('./privacy.js');
         await handleTogglePrivacyModeFull(interaction);
     }
 
     // Toggle Privacy Mode (Age Hidden) - hides only age, shows birthday/zodiac
     else if (interaction.customId.includes('toggle_privacy_mode_age_hidden_privacy_settings_')) {
-        const { handleTogglePrivacyModeAgeHidden } = require('./privacy');
+        const { handleTogglePrivacyModeAgeHidden } = await import('./privacy.js');
         await handleTogglePrivacyModeAgeHidden(interaction);
     }
 
@@ -103,10 +100,10 @@ async function handlePrivacyButtons(interaction) {
 
     // Toggle birthday hidden (profile birthday visibility)
     else if (interaction.customId.includes('toggle_birthday_hidden_privacy_settings_')) {
-        const { handleToggleBirthdayHidden } = require('./privacy');
+        const { handleToggleBirthdayHidden } = await import('./privacy.js');
         await handleToggleBirthdayHidden(interaction);
     }
     // Additional privacy toggle handlers would go here...
 }
 
-module.exports = { handlePrivacyButtons, buildPrivacySettingsMenu };
+export { handlePrivacyButtons, buildPrivacySettingsMenu };

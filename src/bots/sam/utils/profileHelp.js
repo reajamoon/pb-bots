@@ -1,10 +1,10 @@
-const { EmbedBuilder } = require('discord.js');
-const { createBirthdayHelp } = require('./profileHelpBirthday');
-const { createBioHelp } = require('./profileHelpBio');
-const { createPrivacyHelp } = require('./profileHelpPrivacy');
-const { createTipsHelp } = require('./profileHelpTips');
-const { createTimezoneRegionHelp } = require('./profileHelpTimezoneRegion');
-const { createHelpWithBackButton } = require('./profileHelpButtons');
+import { EmbedBuilder } from 'discord.js';
+import { createBirthdayHelp } from './profileHelpBirthday.js';
+import { createBioHelp } from './profileHelpBio.js';
+import { createPrivacyHelp } from './profileHelpPrivacy.js';
+import { createTipsHelp } from './profileHelpTips.js';
+import { createTimezoneRegionHelp } from './profileHelpTimezoneRegion.js';
+import { createHelpWithBackButton } from './profileHelpButtons.js';
 
 /**
  * Profile help system with category-based navigation
@@ -35,7 +35,7 @@ function createProfileHelpMain(interaction) {
         .setColor(0x5865F2)
         .setFooter({ text: 'Pick a category to learn more.' });
 
-    const { encodeMessageId } = require('../../../shared/utils/messageTracking');
+    // ESM: import at top if needed, or update usage if required elsewhere
     const userId = interaction?.user?.id || '';
     const messageId = interaction?.message?.id || '';
     const encodedMsgId = encodeMessageId(messageId);
@@ -70,7 +70,7 @@ function createProfileHelpMain(interaction) {
 
 
 
-module.exports = {
+export {
     createProfileHelpMain,
     createBirthdayHelp,
     createBioHelp,

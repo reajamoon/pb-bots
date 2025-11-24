@@ -107,7 +107,4 @@ function formatBirthdayForProfile(user) {
     };
 }
 
-module.exports = {
-    getDayWithSuffix,
-    formatBirthdayForProfile
-};
+export { getDayWithSuffix, formatBirthdayForProfile };

@@ -2,7 +2,7 @@
  * Utility for robust profile message ID tracking and propagation
  * Ensures all profile settings/menu buttons carry the original profile card message ID
  */
-const logger = require('../../../shared/utils/logger');
+import logger from '../../../shared/utils/logger.js';
 
 /**
  * Extracts the original profile card message ID from customId, interaction, or fallback
@@ -44,7 +44,4 @@ function buildProfileButtonId(action, context, userId, messageId) {
     return `${action}_${context}_${userId}${secondaryId ? `_${secondaryId}` : ''}`;
 }
 
-module.exports = {
-    getProfileMessageId,
-    buildProfileButtonId
-};
+export { getProfileMessageId, buildProfileButtonId };
