@@ -1,5 +1,4 @@
-
-// Unified Sam bot startup (ESM version)
+console.log('Node.js version:', process.version);
 import { ParseQueue, ParseQueueSubscriber, User, Config, sequelize } from '../../models/index.js';
 import { Client, Collection, GatewayIntentBits } from 'discord.js';
 import { readdirSync } from 'fs';

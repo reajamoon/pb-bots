@@ -1,6 +1,5 @@
+console.log('Node.js version:', process.version);
 
-
-// Periodic cleanup of old queue jobs
 import { Op } from 'sequelize';
 import { ParseQueue, ParseQueueSubscriber, Config, User, sequelize, Recommendation } from '../../models/index.js';
 import processRecommendationJob from '../../shared/recUtils/processRecommendationJob.js';

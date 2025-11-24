@@ -2,10 +2,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { buildButtonId } from '../../../../../shared/utils/buttonId.js';
 import { buildPrivacySettingsDoneCustomId, encodeMessageId } from '../../../../../shared/utils/messageTracking.js';
-import menuTextsAll from '../../../../../shared/text/menuTexts.json' assert { type: 'json' };
 import logger from '../../../../../shared/utils/logger.js';
-
-const menuTexts = menuTextsAll.privacy;
 
 function buildPrivacySettingsButtonId(action, userId, messageId) {
     return buildButtonId({
@@ -25,7 +22,9 @@ function buildPrivacySettingsDoneButtonId(userId, messageId) {
     });
 }
 
-export function buildPrivacySettingsMenu(userData, userId, messageId = null, validatedMessageId = null, interaction = null) {
+export async function buildPrivacySettingsMenu(userData, userId, messageId = null, validatedMessageId = null, interaction = null) {
+    const menuTextsAll = (await import('../../../../../shared/text/menuTexts.json', { assert: { type: 'json' } })).default;
+    const menuTexts = menuTextsAll.privacy;
     const mentionsEnabled = userData.birthdayMentions !== false;
     const announcementsEnabled = userData.birthdayAnnouncements !== false;
     const privacyModeFull = userData.birthdayAgePrivacy === true;
