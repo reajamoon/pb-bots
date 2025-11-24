@@ -15,17 +15,41 @@ async function handleRandomRecommendation(interaction) {
     let recommendations = await Recommendation.findAll({
         order: require('sequelize').literal('RANDOM()')
     });
-    // Filter out notPrimaryWork fics unless they were recommended individually (i.e., not just as part of a series)
-    recommendations = recommendations.filter(rec => {
-        if (!rec.notPrimaryWork) return true;
-        // If it was recommended individually, it will have its own unique recommendedBy/recommendedByUsername/notes/etc.
-        // We'll consider it individually recommended if it has non-empty notes or additionalTags, or if it was added by a different user than the series rec.
-        // (You can adjust this logic as needed for your data model)
-        if (rec.notes && rec.notes.trim()) return true;
-        if (Array.isArray(rec.additionalTags) && rec.additionalTags.length > 0) return true;
-        // Otherwise, skip it
-        return false;
-    });
+
+    // Parse override options from command (e.g., allowWIP, allowDeleted, allowAbandoned)
+    // You can add these as boolean options to your slash command definition
+    const allowWIP = interaction.options.getBoolean('allowWIP') || false;
+    const allowDeleted = interaction.options.getBoolean('allowDeleted') || false;
+    const allowAbandoned = interaction.options.getBoolean('allowAbandoned') || false;
+    const risky = interaction.options.getBoolean('risky') || false;
+
+    if (!risky) {
+        // Filter out notPrimaryWork fics unless they were recommended individually
+        recommendations = recommendations.filter(rec => {
+            if (!rec.notPrimaryWork) return true;
+            if (rec.notes && rec.notes.trim()) return true;
+            if (Array.isArray(rec.additionalTags) && rec.additionalTags.length > 0) return true;
+            return false;
+        });
+
+        // Exclude deleted, WIP, and abandoned fics unless overridden
+        recommendations = recommendations.filter(rec => {
+            // Exclude deleted
+            if (!allowDeleted && rec.deleted) return false;
+            // Exclude WIP (status: 'Work in Progress', 'WIP', etc.)
+            if (!allowWIP && rec.status && typeof rec.status === 'string') {
+                const status = rec.status.trim().toLowerCase();
+                if (status === 'work in progress' || status === 'wip' || status === 'incomplete') return false;
+            }
+            // Exclude abandoned (status: 'Abandoned', 'On Hiatus', etc.)
+            if (!allowAbandoned && rec.status && typeof rec.status === 'string') {
+                const status = rec.status.trim().toLowerCase();
+                if (status.includes('abandon') || status.includes('hiatus')) return false;
+            }
+            return true;
+        });
+    }
+
     if (tagFilter) {
         recommendations = recommendations.filter(rec => {
             const allTags = rec.getParsedTags();
