@@ -325,7 +325,7 @@ const embed = new EmbedBuilder()
         embed.addFields(statsFields);
     }
 
-    // Build the base embed structure shared by both work and series recs
+// Build the base embed structure shared by both work and series recs
 function buildBaseEmbed(rec, color) {
     const { EmbedBuilder } = require('discord.js');
     return new EmbedBuilder()
@@ -481,9 +481,8 @@ async function createRecommendationEmbed(rec) {
     return embed;
 }
 
+// Only export non-async helpers here to avoid ERR_REQUIRE_ASYNC_MODULE
 module.exports = {
-    createRecommendationEmbed,
-    createSeriesRecommendationEmbed,
     isSeriesRec,
     buildBaseEmbed,
     buildStoryLinkText,
