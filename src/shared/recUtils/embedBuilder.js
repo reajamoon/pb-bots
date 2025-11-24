@@ -1,12 +1,14 @@
 // All the rec embed shenanigans live here. If something explodes, it's probably my fault.
-module.exports = {
-  createRecommendationEmbed: async function(rec) {
+
+export async function createRecommendationEmbed(rec) {
   // TODO: Move the actual code from rec.js. Yes, I know, still not done. Don't judge me.
-  },
-  createHelpPages: function() {
+}
+
+export function createHelpPages() {
   // Reminder: This chunk is still living in rec.js. One day I'll migrate it. Maybe.
-  },
-  createNavigationButtons: function(currentPage, totalPages) {
-  // If you see this, poke me to finish the migration. Or just do it yourself if you're braver than me.
+}
+
+export function createNavigationButtons(currentPage, totalPages) {
+  // If you see this Or just do it yourself if you're braver than me.
   }
 };
