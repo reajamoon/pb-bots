@@ -16,18 +16,15 @@ module.exports = async function handleClearQueue(interaction) {
     return;
   }
   let urlsToClear = [url];
-  // If this is an AO3 series URL, fetch all work URLs in the series
   if (/archiveofourown\.org\/series\//.test(url)) {
     try {
-      const batchSeriesRecommendationJob = require('../../../../shared/recUtils/batchSeriesRecommendationJob');
-      // Dummy user for parsing only
-      const user = { id: 'system', username: 'system' };
-      const { seriesRec, workRecs } = await batchSeriesRecommendationJob(url, user, {}, null);
+      const { Recommendation } = require('../../../../models');
+      const seriesRec = await Recommendation.findOne({ where: { url } });
       if (seriesRec && Array.isArray(seriesRec.series_works)) {
         urlsToClear = [url, ...seriesRec.series_works.map(w => w.url).filter(Boolean)];
       }
     } catch (err) {
-      await interaction.editReply({ content: `Failed to parse series for work URLs: ${err.message}` });
+      await interaction.editReply({ content: `Failed to fetch series works from database: ${err.message}` });
       return;
     }
   }
