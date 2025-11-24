@@ -1,9 +1,11 @@
-const { getOrCreateUser } = require('../../utils/profileCard');
+import { getOrCreateUser } from '../../utils/profileCard.js';
+import { buildPrivacySettingsMenu } from '../../handlers/buttons/privacyButtons.js';
+import { InteractionFlags } from 'discord.js';
 
-module.exports = async function handlePrivacySettings(interaction) {
+export default async function handlePrivacySettings(interaction) {
     const targetUser = interaction.user;
     const user = await getOrCreateUser(targetUser);
-    const { content, embeds, components } = require('../../handlers/buttons/privacyButtons').buildPrivacySettingsMenu(user, targetUser.id);
+    const { content, embeds, components } = buildPrivacySettingsMenu(user, targetUser.id);
     if (components && components[0] && components[0].components) {
         components[0].components = components[0].components.map(btn => {
             if (btn.customId && btn.customId.startsWith('return_profile')) {
@@ -12,11 +14,10 @@ module.exports = async function handlePrivacySettings(interaction) {
             return btn;
         });
     }
-    const { InteractionFlags } = require('discord.js');
     await interaction.editReply({
         content,
         embeds,
         components,
         flags: InteractionFlags.Ephemeral
     });
-};
+}

@@ -1,10 +1,10 @@
-const { createProfileHelpMain } = require('../../utils/profileHelp');
+import { createProfileHelpMain } from '../../utils/profileHelp.js';
+import logger from '../../../../shared/utils/logger.js';
+import { InteractionFlags } from 'discord.js';
 
-module.exports = async function handleProfileHelp(interaction) {
-        const logger = require('../../../../shared/utils/logger');
+export default async function handleProfileHelp(interaction) {
         logger.info(`[handleProfileHelp] Called with interaction.customId=${interaction.customId}`);
         const { embed, components } = createProfileHelpMain(interaction);
-        const { InteractionFlags } = require('discord.js');        
         embed.setDescription(embed.description && embed.description.length > 0 ? embed.description : 'Profile help and navigation.');
         const ephemeralFlag = InteractionFlags?.Ephemeral ?? 64;
         if (interaction.isButton && interaction.isButton()) {
@@ -21,4 +21,4 @@ module.exports = async function handleProfileHelp(interaction) {
         } else {
                 await interaction.editReply({ embeds: [embed], components, flags: ephemeralFlag });
         }
-};
+}

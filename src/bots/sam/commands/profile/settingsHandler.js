@@ -1,6 +1,7 @@
-const { getOrCreateUser, generateProfileCard, createProfileButtons } = require('../../utils/profileCard');
+import { getOrCreateUser, generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
+import { InteractionFlags } from 'discord.js';
 
-module.exports = async function handleProfileSettings(interaction) {
+export default async function handleProfileSettings(interaction) {
     const targetUser = interaction.user;
     const user = await getOrCreateUser(targetUser);
     const { embed } = await generateProfileCard(targetUser, user, interaction.client, interaction);
@@ -14,10 +15,9 @@ module.exports = async function handleProfileSettings(interaction) {
         });
     }
     const profileSettingsRow = buttonRows[0];
-    const { InteractionFlags } = require('discord.js');
     await interaction.editReply({
         embeds: [embed],
         components: [profileSettingsRow],
         flags: InteractionFlags.Ephemeral
     });
-};
+}

@@ -1,6 +1,6 @@
-const { getOrCreateUser, generateProfileCard, createProfileButtons, canViewProfile } = require('../../utils/profileCard');
+import { getOrCreateUser, generateProfileCard, createProfileButtons, canViewProfile } from '../../utils/profileCard.js';
 
-module.exports = async function handleProfileView(interaction) {
+export default async function handleProfileView(interaction) {
     const targetUser = interaction.options.getUser('user') || interaction.user;
     const user = await getOrCreateUser(targetUser);
     if (!canViewProfile(user, interaction.user.id, targetUser.id)) {
@@ -14,4 +14,4 @@ module.exports = async function handleProfileView(interaction) {
         const updatedButtonRows = createProfileButtons(interaction.user.id, targetUser.id, profileMessage.id);
         await profileMessage.edit({ embeds: [embed], components: updatedButtonRows });
     }
-};
+}
