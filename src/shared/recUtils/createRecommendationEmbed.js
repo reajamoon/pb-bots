@@ -9,14 +9,67 @@ const ratingEmojis = {
     'explicit': '<:ratingexplicit:1133762272087506965>'
 };
 
-// Builds the embed for a rec. Uses two functions: one for series recs, one for individual works.
+// Helper to add warnings field to embed
+function addWarningsField(embed, warnings, majorWarningEmoji, maybeWarningEmoji, majorWarningsList) {
+    const filtered = warnings.filter(w => w.toLowerCase() !== 'no archive warnings apply');
+    if (filtered.length > 0) {
+        let fieldValue = '';
+        if (
+            filtered.length === 1 &&
+            filtered[0].toLowerCase() === 'creator chose not to use archive warnings'
+        ) {
+            fieldValue = `${maybeWarningEmoji} Creator Chose Not To Use Archive Warnings`;
+        } else {
+            const hasMajor = filtered.some(w =>
+                majorWarningsList.some(mw => w.toLowerCase().includes(mw.toLowerCase()))
+            );
+            if (hasMajor) {
+                fieldValue = `${majorWarningEmoji} ${filtered.join(', ')}`;
+            } else {
+                fieldValue = filtered.join(', ');
+            }
+        }
+        embed.addFields({
+            name: 'Major Content Warnings',
+            value: fieldValue
+        });
+    }
+}
+
+// Helper to add tags field
+function addTagsField(embed, tags) {
+    if (Array.isArray(tags) && tags.length > 0) {
+        let tagString = '';
+        let i = 0;
+        while (i < tags.length) {
+            const next = tagString.length === 0 ? tags[i] : ', ' + tags[i];
+            if ((tagString + next).length > 1021) { // 1021 to allow for '...'
+                tagString += '...';
+                break;
+            }
+            tagString += next;
+            i++;
+        }
+        embed.addFields({
+            name: 'Tags',
+            value: tagString,
+            inline: false
+        });
+    }
+}
+
 async function createRecommendationEmbed(rec) {
+    // Defensive checks for required fields
+    const safeTitle = rec.title || 'Untitled';
+    const safeUrl = rec.url || 'https://archiveofourown.org/';
+    const safeUsername = rec.recommendedByUsername || 'Unknown';
+    const safeId = rec.id || '???';
     // If this is a series rec (type === 'series' or url includes '/series/' or has series_works and not notPrimaryWork), use series embed
-    const isSeries = (rec.type === 'series') || (rec.url && rec.url.includes('/series/')) || (Array.isArray(rec.series_works) && rec.series_works.length > 0 && !rec.notPrimaryWork);
+    const isSeries = (rec.type === 'series') || (safeUrl && safeUrl.includes('/series/')) || (Array.isArray(rec.series_works) && rec.series_works.length > 0 && !rec.notPrimaryWork);
     if (isSeries) {
-        return await createSeriesEmbed(rec);
+        return await createSeriesEmbed({ ...rec, title: safeTitle, url: safeUrl, recommendedByUsername: safeUsername, id: safeId });
     } else {
-        return await createWorkEmbed(rec);
+        return await createWorkEmbed({ ...rec, title: safeTitle, url: safeUrl, recommendedByUsername: safeUsername, id: safeId });
     }
 }
 
@@ -86,13 +139,7 @@ async function createSeriesEmbed(rec) {
             embed.addFields({ name: 'Rating', value: ratingToShow, inline: true });
         }
     }
-    if (Array.isArray(rec.tags) && rec.tags.length > 0) {
-        embed.addFields({
-            name: 'Tags',
-            value: rec.tags.slice(0, 8).join(', ') + (rec.tags.length > 8 ? '...' : ''),
-            inline: false
-        });
-    }
+    addTagsField(embed, rec.tags);
 
     // Archive warnings: concatenate and deduplicate from all works in the series
     let allWarnings = [];
@@ -105,7 +152,6 @@ async function createSeriesEmbed(rec) {
             }
         }
     }
-    // Also include series-level warnings if present
     if (Array.isArray(rec.archive_warnings)) {
         allWarnings.push(...rec.archive_warnings);
     } else if (Array.isArray(rec.archiveWarnings)) {
@@ -113,38 +159,35 @@ async function createSeriesEmbed(rec) {
     }
     allWarnings = allWarnings.map(w => (typeof w === 'string' ? w.trim() : '')).filter(Boolean);
     allWarnings = [...new Set(allWarnings)];
-    const majorWarningEmoji = '<:warn_yes:1142772202379415622>';
-    const maybeWarningEmoji = '<:warn_maybe:1142772269156933733>';
-    const majorWarningsList = [
-        'Graphic Depictions of Violence',
-        'Major Character Death',
-        'Rape/Non-Con',
-        'Underage',
-        'Underage Sex'
-    ];
-    const filtered = allWarnings.filter(w => w.toLowerCase() !== 'no archive warnings apply');
-    if (filtered.length > 0) {
-        let fieldValue = '';
-        if (
-            filtered.length === 1 &&
-            filtered[0].toLowerCase() === 'creator chose not to use archive warnings'
-        ) {
-            fieldValue = `${maybeWarningEmoji} Creator Chose Not To Use Archive Warnings`;
-        } else {
-            const hasMajor = filtered.some(w =>
-                majorWarningsList.some(mw => w.toLowerCase().includes(mw.toLowerCase()))
-            );
-            if (hasMajor) {
-                fieldValue = `${majorWarningEmoji} ${filtered.join(', ')}`;
-            } else {
-                fieldValue = filtered.join(', ');
+    addWarningsField(
+        embed,
+        allWarnings,
+        '<:warn_yes:1142772202379415622>',
+        '<:warn_maybe:1142772269156933733>',
+        [
+            'Graphic Depictions of Violence',
+            'Major Character Death',
+            'Rape/Non-Con',
+            'Underage',
+            'Underage Sex'
+        ]
+    );
+        // Aggregate engagement fields for series (sum across all works)
+        let totalHits = 0, totalKudos = 0, totalBookmarks = 0;
+        if (Array.isArray(rec.series_works)) {
+            for (const work of rec.series_works) {
+                if (typeof work.hits === 'number') totalHits += work.hits;
+                if (typeof work.kudos === 'number') totalKudos += work.kudos;
+                if (typeof work.bookmarks === 'number') totalBookmarks += work.bookmarks;
             }
         }
-        embed.addFields({
-            name: 'Major Content Warnings',
-            value: fieldValue
-        });
-    }
+        const engagementFields = [];
+        if (totalHits) engagementFields.push({ name: 'Hits', value: totalHits.toLocaleString(), inline: true });
+        if (totalKudos) engagementFields.push({ name: 'Kudos', value: totalKudos.toLocaleString(), inline: true });
+        if (totalBookmarks) engagementFields.push({ name: 'Bookmarks', value: totalBookmarks.toLocaleString(), inline: true });
+        if (engagementFields.length > 0) {
+            embed.addFields(engagementFields);
+        }
     // Show works in series
     if (Array.isArray(rec.series_works) && rec.series_works.length > 0) {
         let worksList = '';
@@ -208,122 +251,26 @@ async function createWorkEmbed(rec) {
             embed.addFields({ name: 'Rating', value: rec.rating, inline: true });
         }
     }
-    if (Array.isArray(rec.tags) && rec.tags.length > 0) {
-        embed.addFields({
-            name: 'Tags',
-            value: rec.tags.slice(0, 8).join(', ') + (rec.tags.length > 8 ? '...' : ''),
-            inline: false
-        });
-    }
+    addTagsField(embed, rec.tags);
     // Do NOT show series_works for individual works
-    return embed;
-}
-    // DEBUG: Log the rec object and tag fields to inspect tag presence
-    //console.log('[DEBUG] createRecommendationEmbed rec:', JSON.stringify(rec, null, 2));
-    if (typeof rec.getParsedTags === 'function') {
-        const parsedTags = rec.getParsedTags();
-        //console.log('[DEBUG] getParsedTags() result:', parsedTags);
-        //} else {
-        //console.log('[DEBUG] getParsedTags() not a function. tags:', rec.tags, 'additionalTags:', rec.additionalTags);
-    }
-    // Archive warning emoji and logic
-    const majorWarningEmoji = '<:warn_yes:1142772202379415622>';
-    const maybeWarningEmoji = '<:warn_maybe:1142772269156933733>';
-    const majorWarningsList = [
-        'Graphic Depictions of Violence',
-        'Major Character Death',
-        'Rape/Non-Con',
-        'Underage',
-        'Underage Sex'
-    ];
-
-    // (Removed duplicate block)
-
-    // --- Dynamic Published/Updated, Words, Chapters (all inline, same row) ---
-    const statsFields = [];
-    // Determine which date to show and its label
-    let dateLabel = null;
-    let dateValue = null;
-    if (rec.publishedDate && rec.updatedDate) {
-        // Compare as ISO strings if possible, fallback to string compare
-        const pub = new Date(rec.publishedDate);
-        const upd = new Date(rec.updatedDate);
-        if (!isNaN(pub) && !isNaN(upd)) {
-            if (upd > pub) {
-                dateLabel = 'Updated';
-                dateValue = rec.updatedDate;
-            } else {
-                dateLabel = 'Published';
-                dateValue = rec.publishedDate;
-            }
-        } else {
-            // Fallback: just show updated if present
-            dateLabel = 'Updated';
-            dateValue = rec.updatedDate;
-        }
-    } else if (rec.updatedDate) {
-        dateLabel = 'Updated';
-        dateValue = rec.updatedDate;
-    } else if (rec.publishedDate) {
-        dateLabel = 'Published';
-        dateValue = rec.publishedDate;
-    }
-    if (dateLabel && dateValue) {
-        statsFields.push({ name: dateLabel, value: dateValue, inline: true });
-    }
-    if (rec.chapters) statsFields.push({ name: 'Chapters', value: rec.chapters, inline: true });
-    if (rec.wordCount) statsFields.push({ name: 'Words', value: rec.wordCount.toLocaleString(), inline: true });
-    if (statsFields.length > 0) {
-        embed.addFields(statsFields);
-    }
-
 
     // Major Content Warnings (standalone, not inline with link row)
     let warnings = typeof rec.getArchiveWarnings === 'function' ? rec.getArchiveWarnings() : [];
     warnings = warnings.map(w => (typeof w === 'string' ? w.trim() : '')).filter(Boolean);
     warnings = [...new Set(warnings)];
-    const filtered = warnings.filter(w => w.toLowerCase() !== 'no archive warnings apply');
-    if (filtered.length > 0) {
-        let fieldValue = '';
-        if (
-            filtered.length === 1 &&
-            filtered[0].toLowerCase() === 'creator chose not to use archive warnings'
-        ) {
-            fieldValue = `${maybeWarningEmoji} Creator Chose Not To Use Archive Warnings`;
-        } else {
-            const hasMajor = filtered.some(w =>
-                majorWarningsList.some(mw => w.toLowerCase().includes(mw.toLowerCase()))
-            );
-            if (hasMajor) {
-                fieldValue = `${majorWarningEmoji} ${filtered.join(', ')}`;
-            } else {
-                fieldValue = filtered.join(', ');
-            }
-        }
-        embed.addFields({
-            name: 'Major Content Warnings',
-            value: fieldValue
-        });
-    }
-    // Only show freeform tags
-    const freeformTags = Array.isArray(rec.tags) ? rec.tags : [];
-    if (freeformTags.length > 0) {
-        embed.addFields({
-            name: 'Tags',
-            value: freeformTags.slice(0, 8).join(', ') + (freeformTags.length > 8 ? '...' : '')
-        });
-    }
-    if (rec.notes) {
-        embed.addFields({ name: 'Recommender Notes', value: `>>> ${rec.notes}` });
-    }
-    // --- Row: Hits, Kudos, Bookmarks (all inline, same row) ---
-    const engagementFields = [];
-    if (rec.hits) engagementFields.push({ name: 'Hits', value: rec.hits.toLocaleString(), inline: true });
-    if (rec.kudos) engagementFields.push({ name: 'Kudos', value: rec.kudos.toLocaleString(), inline: true });
-    if (rec.bookmarks) engagementFields.push({ name: 'Bookmarks', value: rec.bookmarks.toLocaleString(), inline: true });
-    if (engagementFields.length > 0) {
-        embed.addFields(engagementFields);
-    }
+    addWarningsField(
+        embed,
+        warnings,
+        '<:warn_yes:1142772202379415622>',
+        '<:warn_maybe:1142772269156933733>',
+        [
+            'Graphic Depictions of Violence',
+            'Major Character Death',
+            'Rape/Non-Con',
+            'Underage',
+            'Underage Sex'
+        ]
+    );
     return embed;
 }
 
