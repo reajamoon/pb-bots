@@ -63,16 +63,12 @@ async function createRecommendationEmbed(rec) {
     if (rec && typeof rec.get === 'function') {
         rec = rec.get({ plain: true });
     }
-    const safeTitle = rec.title || 'Untitled';
-    const safeUrl = rec.url || 'https://archiveofourown.org/';
-    const safeUsername = rec.recommendedByUsername || 'Unknown';
-    const safeId = rec.id || '???';
     // If this is a series rec (type === 'series' or url includes '/series/' or has series_works and not notPrimaryWork), use series embed
-    const isSeries = (rec.type === 'series') || (safeUrl && safeUrl.includes('/series/')) || (Array.isArray(rec.series_works) && rec.series_works.length > 0 && !rec.notPrimaryWork);
+    const isSeries = (rec.type === 'series') || (rec.url && rec.url.includes('/series/')) || (Array.isArray(rec.series_works) && rec.series_works.length > 0 && !rec.notPrimaryWork);
     if (isSeries) {
-        return await createSeriesEmbed({ ...rec, title: safeTitle, url: safeUrl, recommendedByUsername: safeUsername, id: safeId });
+        return await createSeriesEmbed(rec);
     } else {
-        return await createWorkEmbed({ ...rec, title: safeTitle, url: safeUrl, recommendedByUsername: safeUsername, id: safeId });
+        return await createWorkEmbed(rec);
     }
 }
 
