@@ -5,7 +5,7 @@ const { readdirSync } = require('fs');
 const { join } = require('path');
 require('dotenv').config();
 const logger = require('../../shared/utils/logger');
-const createRecommendationEmbed = require('../../shared/recUtils/createRecommendationEmbed');
+const { createRecommendationEmbed } = require('../../shared/recUtils/asyncEmbeds');
 const BirthdayNotificationManager = require('./utils/birthdayNotifications');
 
 const POLL_INTERVAL_MS = 10000;
