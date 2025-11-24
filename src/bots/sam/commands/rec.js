@@ -250,16 +250,16 @@ export default {
                     break;
                 }
                 case 'add_ao3share': {
-                    const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
-                    const modal = new ModalBuilder()
+                    const mod = await import('discord.js');
+                    const modal = new mod.ModalBuilder()
                         .setCustomId('ao3share_modal')
                         .setTitle('Paste AO3 Share HTML');
-                    const htmlInput = new TextInputBuilder()
+                    const htmlInput = new mod.TextInputBuilder()
                         .setCustomId('ao3share_html')
                         .setLabel('Paste the AO3 share HTML here')
-                        .setStyle(TextInputStyle.Paragraph)
+                        .setStyle(mod.TextInputStyle.Paragraph)
                         .setRequired(true);
-                    modal.addComponents(new ActionRowBuilder().addComponents(htmlInput));
+                    modal.addComponents(new mod.ActionRowBuilder().addComponents(htmlInput));
                     await interaction.showModal(modal);
                     break;
                 }
