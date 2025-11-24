@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts both Sam and Jack bots using PM2
 echo "Starting Sam bot..."
-pm2 start ecosystem.sam.config.js
+pm2 start ecosystem.sam.config.js --interpreter node --interpreter-args="--experimental-modules"
 echo "Starting Jack bot..."
-pm2 start ecosystem.jack.config.js
+pm2 start ecosystem.jack.config.js --interpreter node --interpreter-args="--experimental-modules"
