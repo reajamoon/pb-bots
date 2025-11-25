@@ -1,14 +1,11 @@
-// Utility to normalize AO3 URLs by stripping /chapters/chapterId
-function normalizeAO3Url(url) {
+// Strictly normalize AO3 work or series URLs to canonical form:
+// https://archiveofourown.org/works/<workID> or https://archiveofourown.org/series/<seriesID>
+export function normalizeAO3Url(url) {
   if (typeof url !== 'string') return url;
-  // Only operate on AO3 work URLs
-  const ao3WorkRegex = /^(https?:\/\/archiveofourown\.org\/works\/\d+)(?:\/chapters\/\d+)?(.*)$/i;
-  const match = url.match(ao3WorkRegex);
+  const match = url.match(/^(https?:\/\/archiveofourown\.org\/(works|series)\/\d+)/i);
   if (match) {
-    // Rebuild the URL without the /chapters/ part
-    return match[1] + (match[2] || '');
+    return match[1];
   }
   return url;
 }
-
 export default normalizeAO3Url;
