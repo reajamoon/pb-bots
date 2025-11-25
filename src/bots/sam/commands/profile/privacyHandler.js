@@ -1,5 +1,5 @@
 import { getOrCreateUser } from '../../utils/profileCard.js';
-import { buildPrivacySettingsMenu } from '../../handlers/buttons/privacyButtons.js';
+import { buildPrivacySettingsMenu } from '../../handlers/buttons/privacy/privacyMenu.js';
 import Discord from 'discord.js';
 const { InteractionFlags } = Discord;
 
