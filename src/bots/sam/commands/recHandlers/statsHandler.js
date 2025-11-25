@@ -58,6 +58,19 @@ async function handleStats(interaction) {
     const height = 350;
     const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
     // Ratings by percentage (emoji only)
+    const ratingEmojis = {
+        'general audiences': '<:ratinggeneral:1133762158077935749>',
+        'teen and up audiences': '<:ratingteen:1133762194174136390>',
+        'mature': '<:ratingmature:1133762226738700390>',
+        'explicit': '<:ratingexplicit:1133762272087506965>',
+        'not rated': '❔',
+        'unrated': '❔'
+    };
+    const ratingCounts = {};
+    for (const rec of allRecs) {
+        const rating = (rec.rating || '').trim().toLowerCase();
+        if (rating) ratingCounts[rating] = (ratingCounts[rating] || 0) + 1;
+    }
     // Bar chart for recs by year
     if (sortedYears.length > 0) {
         // Blue to green gradient for bars
@@ -177,20 +190,6 @@ async function handleStats(interaction) {
         .map(([tag, count], i) => `#${i + 1}: ${tag} (${count})`)
         .join('\n') || 'No tags found.';
 
-    // Ratings by percentage (emoji only)
-    const ratingEmojis = {
-        'general audiences': '<:ratinggeneral:1133762158077935749>',
-        'teen and up audiences': '<:ratingteen:1133762194174136390>',
-        'mature': '<:ratingmature:1133762226738700390>',
-        'explicit': '<:ratingexplicit:1133762272087506965>',
-        'not rated': '❔',
-        'unrated': '❔'
-    };
-    const ratingCounts = {};
-    for (const rec of allRecs) {
-        const rating = (rec.rating || '').trim().toLowerCase();
-        if (rating) ratingCounts[rating] = (ratingCounts[rating] || 0) + 1;
-    }
     const ratingPercentages = Object.entries(ratingCounts)
         .sort((a, b) => b[1] - a[1])
         .map(([rating, count]) => {
