@@ -1,5 +1,5 @@
 import { MessageFlags } from 'discord.js';
-import { Recommendation } from '../../../../models.js';
+import { Recommendation } from '../../../../models/index.js';
 import findRecommendationByIdOrUrl from '../../../../shared/recUtils/findRecommendationByIdOrUrl.js';
 
 // Removes a rec from the library. Only owner or mods can do it.

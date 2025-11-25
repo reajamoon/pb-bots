@@ -1,6 +1,6 @@
 // recNotifyTag.js
 // /rec notifytag on|off - toggle queue notification tagging for the user
-import { User } from '../../../../models.js';
+import { User } from '../../../../models/index.js';
 import { MessageFlags } from 'discord.js';
 
 export default async function handleRecNotifyTag(interaction) {

@@ -1,5 +1,5 @@
 import { MessageFlags } from 'discord.js';
-import { Recommendation, sequelize } from '../../../../models.js';
+import { Recommendation, sequelize } from '../../../../models/index.js';
 import { Op, literal } from 'sequelize';
 import createSearchResultsEmbed from '../../../../shared/recUtils/createSearchResultsEmbed.js';
 import createRecommendationEmbed from '../../../../shared/recUtils/createRecommendationEmbed.js';

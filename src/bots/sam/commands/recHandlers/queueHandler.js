@@ -1,6 +1,6 @@
 // queueHandler.js
 // Handler for /rec queue command: shows the current fic metadata queue
-import { ParseQueue } from '../../../../models.js';
+import { ParseQueue } from '../../../../models/index.js';
 import Discord from 'discord.js';
 const { EmbedBuilder, MessageFlags } = Discord;
 
