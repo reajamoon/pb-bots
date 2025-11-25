@@ -2,7 +2,14 @@
 import Discord from 'discord.js';
 const { EmbedBuilder } = Discord;
 import { createHelpWithBackButton } from './profileHelpButtons.js';
-import helpTexts from '../../../shared/text/helpTexts.json' assert { type: 'json' };
+
+let helpTexts;
+async function getHelpTexts() {
+    if (!helpTexts) {
+        helpTexts = (await import('../../../shared/text/helpTexts.json', { assert: { type: 'json' } })).default;
+    }
+    return helpTexts;
+}
 
 /**
  * Create tips help embed
@@ -10,7 +17,8 @@ import helpTexts from '../../../shared/text/helpTexts.json' assert { type: 'json
  * @returns {Object} Object with embed and component rows
  */
 
-function createTipsHelp(interaction) {
+async function createTipsHelp(interaction) {
+    const helpTexts = await getHelpTexts();
     const tipsText = helpTexts.tips;
     const embed = new EmbedBuilder()
         .setTitle(tipsText.title)
