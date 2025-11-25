@@ -128,6 +128,22 @@ export default {
                 .addStringOption(option =>
                     option.setName('tag')
                         .setDescription('Filter by tag')
+                        .setRequired(false))
+                .addBooleanOption(option =>
+                    option.setName('allowwip')
+                        .setDescription('Include works in progress')
+                        .setRequired(false))
+                .addBooleanOption(option =>
+                    option.setName('allowdeleted')
+                        .setDescription('Include deleted fics')
+                        .setRequired(false))
+                .addBooleanOption(option =>
+                    option.setName('allowabandoned')
+                        .setDescription('Include abandoned/hiatus fics')
+                        .setRequired(false))
+                .addBooleanOption(option =>
+                    option.setName('risky')
+                        .setDescription('Include all recs, even risky/less complete ones')
                         .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
