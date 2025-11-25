@@ -8,11 +8,11 @@ export default function SeriesModel(sequelize) {
       primaryKey: true,
       autoIncrement: true,
     },
-    title: {
+    name: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    description: {
+    summary: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
