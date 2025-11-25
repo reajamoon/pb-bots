@@ -267,7 +267,7 @@ function buildBaseEmbed(rec, color) {
 
 // Builds the embed for a rec. Checks if the link works, adds warnings if needed.
 async function createRecommendationEmbed(rec) {
-    // If this work is part of a series, show series info
+    // If this work is part of a series, show series info (only if all required fields exist)
     if (rec.series && typeof rec.series === 'object' && rec.series.name && rec.series.url && rec.series.part) {
         embed.addFields({
             name: 'Series',

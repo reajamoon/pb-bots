@@ -2,6 +2,7 @@
 import Discord from 'discord.js';
 const { MessageFlags } = Discord;
 import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
+import { fetchAllRecsWithSeries } from '../../../../models/fetchAllRecsWithSeries.js';
 import createRecommendationEmbed, { isSeriesRec } from '../../../../shared/recUtils/createRecommendationEmbed.js';
 
 // Picks a random fic from the library. Filters by tag if you want.
@@ -14,7 +15,14 @@ async function handleRandomRecommendation(interaction) {
     }
     await interaction.deferReply();
     const tagFilter = interaction.options.getString('tag');
-    let recommendations = await fetchRecWithSeries(null, false, true); // We'll filter below
+    let recommendations = await fetchAllRecsWithSeries(true); // Fetch all recs with series info
+    if (!Array.isArray(recommendations)) {
+        await interaction.reply({
+            content: 'Sorry, there was a problem fetching recommendations. Please try again later.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
 
     // Parse override options from command (e.g., allowWIP, allowDeleted, allowAbandoned)
     const allowWIP = interaction.options.getBoolean('allowWIP') || false;
