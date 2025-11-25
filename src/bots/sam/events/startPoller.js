@@ -72,6 +72,8 @@ async function notifyQueueSubscribers(client) {
             if (subscribers.length) {
                 await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
             }
+            // Delete the job after notification to prevent repeated alerts
+            await ParseQueue.destroy({ where: { id: job.id } });
         }
     } catch (err) {
         console.error('Error in queue notification poller:', err);
