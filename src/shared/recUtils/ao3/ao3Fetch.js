@@ -1,6 +1,7 @@
 import updateMessages from '../../text/updateMessages.js';
 import fs from 'fs';
 import path from 'path';
+import { prewarmSharedBrowser } from './ao3BrowserManager.js';
 
 function isAO3LoggedInPage(html) {
     if (!html) return false;
@@ -16,6 +17,8 @@ function isAO3LoggedInPage(html) {
 let ao3FetchMutex = Promise.resolve();
 
 async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
+        // Pre-warm browser on first import/use
+        await prewarmSharedBrowser();
     // Mutex lock: only allow one fetch at a time
     let release;
     const lock = new Promise(res => { release = res; });
@@ -27,6 +30,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
         const { getLoggedInAO3Page, appendAdultViewParamIfNeeded, bypassStayLoggedInInterstitial } = await import('./ao3Utils.js');
         const { parseAO3Metadata } = await import('./ao3Parser.js');
         let html, browser, page, ao3Url;
+            let isFirstBrowserLaunch = false;
         let loggedIn = false;
         let retried = false;
         ao3Url = url;
@@ -43,7 +47,15 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             // Exponential backoff for timeout: 15s, 30s, 60s, max 90s
             const baseTimeout = 15000;
             const maxTimeout = 90000;
-            const timeout = Math.min(baseTimeout * Math.pow(2, attempt - 1), maxTimeout);
+            let timeout = Math.min(baseTimeout * Math.pow(2, attempt - 1), maxTimeout);
+            // Boost timeout for first launch after restart
+            if (typeof fetchAO3MetadataWithFallback._firstBrowserLaunch === 'undefined') {
+                fetchAO3MetadataWithFallback._firstBrowserLaunch = true;
+            }
+            if (fetchAO3MetadataWithFallback._firstBrowserLaunch) {
+                timeout = Math.max(timeout, 180000); // 3 minutes for first launch
+                fetchAO3MetadataWithFallback._firstBrowserLaunch = false;
+            }
             const { getNextAvailableAO3Time, markAO3Requests } = await import('./ao3QueueRateHelper.js');
             const nextAvailable = getNextAvailableAO3Time(1);
             const now = Date.now();

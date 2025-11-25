@@ -1,4 +1,3 @@
-// ao3BrowserManager.js
 // Handles shared Puppeteer browser instance, logging, and resource monitoring for AO3 utilities.
 
 import puppeteer from 'puppeteer';
@@ -6,6 +5,15 @@ import puppeteer from 'puppeteer';
 let sharedBrowser = null;
 let sharedBrowserUseCount = 0;
 let resetMutex = Promise.resolve();
+
+// Pre-warm browser on startup
+let prewarmPromise = null;
+export function prewarmSharedBrowser() {
+    if (!prewarmPromise) {
+        prewarmPromise = getSharedBrowser().catch(() => {});
+    }
+    return prewarmPromise;
+}
 
 export async function resetSharedBrowser() {
     let release;
