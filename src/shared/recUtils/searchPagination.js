@@ -1,5 +1,6 @@
 
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import Discord from 'discord.js';
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 
 /**
  * Builds a row of pagination buttons for search results.

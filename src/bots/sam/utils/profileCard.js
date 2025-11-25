@@ -1,4 +1,5 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 import { User } from '../../../models/index.js';
 import { formatBirthdayForProfile } from './birthdayFormatter.js';
 import { getZodiacSign, getChineseZodiacSign } from '../../../shared/utils/zodiacCalculator.js';

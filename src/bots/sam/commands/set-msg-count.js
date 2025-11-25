@@ -1,5 +1,6 @@
 // Alright, grabbing Discord stuff and our User model
-import { SlashCommandBuilder, PermissionFlagsBits, InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { SlashCommandBuilder, PermissionFlagsBits, InteractionFlags } = Discord;
 const EPHEMERAL_FLAG = InteractionFlags?.Ephemeral ?? 64;
 import { User } from '../../../models/index.js';
 

@@ -1,4 +1,5 @@
-import { EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder } = Discord;
 import quickLinkCheck from './quickLinkCheck.js';
 import isValidFanficUrl from './isValidFanficUrl.js';
 import {

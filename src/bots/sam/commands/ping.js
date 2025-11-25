@@ -1,4 +1,5 @@
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { SlashCommandBuilder, MessageFlags } = Discord;
 
 export default {
     // Command for checking if the bot’s alive and how fast it’s moving

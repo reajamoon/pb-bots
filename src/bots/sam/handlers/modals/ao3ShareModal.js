@@ -2,7 +2,8 @@
 // ao3ShareModal.js
 // Handler for AO3 share HTML modal submission
 import { parseAo3ShareHtml } from '../../../../shared/recUtils/ao3ShareParser.js';
-import { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = Discord;
 import logger from '../../../../shared/utils/logger.js';
 
 

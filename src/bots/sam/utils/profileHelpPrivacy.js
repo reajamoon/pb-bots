@@ -1,5 +1,6 @@
 
-import { EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder } = Discord;
 import { createHelpWithBackButton } from './profileHelpButtons.js';
 import fs from 'fs';
 import path from 'path';

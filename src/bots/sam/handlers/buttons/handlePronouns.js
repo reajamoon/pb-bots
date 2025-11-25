@@ -1,4 +1,5 @@
-import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = Discord;
 
 /**
  * Handler for the set pronouns button, shows the pronouns modal.

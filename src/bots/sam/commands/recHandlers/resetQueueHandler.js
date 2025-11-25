@@ -1,7 +1,8 @@
 // resetQueueHandler.js
 // Handler for /rec resetqueue command: resets all jobs stuck in 'processing' back to 'pending'
 import { ParseQueue } from '../../../../models/index.js';
-import { MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags } = Discord;
 
 export default async function handleResetQueue(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });

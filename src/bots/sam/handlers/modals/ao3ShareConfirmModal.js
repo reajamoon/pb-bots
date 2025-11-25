@@ -2,7 +2,8 @@
 // ao3ShareConfirmModal.js
 // Handler for AO3 share confirmation modal submission
 import handleAddRecommendation from '../../commands/recHandlers/addHandler.js';
-import { MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags } = Discord;
 
 export async function handleAo3ShareConfirmModal(interaction) {
     // Get all fields from the confirmation modal

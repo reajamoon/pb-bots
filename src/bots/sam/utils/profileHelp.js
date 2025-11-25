@@ -1,4 +1,5 @@
-import { EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder } = Discord;
 import { createBirthdayHelp } from './profileHelpBirthday.js';
 import { createBioHelp } from './profileHelpBio.js';
 import { createPrivacyHelp } from './profileHelpPrivacy.js';

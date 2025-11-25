@@ -3,7 +3,8 @@
  * Main command router for the /rec slash command. Handles routing to subcommand handlers for fanfiction recommendations.
  * @module commands/rec
  */
-import { SlashCommandBuilder, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import Discord from 'discord.js';
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 import { Recommendation } from '../../../models/index.js';
 import handleAddRecommendation from './recHandlers/addHandler.js';
 import handleRemoveRecommendation from './recHandlers/removeHandler.js';

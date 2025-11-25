@@ -1,5 +1,6 @@
 
-import { SlashCommandBuilder, InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { SlashCommandBuilder, InteractionFlags } = Discord;
 import handleProfileHelp from './profile/helpHandler.js';
 import handleProfileSettings from './profile/settingsHandler.js';
 import handlePrivacySettings from './profile/privacyHandler.js';

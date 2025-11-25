@@ -1,6 +1,7 @@
 import { User } from '../../../models/index.js';
 import logger from '../../../shared/utils/logger.js';
-import { InteractionFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
 
 /**

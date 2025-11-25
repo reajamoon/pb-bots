@@ -1,5 +1,6 @@
 
-import { MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags } = Discord;
 import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
 import { isSeriesRec, createRecommendationEmbed } from '../../../../shared/recUtils/createRecommendationEmbed.js';
 

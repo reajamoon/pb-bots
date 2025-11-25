@@ -5,7 +5,8 @@ import { getProfileMessageId } from '../../../utils/profileMessageTracker.js';
 import { buildPrivacySettingsMenu } from './privacyMenu.js';
 import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
-import { InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags } = Discord;
 
 export default async function handleToggleBirthdayLists(interaction) {
     // Ephemeral message flag pattern: use InteractionFlags.Ephemeral if available, otherwise fallback to 64.

@@ -1,5 +1,6 @@
 
-import { StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import Discord from 'discord.js';
+const { StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 import { buildButtonId } from '../../../../../shared/utils/buttonId.js';
 import { getProfileMessageId, buildProfileButtonId } from '../../../../../shared/utils/messageTracking.js';
 

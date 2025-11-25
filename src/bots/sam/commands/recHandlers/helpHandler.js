@@ -1,4 +1,5 @@
-import { EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 
 
 // Centralized builder for rec help menu button IDs
@@ -50,7 +51,8 @@ async function handleHelpNavigation(interaction) {
     } catch (error) {
         console.error('Error in handleHelpNavigation:', error);
         try {
-                import { InteractionFlags } from 'discord.js';
+                const Discord = await import('discord.js');
+                const { InteractionFlags } = Discord;
             await interaction.reply({
                 content: 'Sorry, something went wrong with the help navigation. Try using `/rec help` again.',
                 flags: InteractionFlags.Ephemeral

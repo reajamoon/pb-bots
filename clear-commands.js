@@ -1,6 +1,7 @@
 // scripts/clear-commands.js
 
-import { REST, Routes } from 'discord.js';
+import Discord from 'discord.js';
+const { REST, Routes } = Discord;
 import dotenv from 'dotenv';
 dotenv.config();
 

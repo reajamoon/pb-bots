@@ -1,4 +1,5 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = Discord;
 import { buildButtonId } from '../../../../shared/utils/buttonId.js';
 
 /**

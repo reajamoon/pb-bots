@@ -1,4 +1,5 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 import { buildButtonId } from '../../../../shared/utils/buttonId.js';
 import { User } from '../../../../models/index.js';
 

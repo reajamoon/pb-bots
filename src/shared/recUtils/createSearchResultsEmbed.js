@@ -1,5 +1,6 @@
 
-import { EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder } = Discord;
 
 /**
  * Builds a paginated search results embed for rec search.

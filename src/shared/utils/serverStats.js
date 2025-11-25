@@ -1,5 +1,6 @@
 
-import { EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder } = Discord;
 import { getZodiacSign, getChineseZodiacSign } from './zodiacCalculator.js';
 
 /**

@@ -1,5 +1,6 @@
 import findRecommendationByIdOrUrl from '../../../../shared/recUtils/findRecommendationByIdOrUrl.js';
-import { MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags } = Discord;
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import processRecommendationJob from '../../../../shared/recUtils/processRecommendationJob.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';

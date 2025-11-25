@@ -1,5 +1,6 @@
 
-import { REST, Routes } from 'discord.js';
+import Discord from 'discord.js';
+const { REST, Routes } = Discord;
 import dotenv from 'dotenv';
 import { readdirSync } from 'fs';
 import { join } from 'path';

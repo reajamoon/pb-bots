@@ -1,7 +1,8 @@
 // queueHandler.js
 // Handler for /rec queue command: shows the current fic metadata queue
 import { ParseQueue } from '../../../../models.js';
-import { EmbedBuilder, MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder, MessageFlags } = Discord;
 
 export default async function handleQueue(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });

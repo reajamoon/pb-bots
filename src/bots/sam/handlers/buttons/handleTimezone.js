@@ -1,4 +1,5 @@
-import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = Discord;
 import { buildModalCustomId } from '../../../../shared/utils/messageTracking.js';
 
 /**

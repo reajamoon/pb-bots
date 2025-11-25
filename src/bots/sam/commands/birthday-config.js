@@ -1,5 +1,6 @@
 // Imports for Discord stuff and the Guild model
-import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, MessageFlags } = Discord;
 import { Guild } from '../../../models/index.js';
 
 export default {

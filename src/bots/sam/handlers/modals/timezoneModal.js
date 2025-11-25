@@ -1,7 +1,8 @@
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { getProfileMessageId } from '../../../shared/utils/messageTracking.js';
-import { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 import { validateTimezone } from '../../../shared/utils/timezoneValidator.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
 

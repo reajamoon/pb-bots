@@ -1,5 +1,6 @@
 
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = Discord;
 import { Config } from '../../../models/index.js';
 
 export default {

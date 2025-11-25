@@ -1,4 +1,5 @@
-import { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';

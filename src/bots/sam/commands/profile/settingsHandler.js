@@ -1,5 +1,6 @@
 import { getOrCreateUser, generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
-import { InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags } = Discord;
 
 export default async function handleProfileSettings(interaction) {
     const targetUser = interaction.user;

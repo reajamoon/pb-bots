@@ -1,5 +1,6 @@
 
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import Discord from 'discord.js';
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 import { buildButtonId } from '../../../../../shared/utils/buttonId.js';
 import { buildPrivacySettingsDoneCustomId, encodeMessageId } from '../../../../../shared/utils/messageTracking.js';
 import logger from '../../../../../shared/utils/logger.js';

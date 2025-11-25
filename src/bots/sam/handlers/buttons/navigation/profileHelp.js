@@ -1,5 +1,6 @@
 // Pure routing function for testability
-import { InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags } = Discord;
 import { parseButtonId } from '../../../../../shared/utils/buttonId.js';
 function getHelpMenuPayload(customId) {
     const parsed = parseButtonId(customId);

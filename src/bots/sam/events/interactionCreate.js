@@ -1,4 +1,5 @@
-import { Events, InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { Events, InteractionFlags } = Discord;
 import logger from '../../../shared/utils/logger.js';
 import { handleCommand } from '../handlers/commandHandler.js';
 import { handleButton } from '../handlers/buttonHandler.js';

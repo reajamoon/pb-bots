@@ -1,4 +1,5 @@
-import { EmbedBuilder, MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder, MessageFlags } = Discord;
 import { Recommendation } from '../../../../models/index.js';
 import { fn, col, literal } from 'sequelize';
 

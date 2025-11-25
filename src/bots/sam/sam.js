@@ -1,6 +1,7 @@
 console.log('Node.js version:', process.version);
 import { ParseQueue, ParseQueueSubscriber, User, Config, sequelize } from '../../models/index.js';
-import { Client, Collection, GatewayIntentBits } from 'discord.js';
+import Discord from 'discord.js';
+const { Client, Collection, GatewayIntentBits } = Discord;
 import { readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';

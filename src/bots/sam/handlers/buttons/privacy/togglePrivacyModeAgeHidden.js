@@ -4,7 +4,8 @@ import { getProfileMessageId, parsePrivacySettingsCustomId } from '../../../../.
 import { buildPrivacySettingsMenu } from './privacyMenu.js';
 import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
-import { InteractionFlags, EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags, EmbedBuilder } = Discord;
 
 export default async function handleTogglePrivacyModeAgeHidden(interaction) {
     // Ephemeral message flag pattern: use InteractionFlags.Ephemeral if available, otherwise fallback to 64.

@@ -1,5 +1,6 @@
 import { User, Guild, BirthdayMessage } from '../../../models/index.js';
-import { EmbedBuilder } from 'discord.js';
+import Discord from 'discord.js';
+const { EmbedBuilder } = Discord;
 import logger from '../../../shared/utils/logger.js';
 
 class BirthdayNotificationManager {
