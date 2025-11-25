@@ -167,4 +167,3 @@ export default async function handleAddRecommendation(interaction) {
     return;
   }
 }
-export default handleAddRecommendation;

@@ -47,4 +47,3 @@ async function handleSearchPagination(interaction) {
     });
 }
 
-export default handleSearchPagination;

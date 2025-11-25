@@ -384,5 +384,3 @@ export default async function handleUpdateRecommendation(interaction) {
         });
     }
 }
-
-export default handleUpdateRecommendation;

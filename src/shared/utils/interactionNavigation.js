@@ -1,9 +1,6 @@
 
-export default handleInteractionNavigation;
-// Utility for handling close and back button logic for Discord interactions
-// Usage: await handleInteractionNavigation(interaction, { type: 'close', ... })
 
-async function handleInteractionNavigation(interaction, options = {}) {
+export async function handleInteractionNavigation(interaction, options = {}) {
     const {
         type = 'close', // 'close' or 'back'
         content = type === 'close' ? '✅ Closed.' : '',
@@ -39,6 +36,3 @@ async function handleInteractionNavigation(interaction, options = {}) {
         }
     }
 }
-
-
-export { handleInteractionNavigation };

@@ -171,4 +171,3 @@ export default async function handleSearchRecommendations(interaction) {
         components: totalPages > 1 ? [row] : []
     });
 
-export default handleSearchRecommendations;

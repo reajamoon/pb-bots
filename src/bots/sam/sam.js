@@ -1,4 +1,4 @@
-console.log('Node.js version:', process.version);
+console.log('ENTRYPOINT REACHED: sam.js');
 import { ParseQueue, ParseQueueSubscriber, User, Config, sequelize } from '../../models/index.js';
 import Discord from 'discord.js';
 const { Client, Collection, GatewayIntentBits } = Discord;

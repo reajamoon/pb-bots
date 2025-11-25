@@ -1,4 +1,3 @@
-console.log('Node.js version:', process.version);
 
 import { Op } from 'sequelize';
 import { ParseQueue, ParseQueueSubscriber, Config, User, sequelize, Recommendation } from '../../models/index.js';
@@ -7,6 +6,7 @@ import dotenv from 'dotenv';
 import { getNextAvailableAO3Time, markAO3Requests, MIN_INTERVAL_MS } from '../../shared/recUtils/ao3/ao3QueueRateHelper.js';
 import updateMessages from '../../shared/text/updateMessages.js';
 dotenv.config();
+console.log('Node.js version:', process.version);
 
 // Optimized: get mention string for subscribers using a user map
 function getTagMentions(subscribers, userMap) {
