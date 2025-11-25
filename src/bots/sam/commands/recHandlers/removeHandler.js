@@ -1,4 +1,5 @@
-import { MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags } = Discord;
 import { Recommendation } from '../../../../models/index.js';
 import findRecommendationByIdOrUrl from '../../../../shared/recUtils/findRecommendationByIdOrUrl.js';
 

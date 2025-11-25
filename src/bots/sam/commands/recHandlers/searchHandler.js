@@ -1,4 +1,5 @@
-import { MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags } = Discord;
 import { Recommendation, sequelize } from '../../../../models/index.js';
 import { Op, literal } from 'sequelize';
 import createSearchResultsEmbed from '../../../../shared/recUtils/createSearchResultsEmbed.js';

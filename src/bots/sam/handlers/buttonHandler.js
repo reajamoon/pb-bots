@@ -1,5 +1,6 @@
 
-import { InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags } = Discord;
 const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
 import { handleProfileButtons } from './buttons/profile/index.js';
 import { handleNavigationButtons } from './buttons/navigation/index.js';

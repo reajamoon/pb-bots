@@ -1,5 +1,6 @@
 // Handler to clear all queue jobs for a fic URL (admin/mod only)
-import { MessageFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { MessageFlags } = Discord;
 import { ParseQueue, Recommendation } from '../../../../models/index.js';
 
 export default async function handleClearQueue(interaction) {
