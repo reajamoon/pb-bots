@@ -1,3 +1,5 @@
+
+import logger from './logger.js';
 /**
  * PROFILE-SPECIFIC FUNCTIONS
  * Robust profile message ID tracking and propagation
@@ -50,21 +52,6 @@ function getProfileOwnerIdFromInteraction(interaction) {
     const parsed = parseProfileSettingsCustomId(interaction.customId);
     return parsed && parsed.userId ? parsed.userId : interaction.user.id;
 }
-/**
- * Stub for parsePrivacySettingsDoneCustomId
- * TODO: Implement actual logic if needed
- */
-function parsePrivacySettingsDoneCustomId(customId) {
-    return {};
-}
-
-import logger from './logger.js';
-
-/**
- * Message tracking utilities for live profile updates
- * Handles encoding/decoding message IDs in button custom IDs
- */
-
 /**
  * Encode message ID for safe inclusion in custom ID
  * Discord custom IDs have 100 character limit, so we use base64 for efficiency
