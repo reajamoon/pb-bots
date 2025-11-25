@@ -199,7 +199,7 @@ async function handleStats(interaction) {
             return `${emoji} ${percent}%`;
         })
         .filter(Boolean)
-        .join('\n') || 'No ratings found.';
+        .join(', ') || 'No ratings found.';
 
     const embed = new EmbedBuilder()
         .setTitle('📊 Profound Bond Library Statistics')
@@ -207,29 +207,46 @@ async function handleStats(interaction) {
         .setColor(0x234567)
         .setTimestamp()
         .addFields(
-            { name: 'Unique Recommenders', value: uniqueRecommenders.toString(), inline: true },
-            { name: 'Unique Authors', value: uniqueAuthors.toString(), inline: true },
             { name: 'Total Wordcount', value: totalWordCount.toLocaleString(), inline: true },
-            { name: 'Ratings', value: ratingPercentages, inline: true },
-            { name: 'Top 10 Tags', value: topTags, inline: true }
+            { name: 'Unique Authors', value: uniqueAuthors.toString(), inline: true },
+            { name: 'Ratings', value: ratingPercentages, inline: false },
+            { name: 'Top 10 Tags', value: topTags, inline: true },
+            { name: 'Unique Recommenders', value: uniqueRecommenders.toString(), inline: true }
         );
-    if (pieChartPath && chartAttachment) {
-        // Pie chart as embed image, bar chart as attachment
+    // Add pie chart as embed image if available
+    let pieAttachment = null;
+    if (pieChartPath) {
+        pieAttachment = new AttachmentBuilder(pieChartPath, { name: 'ratings-pie.png' });
         embed.setImage('attachment://ratings-pie.png');
-        await interaction.editReply({ embeds: [embed], files: [pieChartPath, chartAttachment] });
-        // Clean up temp files
-        try { await fs.unlink(pieChartPath); } catch {}
-        try { await fs.unlink(chartAttachment.attachment); } catch {}
-    } else if (pieChartPath) {
-        embed.setImage('attachment://ratings-pie.png');
-        await interaction.editReply({ embeds: [embed], files: [pieChartPath] });
-        try { await fs.unlink(pieChartPath); } catch {}
-    } else if (chartAttachment) {
-        await interaction.editReply({ embeds: [embed], files: [chartAttachment] });
-        try { await fs.unlink(chartAttachment.attachment); } catch {}
-    } else {
-        await interaction.editReply({ embeds: [embed] });
     }
+
+    // Add a button to view charts
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
+    const chartsRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('view_charts')
+            .setLabel('View Charts')
+            .setStyle(ButtonStyle.Primary)
+    );
+    await interaction.editReply({ embeds: [embed], components: [chartsRow], files: pieAttachment ? [pieAttachment] : [] });
+
+    // Set up a collector for the button
+    const filter = i => i.customId === 'view_charts' && i.user.id === interaction.user.id;
+    const collector = interaction.channel.createMessageComponentCollector({ filter, time: 60000, max: 1 });
+    collector.on('collect', async i => {
+        // Send the charts as a second message
+        const files = [];
+        if (pieChartPath) files.push(new AttachmentBuilder(pieChartPath, { name: 'ratings-pie.png' }));
+        if (chartAttachment) files.push(chartAttachment);
+        if (files.length > 0) {
+            await i.reply({ content: 'Here are the charts:', files, ephemeral: true });
+        } else {
+            await i.reply({ content: 'No charts available.', ephemeral: true });
+        }
+        // Clean up temp files
+        try { if (pieChartPath) await fs.unlink(pieChartPath); } catch {}
+        try { if (chartAttachment) await fs.unlink(chartAttachment.attachment); } catch {}
+    });
 }
 
 export default handleStats;
