@@ -264,5 +264,4 @@ export {
     buildPrivacySettingsDoneCustomId,
     parsePrivacySettingsCustomId,
     isTrackedPrivacySettings,
-    parsePrivacySettingsDoneCustomId,
 };
