@@ -9,7 +9,9 @@ const ratingEmojis = {
     'general audiences': '<:ratinggeneral:1133762158077935749>',
     'teen and up audiences': '<:ratingteen:1133762194174136390>',
     'mature': '<:ratingmature:1133762226738700390>',
-    'explicit': '<:ratingexplicit:1133762272087506965>'
+    'explicit': '<:ratingexplicit:1133762272087506965>',
+    'not rated': '❔',
+    'unrated': '❔'
 };
 
 // Archive warning emoji and logic
