@@ -1,7 +1,7 @@
 // ao3SeriesParser.js
 // Extracts metadata for AO3 series pages
 
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 import fs from 'fs';
 
 /**

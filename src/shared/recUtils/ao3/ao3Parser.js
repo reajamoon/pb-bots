@@ -11,7 +11,7 @@ import {
 import decodeHtmlEntities from '../decodeHtmlEntities.js';
 import fs from 'fs';
 import path from 'path';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 
 async function parseAO3Metadata(html, url, includeRawHtml = false) {
     // Check for incomplete HTML (missing </html> or </body>)
