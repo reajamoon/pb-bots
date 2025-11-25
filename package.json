@@ -1,9 +1,9 @@
 {
-  "name": "sam-bot",
+  "name": "sam",
   "version": "3.1.0",
   "description": "A Discord bot built with discord.js and Sequelize",
   "type": "module",
-  "main": "src/index.js",
+  "main": "src/bots/sam/sam.js",
   "scripts": {
     "start": "echo \"ERROR: Use PM2 to start the bot (npm run deploy or pm2 start ecosystem.config.js)\" && exit 1",
     "dev": "echo \"ERROR: Use PM2 for development. Do not run nodemon directly.\" && exit 1",
@@ -21,6 +21,9 @@
     "sequelize"
   ],
   "author": "reajamoon@pm.me",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "license": "MIT",
   "dependencies": {
     "cheerio": "^1.1.2",
@@ -44,8 +47,5 @@
     "nodemon": "^3.0.2",
     "prettier": "^3.6.2",
     "sequelize-cli": "^6.6.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
