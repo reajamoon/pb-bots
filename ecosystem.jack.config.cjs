@@ -11,6 +11,8 @@ module.exports = {
       max_memory_restart: '700M',
       max_restarts: 5,
       restart_delay: 10000,
+      interpreter: 'node',
+      interpreter_args: '--experimental-modules',
       env: {
         NODE_ENV: 'production',
       }
