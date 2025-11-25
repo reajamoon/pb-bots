@@ -44,9 +44,8 @@ User.belongsToMany(Guild, { through: 'UserGuilds' });
 Guild.belongsToMany(User, { through: 'UserGuilds' });
 ParseQueue.hasMany(ParseQueueSubscriber, { foreignKey: 'queue_id', as: 'subscribers' });
 ParseQueueSubscriber.belongsTo(ParseQueue, { foreignKey: 'queue_id' });
-
-// Recommendation.belongsTo(Series, { as: 'series', foreignKey: 'seriesId' });
-// Series.hasMany(Recommendation, { as: 'works', foreignKey: 'seriesId' });
+Recommendation.belongsTo(Series, { as: 'series', foreignKey: 'seriesId' });
+Series.hasMany(Recommendation, { as: 'works', foreignKey: 'seriesId' });
 
 export {
     sequelize,
