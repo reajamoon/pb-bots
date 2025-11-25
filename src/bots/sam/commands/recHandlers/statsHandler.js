@@ -3,7 +3,6 @@ const { EmbedBuilder, MessageFlags, AttachmentBuilder } = Discord;
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
 import fs from 'fs-extra';
 import path from 'path';
-import { ratingColors as sharedRatingColors } from '../../../../shared/recUtils/createRecommendationEmbed.js';
 import { Recommendation } from '../../../../models/index.js';
 import { fn, col, literal } from 'sequelize';
 import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
