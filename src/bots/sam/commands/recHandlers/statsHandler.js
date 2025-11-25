@@ -12,7 +12,7 @@ import ao3TagColors, { getAo3TagColor, getAo3RatingColor, lerpHexColor } from '.
 // Shows stats for the PB library.
 async function handleStats(interaction) {
     // Fetch all recs for stats (must be first)
-    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate', 'chapters', 'chapterCount', 'complete', 'publishedDate', 'additionalTags'] });
+    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate', 'chapters', 'complete', 'publishedDate', 'additionalTags'] });
 
     // Grouped variable declarations
     let avgWordcountChartPath = null;
