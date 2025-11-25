@@ -6,7 +6,7 @@ import path from 'path';
 import { Recommendation } from '../../../../models/index.js';
 import { fn, col, literal } from 'sequelize';
 import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
-import ao3TagColors, { getAo3TagColor, getAo3RatingColor, lerpHexColor, hexToRgba } from '../../../../shared/recUtils/ao3/ao3TagColors.js';
+import ao3TagColors, { getAo3TagColor, getAo3RatingColor, lerpHexColor } from '../../../../shared/recUtils/ao3/ao3TagColors.js';
 
 
 // Shows stats for the PB library.
