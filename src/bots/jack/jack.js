@@ -133,7 +133,15 @@ async function processQueueJob(job) {
 					await job.update({ status: 'error', error_message: errMsg || 'Unknown error' });
 					return;
 				}
-				await job.update({ status: 'done', result: embedOrError.recommendation, error_message: null });
+				   // Always set result to a valid Recommendation object with id
+				   let recObj = embedOrError && embedOrError.recommendation;
+				   if (!recObj || !recObj.id) {
+					   // Fallback: try to fetch from DB by URL
+					   recObj = await Recommendation.findOne({ where: { url: job.fic_url } });
+				   }
+				   // Only store minimal info needed for poller (id)
+				   const resultPayload = recObj && recObj.id ? { id: recObj.id } : null;
+				   await job.update({ status: 'done', result: resultPayload, error_message: null });
 				// Suppress notification if instant_candidate and within threshold
 				let thresholdMs = 3000; // default 3 seconds
 				const thresholdConfig = await Config.findOne({ where: { key: 'instant_queue_suppress_threshold_ms' } });
