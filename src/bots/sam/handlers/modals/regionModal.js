@@ -142,7 +142,9 @@ export async function handleRegionModal(interaction, originalMessageId = null) {
         logger.error(`Error setting region for ${interaction.user.tag}:`, error);
         
         // Create back button to return to Profile Settings
-        const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+        // Use ESM import for discord.js symbols
+        const Discord = await import('discord.js');
+        const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
         const backButton = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
