@@ -6,7 +6,7 @@ import { Recommendation } from '../../../../models/index.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
 import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
-import { selectPrimaryWork } from './seriesUtils.js';
+// import { markPrimaryAndNotPrimaryWorks } from './seriesUtils.js';
 
 // Adds a new fic rec. Checks for duplicates, fetches metadata, and builds the embed.
 export default async function handleAddRecommendation(interaction) {
