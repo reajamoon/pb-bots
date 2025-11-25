@@ -10,152 +10,179 @@ import ao3TagColors, { getAo3TagColor, getAo3RatingColor } from '../../../../sha
 
 // Shows stats for the PB library.
 async function handleStats(interaction) {
-        // --- Average wordcount by year chart ---
-        let avgWordcountChartPath = null;
-        let avgWordcountChartAttachment = null;
-        const yearWordcounts = {};
-        const yearWorkCounts = {};
-        for (const rec of allRecs) {
-            if (rec.publishedDate && typeof rec.wordCount === 'number') {
-                const year = new Date(rec.publishedDate).getFullYear();
-                if (!isNaN(year)) {
-                    yearWordcounts[year] = (yearWordcounts[year] || 0) + rec.wordCount;
-                    yearWorkCounts[year] = (yearWorkCounts[year] || 0) + 1;
-                }
-            }
-        }
-        const avgYears = Object.keys(yearWordcounts).map(Number).sort((a, b) => a - b);
-        if (avgYears.length > 0) {
-            const avgWordcounts = avgYears.map(y => yearWordcounts[y] / yearWorkCounts[y]);
-            // Rainbow gradient for bars
-            function rainbowColor(t) {
-                // t: 0..1
-                const a = (1 - t) * 4;
-                const r = Math.round(Math.max(0, 255 * (1 - Math.abs(a - 3))));
-                const g = Math.round(Math.max(0, 255 * (1 - Math.abs(a - 2))));
-                const b = Math.round(Math.max(0, 255 * (1 - Math.abs(a - 1))));
-                return `rgba(${r},${g},${b},0.7)`;
-            }
-            const n = avgYears.length;
-            const rainbowBgColors = avgYears.map((_, i) => rainbowColor(i / Math.max(1, n - 1)));
-            const rainbowBorderColors = avgYears.map((_, i) => rainbowColor(i / Math.max(1, n - 1)).replace('0.7', '1'));
-            const avgBarConfig = {
-                type: 'bar',
-                data: {
-                    labels: avgYears.map(String),
-                    datasets: [{
-                        label: 'Avg Wordcount',
-                        data: avgWordcounts,
-                        backgroundColor: rainbowBgColors,
-                        borderColor: rainbowBorderColors,
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: 'Average Wordcount by Year' }
-                    },
-                    scales: {
-                        x: { title: { display: true, text: 'Year' } },
-                        y: { title: { display: true, text: 'Avg Wordcount' }, beginAtZero: true }
-                    }
-                }
-            };
-            const avgBarBuffer = await chartJSNodeCanvas.renderToBuffer(avgBarConfig);
-            avgWordcountChartPath = path.join('/tmp', `rec-stats-avg-wordcount-year-${Date.now()}.png`);
-            await fs.writeFile(avgWordcountChartPath, avgBarBuffer);
-            avgWordcountChartAttachment = new AttachmentBuilder(avgWordcountChartPath, { name: 'avg-wordcount-by-year.png' });
-        }
+    // Fetch all recs for stats (must be first)
+    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate', 'chapters', 'chapterCount', 'complete', 'publishedDate', 'additionalTags'] });
 
-        // --- Oneshots vs Chaptered chart ---
-        let oneshotVsChapteredChartPath = null;
-        let oneshotVsChapteredChartAttachment = null;
-        let oneshotCount = 0, chapteredCount = 0;
-        for (const rec of allRecs) {
-            // Assume rec.chapters and rec.complete exist, otherwise treat as oneshot if chapters <= 1
-            const chapters = rec.chapters || rec.chapterCount || 1;
-            const isComplete = rec.complete !== false; // treat undefined as complete
-            if (isComplete) {
-                if (chapters > 1) chapteredCount++;
-                else oneshotCount++;
+    // Grouped variable declarations
+    let avgWordcountChartPath = null;
+    let avgWordcountChartAttachment = null;
+    let oneshotVsChapteredChartPath = null;
+    let oneshotVsChapteredChartAttachment = null;
+    let tagWordcountChartPath = null;
+    let tagWordcountChartAttachment = null;
+    let pieAttachment = null;
+    let pieThumbAttachment = null;
+    let pieThumbUrl = null;
+    let chartAttachment = null;
+    let barChartPath = null;
+    let pieChartPath = null;
+    let pieChartUrl = null;
+    const yearWordcounts = {};
+    const yearWorkCounts = {};
+    const tagWordcounts = {};
+    let oneshotCount = 0, chapteredCount = 0;
+    for (const rec of allRecs) {
+        if (rec.publishedDate && typeof rec.wordCount === 'number') {
+            const year = new Date(rec.publishedDate).getFullYear();
+            if (!isNaN(year)) {
+                yearWordcounts[year] = (yearWordcounts[year] || 0) + rec.wordCount;
+                yearWorkCounts[year] = (yearWorkCounts[year] || 0) + 1;
             }
         }
-        const oneshotVsChapteredConfig = {
-            type: 'pie',
+    }
+    const avgYears = Object.keys(yearWordcounts).map(Number).sort((a, b) => a - b);
+    if (avgYears.length > 0) {
+        const avgWordcounts = avgYears.map(y => yearWordcounts[y] / yearWorkCounts[y]);
+        // Use AO3 blue-green gradient for bars
+        const ao3Blue = getAo3TagColor(4, 0.7);
+        const ao3Green = getAo3TagColor(6, 0.7);
+        const ao3BlueBorder = getAo3TagColor(4, 1);
+        const ao3GreenBorder = getAo3TagColor(6, 1);
+        const n = avgYears.length;
+        const lerp = (a, b, t) => {
+            const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+            const ar = (ah >> 16) & 255, ag = (ah >> 8) & 255, ab = ah & 255;
+            const br = (bh >> 16) & 255, bg = (bh >> 8) & 255, bb = bh & 255;
+            const r = Math.round(ar + (br - ar) * t);
+            const g = Math.round(ag + (bg - ag) * t);
+            const b = Math.round(ab + (bb - ab) * t);
+            return [r, g, b];
+        };
+        const barBgColors = avgYears.map((_, i) => {
+            const t = n === 1 ? 0 : i / (n - 1);
+            const [r, g, b] = lerp(ao3Blue, ao3Green, t);
+            return `rgba(${r},${g},${b},0.7)`;
+        });
+        const barBorderColors = avgYears.map((_, i) => {
+            const t = n === 1 ? 0 : i / (n - 1);
+            const [r, g, b] = lerp(ao3BlueBorder, ao3GreenBorder, t);
+            return `rgba(${r},${g},${b},1)`;
+        });
+        const avgBarConfig = {
+            type: 'bar',
             data: {
-                labels: ['Oneshots', 'Chaptered'],
+                labels: avgYears.map(String),
                 datasets: [{
-                    data: [oneshotCount, chapteredCount],
-                    backgroundColor: ['rgba(67, 160, 71, 0.7)', 'rgba(54, 162, 235, 0.7)'], // green, blue
-                    borderColor: ['rgba(67, 160, 71, 1)', 'rgba(54, 162, 235, 1)'],
+                    label: 'Avg Wordcount',
+                    data: avgWordcounts,
+                    backgroundColor: barBgColors,
+                    borderColor: barBorderColors,
                     borderWidth: 1
                 }]
             },
             options: {
                 plugins: {
-                    legend: { display: true, position: 'bottom' },
-                    title: { display: true, text: 'Oneshots vs. Chaptered' }
+                    legend: { display: false },
+                    title: { display: true, text: 'Average Wordcount by Year' }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Year' } },
+                    y: { title: { display: true, text: 'Avg Wordcount' }, beginAtZero: true }
                 }
             }
         };
-        const oneshotVsChapteredBuffer = await chartJSNodeCanvas.renderToBuffer(oneshotVsChapteredConfig);
-        oneshotVsChapteredChartPath = path.join('/tmp', `rec-stats-oneshot-vs-chaptered-${Date.now()}.png`);
-        await fs.writeFile(oneshotVsChapteredChartPath, oneshotVsChapteredBuffer);
-        oneshotVsChapteredChartAttachment = new AttachmentBuilder(oneshotVsChapteredChartPath, { name: 'oneshot-vs-chaptered.png' });
+        const avgBarBuffer = await chartJSNodeCanvas.renderToBuffer(avgBarConfig);
+        avgWordcountChartPath = path.join('/tmp', `rec-stats-avg-wordcount-year-${Date.now()}.png`);
+        await fs.writeFile(avgWordcountChartPath, avgBarBuffer);
+        avgWordcountChartAttachment = new AttachmentBuilder(avgWordcountChartPath, { name: 'avg-wordcount-by-year.png' });
+    }
 
-        // --- Top tags by wordcount chart ---
-        let tagWordcountChartPath = null;
-        let tagWordcountChartAttachment = null;
-        const tagWordcounts = {};
-        for (const rec of allRecs) {
-            let tags = [];
-            if (Array.isArray(rec.tags)) tags.push(...rec.tags);
-            else if (typeof rec.tags === 'string' && rec.tags.trim().startsWith('[')) {
-                try { tags.push(...JSON.parse(rec.tags)); } catch {}
-            }
-            if (Array.isArray(rec.additionalTags)) tags.push(...rec.additionalTags);
-            else if (typeof rec.additionalTags === 'string' && rec.additionalTags.trim().startsWith('[')) {
-                try { tags.push(...JSON.parse(rec.additionalTags)); } catch {}
-            }
-            tags = tags.map(t => (t || '').trim().toLowerCase()).filter(Boolean);
-            for (const tag of tags) {
-                tagWordcounts[tag] = (tagWordcounts[tag] || 0) + (typeof rec.wordCount === 'number' ? rec.wordCount : 0);
+    // --- Oneshots vs Chaptered chart ---
+    for (const rec of allRecs) {
+        // Assume rec.chapters and rec.complete exist, otherwise treat as oneshot if chapters <= 1
+        const chapters = rec.chapters || rec.chapterCount || 1;
+        const isComplete = rec.complete !== false; // treat undefined as complete
+        if (isComplete) {
+            if (chapters > 1) chapteredCount++;
+            else oneshotCount++;
+        }
+    }
+    const ao3Green = getAo3TagColor(6, 0.7); // green
+    const ao3Blue = getAo3TagColor(4, 0.7); // blue
+    const ao3GreenBorder = getAo3TagColor(6, 1);
+    const ao3BlueBorder = getAo3TagColor(4, 1);
+    const oneshotVsChapteredConfig = {
+        type: 'pie',
+        data: {
+            labels: ['Oneshots', 'Chaptered'],
+            datasets: [{
+                data: [oneshotCount, chapteredCount],
+                backgroundColor: [ao3Green, ao3Blue],
+                borderColor: [ao3GreenBorder, ao3BlueBorder],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { display: true, position: 'bottom' },
+                title: { display: true, text: 'Oneshots vs. Chaptered' }
             }
         }
-        const topTagWordcounts = Object.entries(tagWordcounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
-        if (topTagWordcounts.length > 0) {
-            const tagWordcountBarConfig = {
-                type: 'bar',
-                data: {
-                    labels: topTagWordcounts.map(([tag]) => tag),
-                    datasets: [{
-                        label: 'Total Wordcount',
-                        data: topTagWordcounts.map(([, wc]) => wc),
-                        backgroundColor: topTagWordcounts.map((_, i) => getAo3TagColor(i, 0.8)),
-                        borderColor: topTagWordcounts.map((_, i) => getAo3TagColor(i, 1)),
-                        borderWidth: 1
-                    }]
+    };
+    const oneshotVsChapteredBuffer = await chartJSNodeCanvas.renderToBuffer(oneshotVsChapteredConfig);
+    oneshotVsChapteredChartPath = path.join('/tmp', `rec-stats-oneshot-vs-chaptered-${Date.now()}.png`);
+    await fs.writeFile(oneshotVsChapteredChartPath, oneshotVsChapteredBuffer);
+    oneshotVsChapteredChartAttachment = new AttachmentBuilder(oneshotVsChapteredChartPath, { name: 'oneshot-vs-chaptered.png' });
+
+    // --- Top tags by wordcount chart ---
+    for (const rec of allRecs) {
+        let tags = [];
+        if (Array.isArray(rec.tags)) tags.push(...rec.tags);
+        else if (typeof rec.tags === 'string' && rec.tags.trim().startsWith('[')) {
+            try { tags.push(...JSON.parse(rec.tags)); } catch {}
+        }
+        if (Array.isArray(rec.additionalTags)) tags.push(...rec.additionalTags);
+        else if (typeof rec.additionalTags === 'string' && rec.additionalTags.trim().startsWith('[')) {
+            try { tags.push(...JSON.parse(rec.additionalTags)); } catch {}
+        }
+        tags = tags.map(t => (t || '').trim().toLowerCase()).filter(Boolean);
+        for (const tag of tags) {
+            tagWordcounts[tag] = (tagWordcounts[tag] || 0) + (typeof rec.wordCount === 'number' ? rec.wordCount : 0);
+        }
+    }
+    const topTagWordcounts = Object.entries(tagWordcounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+    if (topTagWordcounts.length > 0) {
+        const tagWordcountBarConfig = {
+            type: 'bar',
+            data: {
+                labels: topTagWordcounts.map(([tag]) => tag),
+                datasets: [{
+                    label: 'Total Wordcount',
+                    data: topTagWordcounts.map(([, wc]) => wc),
+                    backgroundColor: topTagWordcounts.map((_, i) => getAo3TagColor(i, 0.8)),
+                    borderColor: topTagWordcounts.map((_, i) => getAo3TagColor(i, 1)),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'Top Tags by Wordcount' }
                 },
-                options: {
-                    plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: 'Top Tags by Wordcount' }
-                    },
-                    indexAxis: 'y',
-                    scales: {
-                        x: { title: { display: true, text: 'Wordcount' }, beginAtZero: true },
-                        y: { title: { display: true, text: 'Tag' } }
-                    }
+                indexAxis: 'y',
+                scales: {
+                    x: { title: { display: true, text: 'Wordcount' }, beginAtZero: true },
+                    y: { title: { display: true, text: 'Tag' } }
                 }
-            };
-            const tagWordcountBarBuffer = await chartJSNodeCanvas.renderToBuffer(tagWordcountBarConfig);
-            tagWordcountChartPath = path.join('/tmp', `rec-stats-tag-wordcount-${Date.now()}.png`);
-            await fs.writeFile(tagWordcountChartPath, tagWordcountBarBuffer);
-            tagWordcountChartAttachment = new AttachmentBuilder(tagWordcountChartPath, { name: 'top-tags-by-wordcount.png' });
-        }
+            }
+        };
+        const tagWordcountBarBuffer = await chartJSNodeCanvas.renderToBuffer(tagWordcountBarConfig);
+        tagWordcountChartPath = path.join('/tmp', `rec-stats-tag-wordcount-${Date.now()}.png`);
+        await fs.writeFile(tagWordcountChartPath, tagWordcountBarBuffer);
+        tagWordcountChartAttachment = new AttachmentBuilder(tagWordcountChartPath, { name: 'top-tags-by-wordcount.png' });
+    }
     if (Date.now() - interaction.createdTimestamp > 14 * 60 * 1000) {
         return await interaction.reply({
             content: 'That interaction took too long to process. Please try the command again.',
@@ -170,8 +197,6 @@ async function handleStats(interaction) {
         });
     }
 
-    // Fetch all recs for stats
-    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate'] });
 
     // Unique recommenders
     const uniqueRecommenders = new Set(allRecs.map(r => r.recommendedBy)).size;
@@ -197,10 +222,7 @@ async function handleStats(interaction) {
         : 'No publication dates found.';
 
     // --- Chart generation for recs by year ---
-    let chartAttachment = null;
-    let pieChartPath = null;
-    let barChartPath = null;
-    let pieChartUrl = null;
+    // (Removed duplicate declarations of chartAttachment, pieChartPath, barChartPath, pieChartUrl)
     const width = 700;
     const height = 350;
     const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
@@ -218,29 +240,39 @@ async function handleStats(interaction) {
         const norm = normalizeRating(rec.rating);
         ratingCounts[norm] = (ratingCounts[norm] || 0) + 1;
     }
-    // Bar chart for recs by year
+    // Bar chart for recs by year using AO3 blue and green
     if (sortedYears.length > 0) {
-        // Blue to green gradient for bars
-        function lerpColor(a, b, t) {
-            // a, b: [r,g,b], t: 0..1
-            return [
-                Math.round(a[0] + (b[0] - a[0]) * t),
-                Math.round(a[1] + (b[1] - a[1]) * t),
-                Math.round(a[2] + (b[2] - a[2]) * t)
-            ];
-        }
-        const blue = [54, 162, 235];
-        const green = [67, 160, 71];
+        const ao3Blue = getAo3TagColor(4, 0.7);
+        const ao3Green = getAo3TagColor(6, 0.7);
+        const ao3BlueBorder = getAo3TagColor(4, 1);
+        const ao3GreenBorder = getAo3TagColor(6, 1);
         const n = sortedYears.length;
         const barBgColors = sortedYears.map((_, i) => {
             const t = n === 1 ? 0 : i / (n - 1);
-            const [r, g, b] = lerpColor(blue, green, t);
-            return `rgba(${r},${g},${b},0.7)`;
+            // Interpolate between AO3 blue and green
+            function lerp(a, b, t) {
+                const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+                const ar = (ah >> 16) & 255, ag = (ah >> 8) & 255, ab = ah & 255;
+                const br = (bh >> 16) & 255, bg = (bh >> 8) & 255, bb = bh & 255;
+                const r = Math.round(ar + (br - ar) * t);
+                const g = Math.round(ag + (bg - ag) * t);
+                const b = Math.round(ab + (bb - ab) * t);
+                return `rgba(${r},${g},${b},0.7)`;
+            }
+            return lerp(ao3Blue, ao3Green, t);
         });
         const barBorderColors = sortedYears.map((_, i) => {
             const t = n === 1 ? 0 : i / (n - 1);
-            const [r, g, b] = lerpColor(blue, green, t);
-            return `rgba(${r},${g},${b},1)`;
+            function lerp(a, b, t) {
+                const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+                const ar = (ah >> 16) & 255, ag = (ah >> 8) & 255, ab = ah & 255;
+                const br = (bh >> 16) & 255, bg = (bh >> 8) & 255, bb = bh & 255;
+                const r = Math.round(ar + (br - ar) * t);
+                const g = Math.round(ag + (bg - ag) * t);
+                const b = Math.round(ab + (bb - ab) * t);
+                return `rgba(${r},${g},${b},1)`;
+            }
+            return lerp(ao3Blue, ao3Green, t);
         });
         const barConfig = {
             type: 'bar',
@@ -367,9 +399,6 @@ async function handleStats(interaction) {
             { name: 'Unique Recommenders', value: uniqueRecommenders.toString(), inline: true }
         );
     // Add pie chart as embed image if available
-    let pieAttachment = null;
-    let pieThumbAttachment = null;
-    let pieThumbUrl = null;
     if (pieChartPath) {
         // Create a second pie chart without a legend for thumbnail
         // Use a small, square canvas for thumbnail
