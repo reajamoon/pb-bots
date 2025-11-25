@@ -44,6 +44,13 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             const baseTimeout = 15000;
             const maxTimeout = 90000;
             const timeout = Math.min(baseTimeout * Math.pow(2, attempt - 1), maxTimeout);
+            const { getNextAvailableAO3Time, markAO3Requests } = await import('./ao3QueueRateHelper.js');
+            const nextAvailable = getNextAvailableAO3Time(1);
+            const now = Date.now();
+            if (nextAvailable > now) {
+                await new Promise(res => setTimeout(res, nextAvailable - now));
+            }
+            markAO3Requests(1);
             await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout });
             // Bypass 'stay logged in' interstitial if present
             await bypassStayLoggedInInterstitial(page, ao3Url);
