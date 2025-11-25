@@ -265,55 +265,39 @@ function buildBaseEmbed(rec, color) {
         });
 }
 
-// Builds the embed for a rec. Checks if the link works, adds warnings if needed.
-async function createRecommendationEmbed(rec) {
-    // If this work is part of a series, show series info (only if all required fields exist)
-    if (rec.series && typeof rec.series === 'object' && rec.series.name && rec.series.url && rec.series.part) {
-        embed.addFields({
-            name: 'Series',
-            value: `[Part ${rec.series.part} of ${rec.series.name}](${rec.series.url})`
-        });
-    }
-    if (isSeriesRec(rec)) {
-        return await createSeriesRecommendationEmbed(rec);
-    }
-    // Series embed builder
-    async function createSeriesRecommendationEmbed(rec) {
-        // Determine effective rating for the series (highest among works, or series rating)
-        let effectiveRating = rec.rating;
-        if ((!effectiveRating || effectiveRating.toLowerCase() === 'unrated' || effectiveRating.toLowerCase() === 'not rated') && Array.isArray(rec.series_works)) {
-            // Find highest rating among works
-            const ratingOrder = ['not rated', 'unrated', 'general audiences', 'teen and up audiences', 'mature', 'explicit'];
-            let maxIdx = 0;
-            for (const work of rec.series_works) {
-                if (work.rating && typeof work.rating === 'string') {
-                    const idx = ratingOrder.indexOf(work.rating.trim().toLowerCase());
-                    if (idx > maxIdx) maxIdx = idx;
-                }
-            }
-            effectiveRating = ratingOrder[maxIdx] || 'Unrated';
-        }
-        const { ratingValue, color } = getRatingAndColor(effectiveRating);
-
+// Builds the embed for a rec or a series. If a Series object is provided, uses its metadata and workIds for the embed.
+// Usage: createRecommendationEmbed(rec) for single rec, or createRecommendationEmbed(null, series, seriesWorks) for series
+async function createRecommendationEmbed(rec, series = null, seriesWorks = null) {
+    if (series) {
+        // Series embed mode
+        // Use series metadata for title, authors, summary, url, status, workCount, wordCount
+        // Use seriesWorks (from AO3 parse or DB) for first five works field
+        const { ratingValue, color } = getRatingAndColor(series.rating || 'Unrated');
         const embed = new EmbedBuilder()
-            .setTitle(`📚 ${rec.title}`)
-            .setDescription(`**Series by:** ${(rec.authors && Array.isArray(rec.authors)) ? rec.authors.join(', ') : (rec.author || 'Unknown Author')}`)
-            .setURL(rec.url)
+            .setTitle(`📚 ${series.name || series.title || 'Untitled Series'}`)
+            .setDescription(`**Series by:** ${(series.authors && Array.isArray(series.authors)) ? series.authors.join(', ') : 'Unknown Author'}`)
+            .setURL(series.url)
             .setColor(color)
             .setTimestamp()
             .setFooter({
-                text: `From the Profound Bond Library • Recommended by ${rec.recommendedByUsername} • ID: ${rec.id}`
+                text: `From the Profound Bond Library • Series ID: ${series.id}`
             });
-        if (rec.summary) {
-            const summaryText = rec.summary.length > 400 ? rec.summary.substring(0, 400) + '...' : rec.summary;
+        // Summary: prefer series.summary, fallback to first available work summary
+        let summary = series.summary;
+        if ((!summary || !summary.trim()) && Array.isArray(seriesWorks) && seriesWorks.length > 0) {
+            summary = seriesWorks[0].summary;
+        }
+        if (summary) {
+            const summaryText = summary.length > 400 ? summary.substring(0, 400) + '...' : summary;
             embed.addFields({
                 name: 'Series Summary',
                 value: `>>> ${summaryText}`
             });
         }
-        const isLinkWorking = rec.deleted ? false : await quickLinkCheck(rec.url);
-        const siteInfo = isValidFanficUrl(rec.url);
-        const linkText = buildStoryLinkText(rec, isLinkWorking, siteInfo);
+        // Series link, rating, status
+        const isLinkWorking = false; // Don't check for series
+        const siteInfo = isValidFanficUrl(series.url);
+        const linkText = buildStoryLinkText(series, isLinkWorking, siteInfo);
         const linkAndMetaFields = [
             {
                 name: '🔗 Series Link',
@@ -321,32 +305,89 @@ async function createRecommendationEmbed(rec) {
                 inline: true
             }
         ];
-        if (effectiveRating) {
+        if (series.rating) {
             linkAndMetaFields.push({ name: 'Rating', value: ratingValue, inline: true });
         }
-        addStatusField(linkAndMetaFields, rec);
+        if (series.status) {
+            linkAndMetaFields.push({ name: 'Status', value: series.status, inline: true });
+        }
         embed.addFields(linkAndMetaFields);
-        addStatsFields(embed, rec);
-        addSeriesWarningsField(embed, rec);
-        addTagsField(embed, rec);
-        addNotesField(embed, rec);
-        addEngagementFields(embed, rec);
-        if (Array.isArray(rec.series_works) && rec.series_works.length > 0) {
+        // Stats: published/updated, number of works, words
+        const statsFields = [];
+        if (series.workCount) statsFields.push({ name: 'Works', value: series.workCount.toString(), inline: true });
+        if (series.wordCount) statsFields.push({ name: 'Words', value: series.wordCount.toLocaleString(), inline: true });
+        embed.addFields(statsFields);
+        // Warnings: aggregate from seriesWorks if available
+        if (Array.isArray(seriesWorks) && seriesWorks.length > 0) {
+            let allWarnings = [];
+            for (const work of seriesWorks) {
+                if (Array.isArray(work.archive_warnings)) allWarnings.push(...work.archive_warnings);
+            }
+            allWarnings = allWarnings.map(w => w && typeof w === 'string' ? w.trim().toLowerCase() : '').filter(Boolean);
+            const normalized = Array.from(new Set(allWarnings)).filter(w => w && w !== 'no archive warnings apply');
+            if (normalized.length > 0) {
+                let fieldValue = '';
+                if (normalized.length === 1 && normalized[0] === 'creator chose not to use archive warnings') {
+                    fieldValue = `${maybeWarningEmoji} Creator Chose Not To Use Archive Warnings`;
+                } else {
+                    const hasMajor = normalized.some(w => majorWarningsList.some(mw => w.includes(mw.toLowerCase())));
+                    if (hasMajor) {
+                        fieldValue = `${majorWarningEmoji} ${normalized.join(', ')}`;
+                    } else {
+                        fieldValue = normalized.join(', ');
+                    }
+                }
+                embed.addFields({ name: 'Major Content Warnings', value: fieldValue });
+            }
+        }
+        // Works in Series field (from series.workIds and seriesWorks)
+        if (Array.isArray(series.workIds) && series.workIds.length > 0 && Array.isArray(seriesWorks)) {
             const maxToShow = 5;
             let worksList = '';
-            for (let i = 0; i < Math.min(rec.series_works.length, maxToShow); i++) {
-                const work = rec.series_works[i];
-                const title = work.title || `Work #${i + 1}`;
-                const url = work.url || rec.url;
+            for (let i = 0; i < Math.min(series.workIds.length, maxToShow); i++) {
+                const workMeta = seriesWorks.find(w => w.ao3ID == series.workIds[i] || w.url?.includes(`/works/${series.workIds[i]}`));
+                const title = (workMeta && workMeta.title) || `Work #${i + 1}`;
+                const url = workMeta && workMeta.url ? workMeta.url : `https://archiveofourown.org/works/${series.workIds[i]}`;
                 worksList += `${i + 1}. [${title}](${url})\n`;
             }
-            if (rec.series_works.length > maxToShow) {
-                worksList += `${maxToShow}. [and more...](${rec.url})`;
+            if (series.workIds.length > maxToShow) {
+                worksList += `${maxToShow}. [and more...](${series.url})`;
             }
             embed.addFields({
-                name: `Works in Series (${rec.series_works.length})`,
+                name: `Works in Series (${series.workIds.length})`,
                 value: worksList.trim()
             });
+        }
+        // Tags: aggregate from seriesWorks
+        if (Array.isArray(seriesWorks) && seriesWorks.length > 0) {
+            const tagSet = new Set();
+            for (const work of seriesWorks) {
+                if (Array.isArray(work.tags)) for (const t of work.tags) tagSet.add(t);
+                if (Array.isArray(work.additionalTags)) for (const t of work.additionalTags) tagSet.add(t);
+            }
+            if (tagSet.size > 0) {
+                let tagString = Array.from(tagSet).join(', ');
+                if (tagString.length > 1021) tagString = tagString.substring(0, 1021) + '...';
+                embed.addFields({ name: 'Tags', value: tagString });
+            }
+        }
+        // Notes
+        if (series.notes) {
+            embed.addFields({ name: 'Recommender Notes', value: `>>> ${series.notes}` });
+        }
+        // Engagement: aggregate from seriesWorks
+        if (Array.isArray(seriesWorks) && seriesWorks.length > 0) {
+            let hits = 0, kudos = 0, bookmarks = 0;
+            for (const work of seriesWorks) {
+                if (work.hits) hits += work.hits;
+                if (work.kudos) kudos += work.kudos;
+                if (work.bookmarks) bookmarks += work.bookmarks;
+            }
+            const engagementFields = [];
+            if (hits) engagementFields.push({ name: 'Hits', value: hits.toLocaleString(), inline: true });
+            if (kudos) engagementFields.push({ name: 'Kudos', value: kudos.toLocaleString(), inline: true });
+            if (bookmarks) engagementFields.push({ name: 'Bookmarks', value: bookmarks.toLocaleString(), inline: true });
+            if (engagementFields.length > 0) embed.addFields(engagementFields);
         }
         return embed;
     }
@@ -394,7 +435,6 @@ async function createRecommendationEmbed(rec) {
     addEngagementFields(embed, rec);
     return embed;
 }
-
 
 export default createRecommendationEmbed;
 export {
