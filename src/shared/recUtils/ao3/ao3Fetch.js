@@ -63,6 +63,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 await new Promise(res => setTimeout(res, nextAvailable - now));
             }
             markAO3Requests(1);
+            console.log(`[AO3][Fetch] Navigating to ${ao3Url} with timeout: ${timeout}ms (attempt ${attempt})`);
             await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout });
             // Bypass 'stay logged in' interstitial if present
             await bypassStayLoggedInInterstitial(page, ao3Url);
