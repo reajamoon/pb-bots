@@ -149,6 +149,17 @@ export default async function handleSearchRecommendations(interaction) {
         const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
         recWithSeries = await fetchRecWithSeries(rec.id, true);
         if (recWithSeries) {
+                        // DEBUG: Log the structure of series and works for diagnosis
+                        if (recWithSeries.series) {
+                            console.log('[rec search] recWithSeries.series:', {
+                                id: recWithSeries.series.id,
+                                name: recWithSeries.series.name,
+                                workIds: recWithSeries.series.workIds,
+                                works: Array.isArray(recWithSeries.series.works) ? recWithSeries.series.works.map(w => ({ id: w.id, title: w.title, ao3ID: w.ao3ID })) : recWithSeries.series.works
+                            });
+                        } else {
+                            console.log('[rec search] recWithSeries.series: null or undefined');
+                        }
             if (recWithSeries.series && Array.isArray(recWithSeries.series.works) && recWithSeries.series.works.length > 0) {
                 embed = await createRecommendationEmbed(null, recWithSeries.series, recWithSeries.series.works);
             } else {

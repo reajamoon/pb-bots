@@ -105,6 +105,7 @@ async function getLoggedInAO3Page(ficUrl) {
         throw new Error('AO3_USERNAME or AO3_PASSWORD is missing from environment.');
     }
     let browser;
+    let pageContent = '';
     try {
         browser = await getSharedBrowser();
     } catch (err) {
