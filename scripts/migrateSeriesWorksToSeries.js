@@ -1,14 +1,14 @@
 // migrateSeriesWorksToSeries.js
 // Migrates deprecated Recommendation.series_works to Series.series_works, matching by seriesId and workIds
 
-import { Recommendation, Series, sequelize } from '../src/models/index.js';
+import { Recommendation, Series, sequelize, Sequelize } from '../src/models/index.js';
 
 async function migrateSeriesWorks() {
   // 1. Fetch all Recommendations with non-null series_works and a valid seriesId
   const recs = await Recommendation.findAll({
     where: {
-      series_works: { [sequelize.Op.ne]: null },
-      seriesId: { [sequelize.Op.ne]: null }
+      series_works: { [Sequelize.Op.ne]: null },
+      seriesId: { [Sequelize.Op.ne]: null }
     },
     raw: true
   });
