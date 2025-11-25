@@ -21,13 +21,31 @@ export default function SeriesModel(sequelize) {
       allowNull: false,
       unique: true,
     },
-    fandom: {
-      type: DataTypes.STRING,
+    ao3SeriesId: {
+      type: DataTypes.INTEGER,
       allowNull: true,
+      unique: true,
+      comment: 'AO3 series ID parsed from URL'
     },
-    author: {
+    authors: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment: 'Array of author names for the series'
+    },
+    workCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Number of works in the series (AO3)'
+    },
+    wordCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Total word count for the series (AO3)'
+    },
+    status: {
       type: DataTypes.STRING,
       allowNull: true,
+      comment: 'Completion status for the series (AO3)'
     }
   }, {
     tableName: 'series',

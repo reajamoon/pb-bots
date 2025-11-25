@@ -26,6 +26,12 @@ export default (sequelize) => {
     });
 
     const Recommendation = sequelize.define('Recommendation', {
+        ao3ID: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            unique: true,
+            comment: 'AO3 work ID parsed from URL'
+        },
         id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
