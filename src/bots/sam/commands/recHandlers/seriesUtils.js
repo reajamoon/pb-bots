@@ -14,13 +14,18 @@ export function isPartOfSeries(metadata) {
  */
 export function markPrimaryAndNotPrimaryWorks(works) {
   if (!Array.isArray(works) || works.length === 0) return [];
-  let workMetas = works.map((w, i) => ({
-    ...w,
-    index: i,
-    hasPrequel: (w.tags || w.freeform_tags || []).some(t => /prequel/i.test(t)),
-    hasSequel: (w.tags || w.freeform_tags || []).some(t => /sequel/i.test(t)),
-    postDate: w.publishedDate ? new Date(w.publishedDate) : null
-  }));
+  let workMetas = works.map((w, i) => {
+    // Defensive: ensure tags and freeform_tags are arrays
+    const tagsArr = Array.isArray(w.tags) ? w.tags : [];
+    const freeformArr = Array.isArray(w.freeform_tags) ? w.freeform_tags : [];
+    return {
+      ...w,
+      index: i,
+      hasPrequel: [...tagsArr, ...freeformArr].some(t => typeof t === 'string' && /prequel/i.test(t)),
+      hasSequel: [...tagsArr, ...freeformArr].some(t => typeof t === 'string' && /sequel/i.test(t)),
+      postDate: w.publishedDate ? new Date(w.publishedDate) : null
+    };
+  });
   let candidates = workMetas.filter(w => !w.hasPrequel && !w.hasSequel);
   if (candidates.length === 0) candidates = workMetas;
   let primaryWork = candidates[0];
