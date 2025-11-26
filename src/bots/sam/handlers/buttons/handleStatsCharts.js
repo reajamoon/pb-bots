@@ -52,6 +52,7 @@ export async function handleStatsChartsButton(interaction, options = {}) {
         const fakeInteraction = {
             ...interaction,
             editReply: updateTargetMessage,
+            deferReply: async () => {},
             user: interaction.user
         };
         await handleStats(fakeInteraction);
