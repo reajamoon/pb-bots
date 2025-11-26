@@ -12,13 +12,14 @@ export default {
         console.log(`Hey, it's Sam. I'm online and ready to help out.`);
         // Set bot status
         client.user.setPresence({
-            activities: [
-                {
-                type: ActivityType.Custom,
-                state: 'The family business.',
-                emoji: { id: '466121531274035213', name: 'PB_samthunk', animated: false }
-                }
-                ],
+            // activities: [
+            //     {
+            //     type: ActivityType.Custom,
+            //     state: 'The family business.',
+            //     emoji: { id: '466121531274035213', name: 'PB_samthunk', animated: false }
+            //     }
+            //     ],
+              activities: [{ name: 'Hello world', type: 3 }],
                 status: 'online'
             });
         // Start poller and birthday manager
