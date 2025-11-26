@@ -1,4 +1,3 @@
-
 import { Sequelize } from 'sequelize';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -12,6 +11,7 @@ import ParseQueueModel from './ParseQueue.js';
 import ParseQueueSubscriberModel from './ParseQueueSubscriber.js';
 import ConfigModel from './Config.js';
 import SeriesModel from './Series.js';
+import UserFicMetadataModel from './UserFicMetadata.js';
 
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: process.env.NODE_ENV === 'production' ? 'postgres' : 'sqlite',
@@ -35,6 +35,7 @@ const Recommendation = RecommendationModel(sequelize);
 const BirthdayMessage = BirthdayMessageModel(sequelize);
 const ParseQueue = ParseQueueModel(sequelize);
 const ParseQueueSubscriber = ParseQueueSubscriberModel(sequelize);
+const UserFicMetadata = UserFicMetadataModel(sequelize);
 
 const Config = ConfigModel(sequelize);
 const Series = SeriesModel(sequelize);
@@ -46,6 +47,12 @@ ParseQueue.hasMany(ParseQueueSubscriber, { foreignKey: 'queue_id', as: 'subscrib
 ParseQueueSubscriber.belongsTo(ParseQueue, { foreignKey: 'queue_id' });
 Recommendation.belongsTo(Series, { foreignKey: 'seriesId', as: 'series' });
 Series.hasMany(Recommendation, { foreignKey: 'seriesId', as: 'works' });
+// UserFicMetadata relations
+UserFicMetadata.belongsTo(User, { foreignKey: 'userID', targetKey: 'id', as: 'user', constraints: false });
+// Not a true FK, but allows eager loading if needed
+UserFicMetadata.belongsTo(Recommendation, { foreignKey: 'ao3ID', targetKey: 'ao3ID', as: 'fic', constraints: false });
+User.hasMany(UserFicMetadata, { foreignKey: 'userID', sourceKey: 'id', as: 'ficMetadata' });
+Recommendation.hasMany(UserFicMetadata, { foreignKey: 'ao3ID', sourceKey: 'ao3ID', as: 'userMetadata' });
 
 export {
     sequelize,
@@ -57,5 +64,6 @@ export {
     BirthdayMessage,
     ParseQueue,
     ParseQueueSubscriber,
-    Series
+    Series,
+    UserFicMetadata
 };
