@@ -8,6 +8,7 @@ import { fn, col, literal } from 'sequelize';
 import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
 import ao3TagColors, { getAo3TagColor, getAo3RatingColor, lerpHexColor } from '../../../../shared/recUtils/ao3/ao3TagColors.js';
 import { buildStatsButtonId } from '../../utils/statsButtonId.js';
+import { setStatsChartCache } from '../../utils/statsChartCache.js';
 
 
 // Shows stats for the PB library.
@@ -400,11 +401,21 @@ async function handleStats(interaction) {
         pieAttachment = new AttachmentBuilder(pieChartPath, { name: 'ratings-pie.png' });
     }
 
-    // Add a button to view charts
+    // Cache chart files with a unique key (userId)
+    const chartFiles = [
+        pieAttachment,
+        chartAttachment,
+        avgWordcountChartAttachment,
+        oneshotVsChapteredChartAttachment,
+        tagWordcountChartAttachment
+    ].filter(Boolean);
+    const cacheKey = `stats:${interaction.user.id}`;
+    setStatsChartCache(cacheKey, chartFiles);
+
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
     const chartsRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(buildStatsButtonId('charts'))
+            .setCustomId(buildStatsButtonId(cacheKey))
             .setLabel('View Charts')
             .setStyle(ButtonStyle.Primary)
     );
@@ -412,20 +423,6 @@ async function handleStats(interaction) {
     const filesToSend = [];
     if (pieThumbAttachment) filesToSend.push(pieThumbAttachment);
     await interaction.editReply({ embeds: [embed], components: [chartsRow], files: filesToSend });
-    // Chart files for button handler context (to be passed by main handler)
-    interaction.statsChartFiles = {
-        pieAttachment,
-        chartAttachment,
-        avgWordcountChartAttachment,
-        oneshotVsChapteredChartAttachment,
-        tagWordcountChartAttachment,
-        // For cleanup, also pass paths if needed
-        pieChartPath,
-        barChartPath,
-        avgWordcountChartPath,
-        oneshotVsChapteredChartPath,
-        tagWordcountChartPath
-    };
 }
 
 export default handleStats;

@@ -7,21 +7,23 @@ import { handleNavigationButtons } from './buttons/navigation/index.js';
 import { handlePrivacyButtons } from './buttons/privacyButtons.js';
 import { handleStatsChartsButton } from './buttons/handleStatsCharts.js';
 import { parseStatsButtonId } from '../utils/statsButtonId.js';
+import { getStatsChartCache, clearStatsChartCache } from '../utils/statsChartCache.js';
 import logger from '../../../shared/utils/logger.js';
 
 /**
  * Handle button interactions by delegating to appropriate handlers
  */
 async function handleButton(interaction) {
-        // Stats charts button
-        if (interaction.customId && interaction.customId.startsWith('stats_charts')) {
-            // Pass chart files from the interaction context if available
-            const files = interaction.statsChartFiles
-                ? Object.values(interaction.statsChartFiles).filter(f => f && f.name && f.attachment)
-                : [];
-            await handleStatsChartsButton(interaction, { files });
-            return;
-        }
+    // Stats charts button
+    if (interaction.customId && interaction.customId.startsWith('stats_charts')) {
+        // Extract cache key from customId
+        const { context: cacheKey } = parseStatsButtonId(interaction.customId);
+        const files = cacheKey ? getStatsChartCache(cacheKey) : [];
+        await handleStatsChartsButton(interaction, { files: files || [] });
+        // Optionally clear cache after use
+        if (cacheKey) clearStatsChartCache(cacheKey);
+        return;
+    }
     try {
         logger.info(`[buttonHandler] Invoked for customId: ${interaction.customId}`);
         const customId = interaction.customId;
