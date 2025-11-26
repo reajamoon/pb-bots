@@ -13,8 +13,8 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     const { context: cacheKey, messageId } = parseStatsButtonId(
         isBack ? interaction.customId.replace('stats_charts_back:', 'stats_charts:') : interaction.customId
     ) || {};
-    // Only use the context (cacheKey) for cache lookup, ignore messageId
-    const chartCacheKey = cacheKey;
+    // Use messageId as the cache key
+    const chartCacheKey = `stats:${messageId}`;
 
     // Helper to update the correct message
     async function updateTargetMessage(payload) {

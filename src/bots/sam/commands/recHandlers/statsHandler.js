@@ -419,12 +419,12 @@ async function handleStats(interaction) {
     if (avgWordcountChartPath) chartFiles.push({ path: avgWordcountChartPath, name: 'avg-wordcount-by-year.png' });
     if (oneshotVsChapteredChartPath) chartFiles.push({ path: oneshotVsChapteredChartPath, name: 'oneshot-vs-chaptered.png' });
     if (tagWordcountChartPath) chartFiles.push({ path: tagWordcountChartPath, name: 'top-tags-by-wordcount.png' });
-    const cacheKey = `stats:${interaction.user.id}`;
+    const messageId = interaction.message && interaction.message.id ? interaction.message.id : (interaction.id || '');
+    const cacheKey = `stats:${messageId}`;
     setStatsChartCache(cacheKey, chartFiles);
 
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
     // Track the original message ID for robust updates
-    const messageId = interaction.message && interaction.message.id ? interaction.message.id : (interaction.id || '');
     const chartsRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(buildStatsButtonId(cacheKey, messageId))

@@ -13,6 +13,7 @@ export function setStatsChartCache(key, files, ttl = DEFAULT_TTL) {
         .map(f => (f && f.attachment) ? f.attachment : (f && f.path) ? f.path : null)
         .filter(Boolean);
     logger.info(`[setStatsChartCache] key=${key}, files=${JSON.stringify(files.map(f => f.name || f.path || f.attachment))}`);
+    console.log(`[setStatsChartCache] key=${key}, files=${JSON.stringify(files.map(f => f.name || f.path || f.attachment))}`);
     cache.set(key, {
         files,
         filePaths,
@@ -23,6 +24,7 @@ export function setStatsChartCache(key, files, ttl = DEFAULT_TTL) {
 export function getStatsChartCache(key) {
     const entry = cache.get(key);
     logger.info(`[getStatsChartCache] key=${key}, found=${!!entry}, files=${entry ? JSON.stringify(entry.files.map(f => f.name || f.path || f.attachment)) : 'null'}`);
+    console.log(`[getStatsChartCache] key=${key}, found=${!!entry}, files=${entry ? JSON.stringify(entry.files.map(f => f.name || f.path || f.attachment)) : 'null'}`);
     if (!entry) return null;
     if (Date.now() > entry.expires) {
         cache.delete(key);
