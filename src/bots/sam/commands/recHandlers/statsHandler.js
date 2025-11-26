@@ -340,11 +340,15 @@ async function handleStats(interaction) {
     allTags = allTags.map(t => (t || '').trim().toLowerCase()).filter(Boolean);
     const tagCounts = {};
     for (const tag of allTags) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-    const topTags = Object.entries(tagCounts)
+    const sortedTopTags = Object.entries(tagCounts)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
+        .slice(0, 10);
+    const topTags1to5 = sortedTopTags.slice(0, 5)
         .map(([tag, count], i) => `#${i + 1}: ${tag} (${count})`)
         .join('\n') || 'No tags found.';
+    const topTags6to10 = sortedTopTags.slice(5, 10)
+        .map(([tag, count], i) => `#${i + 6}: ${tag} (${count})`)
+        .join('\n') || '\u200b';
 
     const ratingPercentages = Object.entries(ratingCounts)
         .sort((a, b) => b[1] - a[1])
@@ -366,9 +370,10 @@ async function handleStats(interaction) {
         .addFields(
             { name: 'Total Wordcount', value: totalWordCount.toLocaleString(), inline: true },
             { name: 'Unique Authors', value: uniqueAuthors.toString(), inline: true },
+            { name: 'Unique Recommenders', value: uniqueRecommenders.toString(), inline: true },
             { name: 'Ratings', value: ratingPercentages, inline: false },
-            { name: 'Top 10 Tags', value: topTags, inline: true },
-            { name: 'Unique Recommenders', value: uniqueRecommenders.toString(), inline: true }
+            { name: 'Top Tags 1-5', value: topTags1to5, inline: true },
+            { name: 'Top Tags 6-10', value: topTags6to10, inline: true }
         );
     // Add pie chart as embed image if available
     if (pieChartPath) {
@@ -424,9 +429,14 @@ async function handleStats(interaction) {
             .setLabel('View Charts')
             .setStyle(ButtonStyle.Primary)
     );
+    // Set the 'recs by publication year' chart as the embed image if available
+    if (barChartPath) {
+        embed.setImage('attachment://recs-by-year.png');
+    }
     // Only send the thumbnail pie chart as thumbnail, not as image or in follow-up
     const filesToSend = [];
     if (pieThumbAttachment) filesToSend.push(pieThumbAttachment);
+    if (barChartPath) filesToSend.push(new AttachmentBuilder(barChartPath, { name: 'recs-by-year.png' }));
     await interaction.editReply({ embeds: [embed], components: [chartsRow], files: filesToSend });
 }
 
