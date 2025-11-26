@@ -48,10 +48,10 @@ ParseQueueSubscriber.belongsTo(ParseQueue, { foreignKey: 'queue_id' });
 Recommendation.belongsTo(Series, { foreignKey: 'seriesId', as: 'series' });
 Series.hasMany(Recommendation, { foreignKey: 'seriesId', as: 'works' });
 // UserFicMetadata relations
-UserFicMetadata.belongsTo(User, { foreignKey: 'userID', targetKey: 'id', as: 'user', constraints: false });
+UserFicMetadata.belongsTo(User, { foreignKey: 'userID', targetKey: 'discordId', as: 'user', constraints: false });
 // Not a true FK, but allows eager loading if needed
 UserFicMetadata.belongsTo(Recommendation, { foreignKey: 'ao3ID', targetKey: 'ao3ID', as: 'fic', constraints: false });
-User.hasMany(UserFicMetadata, { foreignKey: 'userID', sourceKey: 'id', as: 'ficMetadata' });
+User.hasMany(UserFicMetadata, { foreignKey: 'userID', sourceKey: 'discordId', as: 'ficMetadata' });
 Recommendation.hasMany(UserFicMetadata, { foreignKey: 'ao3ID', sourceKey: 'ao3ID', as: 'userMetadata' });
 
 export {
