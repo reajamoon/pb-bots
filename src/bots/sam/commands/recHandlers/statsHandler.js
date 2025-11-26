@@ -13,14 +13,12 @@ import { setStatsChartCache } from '../../utils/statsChartCache.js';
 
 // Shows stats for the PB library.
 async function handleStats(interaction) {
-    // Fetch all recs for stats (must be first)
-    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate', 'chapters', 'status'] });
-
     // ChartJSNodeCanvas must be initialized before any usage
     const width = 700;
     const height = 350;
     const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
-
+    // Fetch all recs for stats (must be first)
+    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate', 'chapters', 'status'] });
     // Grouped variable declarations
     let avgWordcountChartPath = null;
     let avgWordcountChartAttachment = null;
