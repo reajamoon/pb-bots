@@ -411,7 +411,6 @@ async function handleStats(interaction) {
         pieAttachment = new AttachmentBuilder(pieChartPath, { name: 'ratings-pie.png' });
     }
 
-    // Cache chart files with a unique key (userId)
     // Cache file paths and names for chart files (not AttachmentBuilder objects)
     const chartFiles = [];
     if (pieChartPath) chartFiles.push({ path: pieChartPath, name: 'ratings-pie.png' });
@@ -419,18 +418,6 @@ async function handleStats(interaction) {
     if (avgWordcountChartPath) chartFiles.push({ path: avgWordcountChartPath, name: 'avg-wordcount-by-year.png' });
     if (oneshotVsChapteredChartPath) chartFiles.push({ path: oneshotVsChapteredChartPath, name: 'oneshot-vs-chaptered.png' });
     if (tagWordcountChartPath) chartFiles.push({ path: tagWordcountChartPath, name: 'top-tags-by-wordcount.png' });
-    const messageId = interaction.message && interaction.message.id ? interaction.message.id : (interaction.id || '');
-    const cacheKey = `stats:${messageId}`;
-    setStatsChartCache(cacheKey, chartFiles);
-
-    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
-    // Track the original message ID for robust updates
-    const chartsRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(buildStatsButtonId(cacheKey, messageId))
-            .setLabel('View Charts')
-            .setStyle(ButtonStyle.Primary)
-    );
     // Set the 'recs by publication year' chart as the embed image if available
     if (barChartPath) {
         embed.setImage('attachment://recs-by-year.png');
@@ -439,7 +426,23 @@ async function handleStats(interaction) {
     const filesToSend = [];
     if (pieThumbAttachment) filesToSend.push(pieThumbAttachment);
     if (barChartPath) filesToSend.push(new AttachmentBuilder(barChartPath, { name: 'recs-by-year.png' }));
-    await interaction.editReply({ embeds: [embed], components: [chartsRow], files: filesToSend });
+    // First, send the reply without the button to get the real messageId
+    await interaction.editReply({ embeds: [embed], components: [], files: filesToSend });
+    const sentMsg = await interaction.fetchReply();
+    const messageId = sentMsg.id;
+    const cacheKey = `stats:${messageId}`;
+    setStatsChartCache(cacheKey, chartFiles);
+
+    // Now build the button with the correct messageId
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
+    const chartsRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(buildStatsButtonId(cacheKey, messageId))
+            .setLabel('View Charts')
+            .setStyle(ButtonStyle.Primary)
+    );
+    // Edit the reply to add the button
+    await sentMsg.edit({ components: [chartsRow] });
 }
 
 export default handleStats;
