@@ -94,12 +94,19 @@ async function handleStats(interaction) {
 
     // --- Oneshots vs Chaptered chart ---
     for (const rec of allRecs) {
-        const chapters = rec.chapters || 1;
-        const isComplete = typeof rec.status === 'string' ? rec.status.toLowerCase() === 'complete' : true;
-        if (isComplete) {
-            if (chapters > 1) chapteredCount++;
-            else oneshotCount++;
+        // Only include completed works
+        const isComplete = typeof rec.status === 'string' ? rec.status.toLowerCase() === 'complete' : false;
+        if (!isComplete) continue;
+        let chapters = 1, total = 1;
+        if (typeof rec.chapters === 'string' && rec.chapters.includes('/')) {
+            const [curr, tot] = rec.chapters.split('/');
+            chapters = parseInt(curr, 10) || 1;
+            total = tot === '?' ? null : parseInt(tot, 10) || 1;
+        } else if (typeof rec.chapters === 'number') {
+            chapters = total = rec.chapters;
         }
+        if (chapters === 1 && total === 1) oneshotCount++;
+        else if (total && total > 1) chapteredCount++;
     }
     const ao3Green = getAo3TagColor(6, 0.7); // green
     const ao3Blue = getAo3TagColor(4, 0.7); // blue
