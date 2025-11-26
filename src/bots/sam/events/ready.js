@@ -1,5 +1,6 @@
 
-import logger from '../../../shared/utils/logger.js';
+console.log('READY EVENT MODULE LOADED');
+import { ActivityType } from 'discord.js';
 import startPoller from './startPoller.js';
 import startBirthdayManager from './startBirthdayManager.js';
 import BirthdayNotificationManager from '../utils/birthdayNotifications.js';
@@ -8,10 +9,18 @@ export default {
     name: 'ready',
     once: true,
     async execute(client) {
-        logger.info(`Hey, it's Sam. I'm online and ready to help out.`);
-        logger.info(`Currently keeping an eye on ${client.guilds.cache.size} ${client.guilds.cache.size === 1 ? 'server' : 'servers'}`);
+        console.log(`Hey, it's Sam. I'm online and ready to help out.`);
         // Set bot status
-        client.user.setActivity('the family business', { type: 'PLAYING' });
+        client.user.setPresence({
+            activities: [
+                {
+                type: ActivityType.Custom,
+                state: 'The family business.',
+                emoji: { id: '466121531274035213', name: 'PB_samthunk', animated: false }
+                }
+                ],
+                status: 'online'
+            });
         // Start poller and birthday manager
         startPoller(client);
         // Use the already-initialized birthdayManager if available, else create one
