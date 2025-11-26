@@ -21,8 +21,19 @@ async function handleButton(interaction) {
             await handleStatsChartsButton(interaction);
             return;
         }
-        // Extract cache key from customId
-        const { context: cacheKey } = parseStatsButtonId(interaction.customId);
+        // Extract and decode messageId from customId
+        const customId = interaction.customId;
+        const parts = customId.split(':');
+        const encodedMessageId = parts[parts.length - 1];
+        let decodedMessageId = null;
+        if (encodedMessageId) {
+            try {
+                decodedMessageId = Buffer.from(encodedMessageId, 'base64').toString('utf8');
+            } catch (e) {
+                console.error('[buttonHandler] Failed to decode messageId from base64:', encodedMessageId, e);
+            }
+        }
+        const cacheKey = decodedMessageId ? `stats:${decodedMessageId}` : null;
         const files = cacheKey ? getStatsChartCache(cacheKey) : [];
         await handleStatsChartsButton(interaction, { files: files || [] });
         // Optionally clear cache after use
