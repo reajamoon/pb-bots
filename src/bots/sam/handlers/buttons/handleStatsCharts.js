@@ -13,14 +13,17 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     const { context: cacheKey, messageId } = parseStatsButtonId(
         isBack ? interaction.customId.replace('stats_charts_back:', 'stats_charts:') : interaction.customId
     ) || {};
-    // Use messageId as the cache key
-    const chartCacheKey = `stats:${messageId}`;
+    // Always use the decoded messageId for cache and message operations
+    const decodedMessageId = messageId;
+    // Use decoded messageId as the cache key
+    const chartCacheKey = decodedMessageId ? `stats:${decodedMessageId}` : cacheKey;
+    console.log('[handleStatsChartsButton] Using decoded messageId for cache and message ops:', decodedMessageId);
 
     // Helper to update the correct message
     async function updateTargetMessage(payload) {
-        if (messageId && interaction.channel && interaction.channel.messages) {
+        if (decodedMessageId && interaction.channel && interaction.channel.messages) {
             try {
-                const msg = await interaction.channel.messages.fetch(messageId);
+                const msg = await interaction.channel.messages.fetch(decodedMessageId);
                 if (msg && msg.edit) {
                     await msg.edit(payload);
                     await interaction.deferUpdate();
