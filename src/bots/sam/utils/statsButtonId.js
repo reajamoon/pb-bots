@@ -8,6 +8,6 @@ export function buildStatsButtonId(context = '') {
 
 export function parseStatsButtonId(customId) {
     if (!customId.startsWith(STATS_BUTTON_PREFIX)) return null;
-    const parts = customId.split(':');
-    return { context: parts[1] || '' };
+    const idx = customId.indexOf(':');
+    return { context: idx !== -1 ? customId.slice(idx + 1) : '' };
 }
