@@ -60,9 +60,21 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     const cacheKeyToUse = decodedMessageId ? `stats:${decodedMessageId}` : null;
     console.log('[handleStatsChartsButton] About to call getStatsChartCache with key:', cacheKeyToUse);
     const fileMetas = options.files || (cacheKeyToUse ? getStatsChartCache(cacheKeyToUse) : null) || [];
-    const files = fileMetas
-        .filter(f => f && f.path && f.name)
-        .map(f => new AttachmentBuilder(f.path, { name: f.name }));
+    const files = [];
+    for (const f of fileMetas) {
+        if (f && f.path && f.name) {
+            try {
+                const exists = await import('fs').then(fs => fs.existsSync(f.path));
+                if (!exists) {
+                    console.error('[handleStatsChartsButton] File does not exist:', f.path);
+                    continue;
+                }
+                files.push(new AttachmentBuilder(f.path, { name: f.name }));
+            } catch (err) {
+                console.error('[handleStatsChartsButton] Error creating AttachmentBuilder for', f.path, err);
+            }
+        }
+    }
     const backRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`stats_charts_back:${encodeMessageId(numericMessageId)}`)
@@ -72,5 +84,9 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     const payload = files.length > 0
         ? { content: 'Here are the charts:', embeds: [], files, components: [backRow], attachments: [] }
         : { content: 'No charts available.', embeds: [], files: [], components: [backRow], attachments: [] };
-    await updateTargetMessage(payload);
+    try {
+        await updateTargetMessage(payload);
+    } catch (err) {
+        console.error('[handleStatsChartsButton] Error updating message with payload:', payload, err);
+    }
 }
