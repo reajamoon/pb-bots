@@ -7,8 +7,10 @@ import handleStats from '../../commands/recHandlers/statsHandler.js';
 
 // Handles the "View Charts" and "Back to Stats" buttons for stats
 export async function handleStatsChartsButton(interaction, options = {}) {
-    // Determine if this is a back button or a view charts button
-    const isBack = interaction.customId && interaction.customId.startsWith('stats_charts_back:');
+    try {
+        console.log('[handleStatsChartsButton] Handler entered for customId:', interaction.customId);
+        // Determine if this is a back button or a view charts button
+        const isBack = interaction.customId && interaction.customId.startsWith('stats_charts_back:');
     // Always extract the last part as the base64-encoded messageId
     const customId = interaction.customId;
     const parts = customId.split(':');
@@ -86,9 +88,12 @@ export async function handleStatsChartsButton(interaction, options = {}) {
         ? { content: 'Here are the charts:', embeds: [], files, components: [backRow], attachments: [] }
         : { content: 'No charts available.', embeds: [], files: [], components: [backRow], attachments: [] };
     console.log('[handleStatsChartsButton] payload before sending:', payload);
-    try {
-        await updateTargetMessage(payload);
+        try {
+            await updateTargetMessage(payload);
+        } catch (err) {
+            console.error('[handleStatsChartsButton] Error updating message with payload:', payload, err);
+        }
     } catch (err) {
-        console.error('[handleStatsChartsButton] Error updating message with payload:', payload, err);
+        console.error('[handleStatsChartsButton] Top-level error:', err);
     }
 }
