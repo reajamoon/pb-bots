@@ -2,31 +2,30 @@
 // Keyed by userId or custom key, values are { files: [AttachmentBuilder, ...], expires: timestamp }
 
 import fs from 'fs-extra';
+import logger from '../../../shared/utils/logger.js';
 
 const cache = new Map();
 const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 
-export function setStatsChartCache(key, files, ttl = DEFAULT_TTL) {
     // Extract file paths for cleanup
     const filePaths = files
         .map(f => (f && f.attachment) ? f.attachment : (f && f.path) ? f.path : null)
         .filter(Boolean);
+    logger.info(`[setStatsChartCache] key=${key}, files=${JSON.stringify(files.map(f => f.name || f.path || f.attachment))}`);
     cache.set(key, {
         files,
         filePaths,
         expires: Date.now() + ttl
     });
-}
 
-export function getStatsChartCache(key) {
     const entry = cache.get(key);
+    logger.info(`[getStatsChartCache] key=${key}, found=${!!entry}, files=${entry ? JSON.stringify(entry.files.map(f => f.name || f.path || f.attachment)) : 'null'}`);
     if (!entry) return null;
     if (Date.now() > entry.expires) {
         cache.delete(key);
         return null;
     }
     return entry.files;
-}
 
 export function clearStatsChartCache(key) {
     cache.delete(key);
