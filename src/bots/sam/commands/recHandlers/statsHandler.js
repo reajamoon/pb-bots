@@ -437,7 +437,7 @@ async function handleStats(interaction) {
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
     const chartsRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(buildStatsButtonId('', messageId))
+            .setCustomId(`stats_charts:${encodeMessageId(messageId)}`)
             .setLabel('View Charts')
             .setStyle(ButtonStyle.Primary)
     );

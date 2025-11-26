@@ -22,7 +22,7 @@ export async function handleStatsChartsButton(interaction, options = {}) {
             console.error('[handleStatsChartsButton] Failed to decode messageId from base64:', encodedMessageId, e);
         }
     }
-    // Force the cache key to always be stats:<decodedMessageId>
+    // Always use stats:<decodedMessageId> as the cache key
     const chartCacheKey = decodedMessageId ? `stats:${decodedMessageId}` : null;
     console.log('[handleStatsChartsButton] Using decoded messageId for cache and message ops:', decodedMessageId);
 
@@ -61,7 +61,7 @@ export async function handleStatsChartsButton(interaction, options = {}) {
         .map(f => new AttachmentBuilder(f.path, { name: f.name }));
     const backRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(buildStatsButtonId('', decodedMessageId).replace('stats_charts:', 'stats_charts_back:'))
+            .setCustomId(`stats_charts_back:${encodeMessageId(decodedMessageId)}`)
             .setLabel('Back to Stats')
             .setStyle(ButtonStyle.Secondary)
     );
