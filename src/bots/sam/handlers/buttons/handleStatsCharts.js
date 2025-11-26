@@ -10,10 +10,10 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     // Determine if this is a back button or a view charts button
     const isBack = interaction.customId && interaction.customId.startsWith('stats_charts_back:');
     // Parse context and messageId from customId
-    const { context: cacheKey, messageId: encodedMessageId } = parseStatsButtonId(
-        isBack ? interaction.customId.replace('stats_charts_back:', 'stats_charts:') : interaction.customId
-    ) || {};
-    // Properly decode the messageId from base64
+    // Parse the customId and extract the base64-encoded messageId (always the last part)
+    const customId = isBack ? interaction.customId.replace('stats_charts_back:', 'stats_charts:') : interaction.customId;
+    const parts = customId.split(':');
+    const encodedMessageId = parts[parts.length - 1];
     let decodedMessageId = null;
     if (encodedMessageId) {
         try {
@@ -22,8 +22,8 @@ export async function handleStatsChartsButton(interaction, options = {}) {
             console.error('[handleStatsChartsButton] Failed to decode messageId from base64:', encodedMessageId, e);
         }
     }
-    // Use decoded messageId as the cache key
-    const chartCacheKey = decodedMessageId ? `stats:${decodedMessageId}` : cacheKey;
+    // Use only the decoded messageId (numeric string) for cache and message operations
+    const chartCacheKey = decodedMessageId ? `stats:${decodedMessageId}` : null;
     console.log('[handleStatsChartsButton] Using decoded messageId for cache and message ops:', decodedMessageId);
 
     // Helper to update the correct message
