@@ -12,7 +12,7 @@ import ao3TagColors, { getAo3TagColor, getAo3RatingColor, lerpHexColor } from '.
 // Shows stats for the PB library.
 async function handleStats(interaction) {
     // Fetch all recs for stats (must be first)
-    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate', 'chapters', 'complete', 'publishedDate', 'additionalTags'] });
+    const allRecs = await Recommendation.findAll({ attributes: ['tags', 'additionalTags', 'recommendedBy', 'author', 'wordCount', 'title', 'rating', 'publishedDate', 'chapters', 'status'] });
 
     // Grouped variable declarations
     let avgWordcountChartPath = null;
@@ -89,9 +89,8 @@ async function handleStats(interaction) {
 
     // --- Oneshots vs Chaptered chart ---
     for (const rec of allRecs) {
-        // Assume rec.chapters and rec.complete exist, otherwise treat as oneshot if chapters <= 1
-        const chapters = rec.chapters || rec.chapterCount || 1;
-        const isComplete = rec.complete !== false; // treat undefined as complete
+        const chapters = rec.chapters || 1;
+        const isComplete = typeof rec.status === 'string' ? rec.status.toLowerCase() === 'complete' : true;
         if (isComplete) {
             if (chapters > 1) chapteredCount++;
             else oneshotCount++;
