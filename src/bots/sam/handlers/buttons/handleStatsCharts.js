@@ -15,8 +15,13 @@ export async function handleStatsChartsButton(interaction, options = {}) {
 
     if (isBack) {
         // Restore the stats embed (re-run handleStats, but edit the message)
-        // Use the original interaction user
-        await handleStats({ ...interaction, editReply: interaction.editReply.bind(interaction), user: interaction.user });
+        // Use interaction.update instead of editReply for button interactions
+        const fakeInteraction = {
+            ...interaction,
+            editReply: interaction.update.bind(interaction),
+            user: interaction.user
+        };
+        await handleStats(fakeInteraction);
         return;
     }
 
