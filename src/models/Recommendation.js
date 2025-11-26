@@ -1,30 +1,6 @@
 import { DataTypes } from 'sequelize';
 
 export default (sequelize) => {
-    // Define Series model
-    const Series = sequelize.define('Series', {
-        id: {
-            type: DataTypes.INTEGER,
-            primaryKey: true,
-            autoIncrement: true
-        },
-        name: {
-            type: DataTypes.STRING,
-            allowNull: false
-        },
-        url: {
-            type: DataTypes.STRING,
-            allowNull: false
-        },
-        summary: {
-            type: DataTypes.TEXT,
-            allowNull: true
-        }
-    }, {
-        tableName: 'series',
-        timestamps: true
-    });
-
     const Recommendation = sequelize.define('Recommendation', {
         ao3ID: {
             type: DataTypes.INTEGER,

@@ -53,6 +53,8 @@ UserFicMetadata.belongsTo(User, { foreignKey: 'userID', targetKey: 'discordId', 
 UserFicMetadata.belongsTo(Recommendation, { foreignKey: 'ao3ID', targetKey: 'ao3ID', as: 'fic', constraints: false });
 User.hasMany(UserFicMetadata, { foreignKey: 'userID', sourceKey: 'discordId', as: 'ficMetadata' });
 Recommendation.hasMany(UserFicMetadata, { foreignKey: 'ao3ID', sourceKey: 'ao3ID', as: 'userMetadata' });
+BirthdayMessage.belongsTo(User, { foreignKey: 'userId', targetKey: 'discordId', as: 'user', constraints: false });
+User.hasMany(BirthdayMessage, { foreignKey: 'userId', sourceKey: 'discordId', as: 'birthdayMessages' });
 
 export {
     sequelize,
