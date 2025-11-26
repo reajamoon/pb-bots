@@ -10,8 +10,8 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     // Determine if this is a back button or a view charts button
     const isBack = interaction.customId && interaction.customId.startsWith('stats_charts_back:');
     // Parse context and messageId from customId
-    // Parse the customId and extract the base64-encoded messageId (always the last part)
-    const customId = isBack ? interaction.customId.replace('stats_charts_back:', 'stats_charts:') : interaction.customId;
+    // For both normal and back buttons, always extract the last part as the base64-encoded messageId
+    const customId = interaction.customId;
     const parts = customId.split(':');
     const encodedMessageId = parts[parts.length - 1];
     let decodedMessageId = null;
