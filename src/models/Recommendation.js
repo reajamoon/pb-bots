@@ -97,6 +97,7 @@ export default (sequelize) => {
         notes: {
             type: DataTypes.TEXT,
             allowNull: true
+            // Deprecated use notes on UserFicMetadata Model
         },
         archive_warnings: {
             type: DataTypes.JSONB, // Store as array

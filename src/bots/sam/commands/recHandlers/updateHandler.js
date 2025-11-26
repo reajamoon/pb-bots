@@ -1,11 +1,10 @@
-
 import findRecommendationByIdOrUrl from '../../../../shared/recUtils/findRecommendationByIdOrUrl.js';
 import Discord from 'discord.js';
 const { MessageFlags } = Discord;
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import processRecommendationJob from '../../../../shared/recUtils/processRecommendationJob.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
-import { Recommendation } from '../../../../models/index.js';
+import { Recommendation, UserFicMetadata } from '../../../../models/index.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
 import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
@@ -52,20 +51,24 @@ export default async function handleUpdateRecommendation(interaction) {
             identifier: interaction.options.getString('identifier'),
             options: interaction.options.data
         });
-
         // Debug: log all incoming option values for troubleshooting
-        const debugFields = {
-            newTitle: interaction.options.getString('title'),
-            newAuthor: interaction.options.getString('author'),
-            newSummary: interaction.options.getString('summary'),
-            newRating: interaction.options.getString('rating'),
-            newStatus: interaction.options.getString('status'),
-            newWordCount: interaction.options.getInteger('wordcount'),
-            newTags: interaction.options.getString('tags'),
-            newNotes: interaction.options.getString('notes'),
-            appendAdditional: interaction.options.getBoolean('append')
-        };
-        console.log('[rec update] Option values:', debugFields);
+        // const debugFields = {
+        //     newTitle: interaction.options.getString('title'),
+        //     newAuthor: interaction.options.getString('author'),
+        //     newSummary: interaction.options.getString('summary'),
+        //     newRating: interaction.options.getString('rating'),
+        //     newStatus: interaction.options.getString('status'),
+        //     newWordCount: interaction.options.getInteger('wordcount'),
+        //     newTags: interaction.options.getString('tags'),
+        //     newNotes: interaction.options.getString('notes'),
+        //     newChapters: interaction.options.getString('chapters'),
+        //     newArchiveWarnings: interaction.options.getString('archive_warnings'),
+        //     newSeriesName: interaction.options.getString('series_name'),
+        //     newSeriesPart: interaction.options.getInteger('series_part'),
+        //     newSeriesUrl: interaction.options.getString('series_url'),
+        //     appendAdditional: interaction.options.getBoolean('append')
+        // };
+        // console.log('[rec update] Option values:', debugFields);
         await interaction.deferReply();
         const identifier = interaction.options.getString('identifier');
         if (!identifier) {
@@ -93,6 +96,13 @@ export default async function handleUpdateRecommendation(interaction) {
             newTags = Array.from(new Set(newTags.map(t => t.toLowerCase())));
         }
         const newNotes = interaction.options.getString('notes');
+        const newChapters = interaction.options.getString('chapters');
+        const newArchiveWarnings = interaction.options.getString('archive_warnings')
+            ? interaction.options.getString('archive_warnings').split(',').map(w => w.trim()).filter(Boolean)
+            : null;
+        const newSeriesName = interaction.options.getString('series_name');
+        const newSeriesPart = interaction.options.getInteger('series_part');
+        const newSeriesUrl = interaction.options.getString('series_url');
         // Support append mode for additional tags
         const appendAdditional = interaction.options.getBoolean('append');
 
@@ -109,92 +119,296 @@ export default async function handleUpdateRecommendation(interaction) {
             const { Series, Recommendation } = await import('../../../../models/index.js');
             const createOrJoinQueueEntry = (await import('../../../../shared/recUtils/createOrJoinQueueEntry.js')).default;
             const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
-            // Fetch the Series entry
-            const seriesEntry = await Series.findByPk(recommendation.seriesId);
-            if (seriesEntry) {
-                const workIds = Array.isArray(seriesEntry.workIds) ? seriesEntry.workIds : [];
-                const allWorkUrls = workIds.map(id => `https://archiveofourown.org/works/${id}`);
-                const worksInDb = await Recommendation.findAll({ where: { url: allWorkUrls } });
-                const worksInDbUrls = new Set(worksInDb.map(w => w.url));
-                const newWorkUrls = allWorkUrls.filter(url => !worksInDbUrls.has(url));
-
-                // Fetch AO3 series metadata for up-to-date info
-                let seriesMeta = null;
-                try {
-                    const { fetchAO3SeriesMetadata } = await import('../../../../shared/recUtils/ao3Meta.js');
-                    seriesMeta = await fetchAO3SeriesMetadata(seriesEntry.url);
-                } catch (err) {
-                    console.error('[series update] Failed to fetch AO3 series metadata:', err);
-                }
-                // Always update the series entry itself (queue)
-                await createOrJoinQueueEntry(seriesEntry.url, interaction.user.id);
-
-                // If there are new works, send an ephemeral message listing them (do not import)
-                if (newWorkUrls.length > 0) {
-                    await interaction.followUp({
-                        content: `New works have been added to this series on AO3 since the last update, but have not been imported.\n\n**New works:**\n${newWorkUrls.map(u => `- <${u}>`).join('\n')}`,
-                        ephemeral: true
-                    });
-                }
-                // If any works in the series are present in Recommendations, ask if user wants to update all works
-                if (worksInDb.length > 0) {
-                    // Send ephemeral confirmation prompt
-                    await interaction.followUp({
-                        content: `There are ${worksInDb.length} works from this series in the library. Would you like to update all of them now?`,
-                        ephemeral: true,
-                        components: [
-                            {
-                                type: 1, // ACTION_ROW
-                                components: [
-                                    {
-                                        type: 2, // BUTTON
-                                        style: 1, // PRIMARY
-                                        custom_id: `update_series_works_${seriesEntry.id}`,
-                                        label: 'Update All Works'
-                                    }
-                                ]
+            // --- Fic Parsing Queue Logic ---
+            const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
+            // Always use the queue for any update that requires a metadata fetch
+            const needsMetadataFetch = newUrl || (!newTitle && !newAuthor && !newSummary && !newRating && !newStatus && !newWordCount);
+            if (needsMetadataFetch) {
+                let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
+                if (queueEntry) {
+                    if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
+                        const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
+                        if (!existingSub) {
+                            try {
+                                await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
+                            } catch (err) {
+                                console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
                             }
-                        ]
-                    });
+                        }
+                        await interaction.editReply({
+                            content: 'That fic is already being processed! You’ll get a notification when it’s ready.'
+                        });
+                        return;
+                    }
+                    if (queueEntry.status === 'done' && queueEntry.result) {
+                        // For done/cached recs, fetch from DB and build embed directly (no AO3 access)
+                        const { Recommendation } = await import('../../../../models/index.js');
+                        const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
+                        const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
+                        const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
+                        if (updatedRec) {
+                            const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
+                            const embed = await createRecommendationEmbed(recWithSeries);
+                            await interaction.editReply({
+                                content: 'This fic was just updated! Here’s the latest info.',
+                                embeds: [embed]
+                            });
+                            // Upsert UserFicMetadata after successful instant update
+                            if (recommendation.seriesId && seriesEntry) {
+                              await UserFicMetadata.upsert({
+                                userID: interaction.user.id,
+                                ao3ID: null,
+                                seriesId: seriesEntry.id,
+                                manual_title: newTitle || null,
+                                manual_authors: newAuthor ? [newAuthor] : null,
+                                manual_summary: newSummary || null,
+                                manual_tags: newTags || [],
+                                manual_rating: newRating || null,
+                                manual_wordcount: newWordCount || null,
+                                manual_chapters: newChapters || null,
+                                manual_status: newStatus || null,
+                                manual_archive_warnings: newArchiveWarnings || [],
+                                manual_seriesName: newSeriesName || null,
+                                manual_seriesPart: newSeriesPart || null,
+                                manual_seriesUrl: newSeriesUrl || null,
+                                additional_tags: additionalTagsToSend || [],
+                                rec_note: newNotes || null
+                              });
+                            } else {
+                              await UserFicMetadata.upsert({
+                                userID: interaction.user.id,
+                                ao3ID: recommendation.ao3ID,
+                                seriesId: recommendation.seriesId || null,
+                                manual_title: newTitle || null,
+                                manual_authors: newAuthor ? [newAuthor] : null,
+                                manual_summary: newSummary || null,
+                                manual_tags: newTags || [],
+                                manual_rating: newRating || null,
+                                manual_wordcount: newWordCount || null,
+                                manual_chapters: newChapters || null,
+                                manual_status: newStatus || null,
+                                manual_archive_warnings: newArchiveWarnings || [],
+                                manual_seriesName: newSeriesName || null,
+                                manual_seriesPart: newSeriesPart || null,
+                                manual_seriesUrl: newSeriesUrl || null,
+                                additional_tags: additionalTagsToSend || [],
+                                rec_note: newNotes || null
+                              });
+                            }
+                        } else {
+                            await interaction.editReply({
+                                content: 'Recommendation found in queue but not in database. Please try again or contact an admin.'
+                            });
+                        }
+                        return;
+                    }
+                    if (queueEntry.status === 'error') {
+                        await interaction.editReply({
+                            content: `There was an error parsing this fic previously: ${queueEntry.error_message || 'Unknown error.'} You can try again later.`
+                        });
+                        return;
+                    }
                 }
-
-                // Always send an updated embed for the series
-                const embed = await createRecommendationEmbed({
-                    ...recommendation.toJSON(),
-                    pendingWorks: newWorkUrls
-                });
-                await interaction.editReply({
-                    content: 'Series updated! See below for details.',
-                    embeds: [embed]
-                });
-                return;
-            }
-        }
-        let urlToUse = newUrl || recommendation.url;
-        urlToUse = normalizeAO3Url(urlToUse);
-
-        // --- Fic Parsing Queue Logic ---
-        const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
-        // Always use the queue for any update that requires a metadata fetch
-        const needsMetadataFetch = newUrl || (!newTitle && !newAuthor && !newSummary && !newRating && !newStatus && !newWordCount);
-        if (needsMetadataFetch) {
-            let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
-            if (queueEntry) {
-                if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
-                    const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
-                    if (!existingSub) {
-                        try {
-                            await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
-                        } catch (err) {
-                            console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
+                // Only mark as instant_candidate if this is a single non-series fic and no other jobs are active
+                const activeJobs = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
+                let isInstant = false;
+                // Only allow instant_candidate for non-series URLs
+                if (!/archiveofourown\.org\/series\//.test(urlToUse) && activeJobs === 0) {
+                    isInstant = true;
+                }
+                try {
+                    queueEntry = await ParseQueue.create({
+                        fic_url: urlToUse,
+                        status: 'pending',
+                        requested_by: interaction.user.id,
+                        instant_candidate: isInstant
+                    });
+                } catch (err) {
+                    // Handle race condition: duplicate key error (Sequelize or raw pg)
+                    if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
+                        // Find the now-existing queue entry
+                        queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
+                        if (queueEntry) {
+                            if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
+                                const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
+                                if (!existingSub) {
+                                    try {
+                                        await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
+                                    } catch (err) {
+                                        console.error('[RecHandler] Error adding ParseQueueSubscriber (race condition):', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
+                                    }
+                                }
+                                await interaction.editReply({
+                                    content: 'That fic is already being processed! You’ll get a notification when it’s ready.'
+                                });
+                                return;
+                            }
+                            if (queueEntry.status === 'done' && queueEntry.result) {
+                                // Return friendly duplicate message with details, robust fallback
+                                let rec = null;
+                                try {
+                                    const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
+                                    rec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
+                                } catch {}
+                                let recWithSeries = rec;
+                                if (rec) {
+                                    recWithSeries = await fetchRecWithSeries(rec.id, true);
+                                }
+                                let addedBy = recWithSeries && recWithSeries.recommendedByUsername ? recWithSeries.recommendedByUsername : 'someone';
+                                let addedAt = recWithSeries && recWithSeries.createdAt ? new Date(recWithSeries.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+                                let title = recWithSeries && recWithSeries.title ? recWithSeries.title : 'This fic';
+                                let msg = `${title} was already added by ${addedBy}${addedAt ? ` on ${addedAt}` : ''}, but hey! Great minds think alike, right?`;
+                                if (!recWithSeries) msg = 'This fic was already added to the library! Great minds think alike, right?';
+                                await interaction.editReply({
+                                    content: msg
+                                });
+                                // Upsert UserFicMetadata after successful instant update
+                                if (recommendation.seriesId && seriesEntry) {
+                                  await UserFicMetadata.upsert({
+                                    userID: interaction.user.id,
+                                    ao3ID: null,
+                                    seriesId: seriesEntry.id,
+                                    manual_title: newTitle || null,
+                                    manual_authors: newAuthor ? [newAuthor] : null,
+                                    manual_summary: newSummary || null,
+                                    manual_tags: newTags || [],
+                                    manual_rating: newRating || null,
+                                    manual_wordcount: newWordCount || null,
+                                    manual_chapters: newChapters || null,
+                                    manual_status: newStatus || null,
+                                    manual_archive_warnings: newArchiveWarnings || [],
+                                    manual_seriesName: newSeriesName || null,
+                                    manual_seriesPart: newSeriesPart || null,
+                                    manual_seriesUrl: newSeriesUrl || null,
+                                    additional_tags: additionalTagsToSend || [],
+                                    rec_note: newNotes || null
+                                  });
+                                } else {
+                                  await UserFicMetadata.upsert({
+                                    userID: interaction.user.id,
+                                    ao3ID: recommendation.ao3ID,
+                                    seriesId: recommendation.seriesId || null,
+                                    manual_title: newTitle || null,
+                                    manual_authors: newAuthor ? [newAuthor] : null,
+                                    manual_summary: newSummary || null,
+                                    manual_tags: newTags || [],
+                                    manual_rating: newRating || null,
+                                    manual_wordcount: newWordCount || null,
+                                    manual_chapters: newChapters || null,
+                                    manual_status: newStatus || null,
+                                    manual_archive_warnings: newArchiveWarnings || [],
+                                    manual_seriesName: newSeriesName || null,
+                                    manual_seriesPart: newSeriesPart || null,
+                                    manual_seriesUrl: newSeriesUrl || null,
+                                    additional_tags: additionalTagsToSend || [],
+                                    rec_note: newNotes || null
+                                  });
+                                }
+                                return;
+                            }
+                            if (queueEntry.status === 'error') {
+                                await interaction.editReply({
+                                    content: `There was an error parsing this fic previously: ${queueEntry.error_message || 'Unknown error.'} You can try again later.`
+                                });
+                                return;
+                            }
+                            // Fallback for any other status
+                            await interaction.editReply({
+                                content: 'This fic is already in the queue. You’ll get a notification when it’s ready!'
+                            });
+                            return;
                         }
                     }
+                    throw err;
+                }
+                try {
+                    await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
+                } catch (err) {
+                    console.error('[RecHandler] Error adding ParseQueueSubscriber (final unconditional):', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
+                }
+                // Poll for instant completion (duration matches suppression threshold in config)
+                const { Config } = await import('../../../../models/index.js');
+                let pollTimeout = 3000; // default 3 seconds
+                try {
+                    const thresholdConfig = await Config.findOne({ where: { key: 'instant_queue_suppress_threshold_ms' } });
+                    if (thresholdConfig && !isNaN(Number(thresholdConfig.value))) {
+                        pollTimeout = Number(thresholdConfig.value);
+                    }
+                } catch {}
+                const pollInterval = 200;
+                const start = Date.now();
+                let foundDone = false;
+                let resultEmbed = null;
+                while (Date.now() - start < pollTimeout) {
+                    // Refetch the queue entry
+                    const updatedQueue = await ParseQueue.findOne({ where: { id: queueEntry.id } });
+                    if (updatedQueue && updatedQueue.status === 'done' && updatedQueue.result) {
+                        // Fetch the updated recommendation for embed (no AO3 access)
+                        const { Recommendation } = await import('../../../../models/index.js');
+                        const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
+                        const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
+                        const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
+                        if (updatedRec) {
+                            const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
+                            resultEmbed = await createRecommendationEmbed(recWithSeries);
+                            // Upsert UserFicMetadata after successful instant update
+                            if (recommendation.seriesId && seriesEntry) {
+                              await UserFicMetadata.upsert({
+                                userID: interaction.user.id,
+                                ao3ID: null,
+                                seriesId: seriesEntry.id,
+                                manual_title: newTitle || null,
+                                manual_authors: newAuthor ? [newAuthor] : null,
+                                manual_summary: newSummary || null,
+                                manual_tags: newTags || [],
+                                manual_rating: newRating || null,
+                                manual_wordcount: newWordCount || null,
+                                manual_chapters: newChapters || null,
+                                manual_status: newStatus || null,
+                                manual_archive_warnings: newArchiveWarnings || [],
+                                manual_seriesName: newSeriesName || null,
+                                manual_seriesPart: newSeriesPart || null,
+                                manual_seriesUrl: newSeriesUrl || null,
+                                additional_tags: additionalTagsToSend || [],
+                                rec_note: newNotes || null
+                              });
+                            } else {
+                              await UserFicMetadata.upsert({
+                                userID: interaction.user.id,
+                                ao3ID: recommendation.ao3ID,
+                                seriesId: recommendation.seriesId || null,
+                                manual_title: newTitle || null,
+                                manual_authors: newAuthor ? [newAuthor] : null,
+                                manual_summary: newSummary || null,
+                                manual_tags: newTags || [],
+                                manual_rating: newRating || null,
+                                manual_wordcount: newWordCount || null,
+                                manual_chapters: newChapters || null,
+                                manual_status: newStatus || null,
+                                manual_archive_warnings: newArchiveWarnings || [],
+                                manual_seriesName: newSeriesName || null,
+                                manual_seriesPart: newSeriesPart || null,
+                                manual_seriesUrl: newSeriesUrl || null,
+                                additional_tags: additionalTagsToSend || [],
+                                rec_note: newNotes || null
+                              });
+                            }
+                        }
+                        foundDone = true;
+                        break;
+                    }
+                    await new Promise(res => setTimeout(res, pollInterval));
+                }
+                if (foundDone && resultEmbed) {
                     await interaction.editReply({
-                        content: 'That fic is already being processed! You’ll get a notification when it’s ready.'
+                        content: 'That fic was already updated! Here’s the latest info:',
+                        embeds: [resultEmbed]
                     });
                     return;
-                } else if (queueEntry.status === 'done' && queueEntry.result) {
-                    // For done/cached recs, fetch from DB and build embed directly (no AO3 access)
+                }
+                // Final fallback: check if the job is now done in the DB (worker may have been too fast)
+                const finalQueue = await ParseQueue.findOne({ where: { id: queueEntry.id, status: 'done' } });
+                if (finalQueue && finalQueue.result) {
                     const { Recommendation } = await import('../../../../models/index.js');
                     const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
                     const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
@@ -203,180 +417,61 @@ export default async function handleUpdateRecommendation(interaction) {
                         const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
                         const embed = await createRecommendationEmbed(recWithSeries);
                         await interaction.editReply({
-                            content: 'This fic was just updated! Here’s the latest info.',
+                            content: 'That fic was already updated! Here’s the latest info:',
                             embeds: [embed]
                         });
-                    } else {
-                        await interaction.editReply({
-                            content: 'Recommendation found in queue but not in database. Please try again or contact an admin.'
-                        });
-                    }
-                    return;
-                } else if (queueEntry.status === 'error') {
-                    await interaction.editReply({
-                        content: `There was an error parsing this fic previously: ${queueEntry.error_message || 'Unknown error.'} You can try again later.`
-                    });
-                    return;
-                }
-            }
-            // Only mark as instant_candidate if this is a single non-series fic and no other jobs are active
-            const activeJobs = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
-            let isInstant = false;
-            // Only allow instant_candidate for non-series URLs
-            if (!/archiveofourown\.org\/series\//.test(urlToUse) && activeJobs === 0) {
-                isInstant = true;
-            }
-            try {
-                queueEntry = await ParseQueue.create({
-                    fic_url: urlToUse,
-                    status: 'pending',
-                    requested_by: interaction.user.id,
-                    instant_candidate: isInstant
-                });
-            } catch (err) {
-                // Handle race condition: duplicate key error (Sequelize or raw pg)
-                if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
-                    // Find the now-existing queue entry
-                    queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
-                    if (queueEntry) {
-                        if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
-                            const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
-                            if (!existingSub) {
-                                try {
-                                    await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
-                                } catch (err) {
-                                    console.error('[RecHandler] Error adding ParseQueueSubscriber (race condition):', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
-                                }
-                            }
-                            await interaction.editReply({
-                                content: 'That fic is already being processed! You’ll get a notification when it’s ready.'
-                            });
-                            return;
-                        } else if (queueEntry.status === 'done' && queueEntry.result) {
-                            // Return friendly duplicate message with details, robust fallback
-                            let rec = null;
-                            try {
-                                const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
-                                rec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
-                            } catch {}
-                            let recWithSeries = rec;
-                            if (rec) {
-                                recWithSeries = await fetchRecWithSeries(rec.id, true);
-                            }
-                            let addedBy = recWithSeries && recWithSeries.recommendedByUsername ? recWithSeries.recommendedByUsername : 'someone';
-                            let addedAt = recWithSeries && recWithSeries.createdAt ? new Date(recWithSeries.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : null;
-                            let title = recWithSeries && recWithSeries.title ? recWithSeries.title : 'This fic';
-                            let msg = `${title} was already added by ${addedBy}${addedAt ? ` on ${addedAt}` : ''}, but hey! Great minds think alike, right?`;
-                            if (!recWithSeries) msg = 'This fic was already added to the library! Great minds think alike, right?';
-                            await interaction.editReply({
-                                content: msg
-                            });
-                            return;
-                        } else if (queueEntry.status === 'error') {
-                            await interaction.editReply({
-                                content: `There was an error parsing this fic previously: ${queueEntry.error_message || 'Unknown error.'} You can try again later.`
-                            });
-                            return;
+                        // Upsert UserFicMetadata after successful instant update
+                        if (recommendation.seriesId && seriesEntry) {
+                          await UserFicMetadata.upsert({
+                            userID: interaction.user.id,
+                            ao3ID: null,
+                            seriesId: seriesEntry.id,
+                            manual_title: newTitle || null,
+                            manual_authors: newAuthor ? [newAuthor] : null,
+                            manual_summary: newSummary || null,
+                            manual_tags: newTags || [],
+                            manual_rating: newRating || null,
+                            manual_wordcount: newWordCount || null,
+                            manual_chapters: newChapters || null,
+                            manual_status: newStatus || null,
+                            manual_archive_warnings: newArchiveWarnings || [],
+                            manual_seriesName: newSeriesName || null,
+                            manual_seriesPart: newSeriesPart || null,
+                            manual_seriesUrl: newSeriesUrl || null,
+                            additional_tags: additionalTagsToSend || [],
+                            rec_note: newNotes || null
+                          });
                         } else {
-                            // Fallback for any other status
-                            await interaction.editReply({
-                                content: 'This fic is already in the queue. You’ll get a notification when it’s ready!'
-                            });
-                            return;
+                          await UserFicMetadata.upsert({
+                            userID: interaction.user.id,
+                            ao3ID: recommendation.ao3ID,
+                            seriesId: recommendation.seriesId || null,
+                            manual_title: newTitle || null,
+                            manual_authors: newAuthor ? [newAuthor] : null,
+                            manual_summary: newSummary || null,
+                            manual_tags: newTags || [],
+                            manual_rating: newRating || null,
+                            manual_wordcount: newWordCount || null,
+                            manual_chapters: newChapters || null,
+                            manual_status: newStatus || null,
+                            manual_archive_warnings: newArchiveWarnings || [],
+                            manual_seriesName: newSeriesName || null,
+                            manual_seriesPart: newSeriesPart || null,
+                            manual_seriesUrl: newSeriesUrl || null,
+                            additional_tags: additionalTagsToSend || [],
+                            rec_note: newNotes || null
+                          });
                         }
+                        return;
                     }
                 }
-                throw err;
-            }
-            try {
-                await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
-            } catch (err) {
-                console.error('[RecHandler] Error adding ParseQueueSubscriber (final unconditional):', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
-            }
-            // Poll for instant completion (duration matches suppression threshold in config)
-            const { Config } = await import('../../../../models/index.js');
-            let pollTimeout = 3000; // default 3 seconds
-            try {
-                const thresholdConfig = await Config.findOne({ where: { key: 'instant_queue_suppress_threshold_ms' } });
-                if (thresholdConfig && !isNaN(Number(thresholdConfig.value))) {
-                    pollTimeout = Number(thresholdConfig.value);
-                }
-            } catch {}
-            const pollInterval = 200;
-            const start = Date.now();
-            let foundDone = false;
-            let resultEmbed = null;
-            while (Date.now() - start < pollTimeout) {
-                // Refetch the queue entry
-                const updatedQueue = await ParseQueue.findOne({ where: { id: queueEntry.id } });
-                        if (updatedQueue && updatedQueue.status === 'done' && updatedQueue.result) {
-                            // Fetch the updated recommendation for embed (no AO3 access)
-                            const { Recommendation } = await import('../../../../models/index.js');
-                            const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
-                            const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
-                            const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
-                            if (updatedRec) {
-                                const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
-                                resultEmbed = await createRecommendationEmbed(recWithSeries);
-                            }
-                            foundDone = true;
-                            break;
-                        }
-                await new Promise(res => setTimeout(res, pollInterval));
-            }
-            if (foundDone && resultEmbed) {
+                // If still not found, fallback to queue message
                 await interaction.editReply({
-                    content: 'That fic was already updated! Here’s the latest info:',
-                    embeds: [resultEmbed]
+                    content: 'Your fic has been added to the parsing queue! I’ll notify you when it’s ready.'
                 });
                 return;
             }
-            // Final fallback: check if the job is now done in the DB (worker may have been too fast)
-            const finalQueue = await ParseQueue.findOne({ where: { id: queueEntry.id, status: 'done' } });
-            if (finalQueue && finalQueue.result) {
-                const { Recommendation } = await import('../../../../models/index.js');
-                const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
-                const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
-                const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
-                if (updatedRec) {
-                    const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
-                    const embed = await createRecommendationEmbed(recWithSeries);
-                    await interaction.editReply({
-                        content: 'That fic was already updated! Here’s the latest info:',
-                        embeds: [embed]
-                    });
-                    return;
-                }
-            }
-            // If still not found, fallback to queue message
-            await interaction.editReply({
-                content: 'Your fic has been added to the parsing queue! I’ll notify you when it’s ready.'
-            });
-            return;
-        }
-
-        // If not queueing, update the recommendation directly
-        // For additional tags, support append or replace
-        let additionalTagsToSend = newTags || [];
-        if (appendAdditional && newTags && newTags.length > 0) {
-            // Merge with all existing tags (main + additional), deduplicate
-            let oldAdditional = [];
-            if (Array.isArray(recommendation.additionalTags)) {
-                oldAdditional = recommendation.additionalTags;
-            } else if (typeof recommendation.additionalTags === 'string') {
-                try { oldAdditional = JSON.parse(recommendation.additionalTags); } catch { oldAdditional = []; }
-            }
-            let mainTags = [];
-            if (Array.isArray(recommendation.tags)) {
-                mainTags = recommendation.tags;
-            } else if (typeof recommendation.tags === 'string') {
-                try { mainTags = JSON.parse(recommendation.tags); } catch { mainTags = recommendation.tags.split(',').map(t => t.trim()).filter(Boolean); }
-            }
-            additionalTagsToSend = Array.from(new Set([
-                ...mainTags.map(t => t.toLowerCase()),
-                ...oldAdditional.map(t => t.toLowerCase()),
-                ...newTags.map(t => t.toLowerCase())
-            ]));
+// (removed stray spread operator code)
         }
         // Always deduplicate and clean
         additionalTagsToSend = Array.from(new Set((additionalTagsToSend || []).map(t => t.toLowerCase())));
@@ -389,10 +484,15 @@ export default async function handleUpdateRecommendation(interaction) {
                 summary: newSummary,
                 rating: newRating,
                 wordCount: newWordCount,
-                status: newStatus
+                status: newStatus,
+                chapters: newChapters,
+                archive_warnings: newArchiveWarnings,
+                seriesName: newSeriesName,
+                seriesPart: newSeriesPart,
+                seriesUrl: newSeriesUrl,
+                tags: newTags
             },
             additionalTags: additionalTagsToSend,
-            notes: newNotes || '',
             isUpdate: true,
             existingRec: recommendation,
             notify: async (embedOrError) => {
@@ -415,6 +515,49 @@ export default async function handleUpdateRecommendation(interaction) {
                 }
             }
         });
+        if (recommendation.seriesId && seriesEntry) {
+  // Series rec upsert
+  await UserFicMetadata.upsert({
+    userID: interaction.user.id,
+    ao3ID: null,
+    seriesId: seriesEntry.id,
+    manual_title: newTitle || null,
+    manual_authors: newAuthor ? [newAuthor] : null,
+    manual_summary: newSummary || null,
+    manual_tags: newTags || [],
+    manual_rating: newRating || null,
+    manual_wordcount: newWordCount || null,
+    manual_chapters: newChapters || null,
+    manual_status: newStatus || null,
+    manual_archive_warnings: newArchiveWarnings || [],
+    manual_seriesName: newSeriesName || null,
+    manual_seriesPart: newSeriesPart || null,
+    manual_seriesUrl: newSeriesUrl || null,
+    additional_tags: additionalTagsToSend || [],
+    rec_note: newNotes || null
+  });
+} else {
+  // Work rec upsert
+  await UserFicMetadata.upsert({
+    userID: interaction.user.id,
+    ao3ID: recommendation.ao3ID,
+    seriesId: recommendation.seriesId || null,
+    manual_title: newTitle || null,
+    manual_authors: newAuthor ? [newAuthor] : null,
+    manual_summary: newSummary || null,
+    manual_tags: newTags || [],
+    manual_rating: newRating || null,
+    manual_wordcount: newWordCount || null,
+    manual_chapters: newChapters || null,
+    manual_status: newStatus || null,
+    manual_archive_warnings: newArchiveWarnings || [],
+    manual_seriesName: newSeriesName || null,
+    manual_seriesPart: newSeriesPart || null,
+    manual_seriesUrl: newSeriesUrl || null,
+    additional_tags: additionalTagsToSend || [],
+    rec_note: newNotes || null
+  });
+}
     } catch (error) {
         console.error('[rec update] Error:', error);
         await interaction.editReply({
