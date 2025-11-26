@@ -7,7 +7,7 @@ import { Recommendation } from '../../../../models/index.js';
 import { fn, col, literal } from 'sequelize';
 import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
 import ao3TagColors, { getAo3TagColor, getAo3RatingColor, lerpHexColor } from '../../../../shared/recUtils/ao3/ao3TagColors.js';
-import { buildStatsButtonId } from '../../utils/statsButtonId.js';
+import { buildStatsButtonId } from '../../utils/statsButtonId.new.js';
 import { setStatsChartCache } from '../../utils/statsChartCache.js';
 
 
@@ -423,9 +423,11 @@ async function handleStats(interaction) {
     setStatsChartCache(cacheKey, chartFiles);
 
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
+    // Track the original message ID for robust updates
+    const messageId = interaction.message && interaction.message.id ? interaction.message.id : (interaction.id || '');
     const chartsRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(buildStatsButtonId(cacheKey))
+            .setCustomId(buildStatsButtonId(cacheKey, messageId))
             .setLabel('View Charts')
             .setStyle(ButtonStyle.Primary)
     );
