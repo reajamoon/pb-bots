@@ -13,6 +13,8 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     const { context: cacheKey, messageId } = parseStatsButtonId(
         isBack ? interaction.customId.replace('stats_charts_back:', 'stats_charts:') : interaction.customId
     ) || {};
+    // Only use the context (cacheKey) for cache lookup, ignore messageId
+    const chartCacheKey = cacheKey;
 
     // Helper to update the correct message
     async function updateTargetMessage(payload) {
@@ -43,7 +45,7 @@ export async function handleStatsChartsButton(interaction, options = {}) {
     }
 
     // Normal "View Charts" button: replace the message with the chart images and a back button
-    const fileMetas = options.files || getStatsChartCache(cacheKey) || [];
+    const fileMetas = options.files || getStatsChartCache(chartCacheKey) || [];
     const files = fileMetas
         .filter(f => f && f.path && f.name)
         .map(f => new AttachmentBuilder(f.path, { name: f.name }));
