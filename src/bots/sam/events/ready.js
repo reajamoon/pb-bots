@@ -1,16 +1,15 @@
-import { Events } from 'discord.js';
+
 import logger from '../../../shared/utils/logger.js';
 import startPoller from './startPoller.js';
 import startBirthdayManager from './startBirthdayManager.js';
 import BirthdayNotificationManager from '../utils/birthdayNotifications.js';
 
 export default {
-    name: Events.ClientReady,
+    name: 'ready',
     once: true,
     async execute(client) {
         logger.info(`Hey, it's Sam. I'm online and ready to help out.`);
         logger.info(`Currently keeping an eye on ${client.guilds.cache.size} ${client.guilds.cache.size === 1 ? 'server' : 'servers'}`);
-
         // Set bot status
         client.user.setActivity('the family business', { type: 'PLAYING' });
         // Start poller and birthday manager
