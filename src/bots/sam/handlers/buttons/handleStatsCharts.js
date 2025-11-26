@@ -1,5 +1,6 @@
+
 import Discord from 'discord.js';
-const { MessageFlags } = Discord;
+const { MessageFlags, AttachmentBuilder } = Discord;
 
 /**
  * Handler for the stats charts button ("View Charts").
@@ -9,8 +10,11 @@ const { MessageFlags } = Discord;
 export async function handleStatsChartsButton(interaction, options = {}) {
     // You may want to check permissions or context here
     try {
-        // Example: Expect chart files in options
-        const files = options.files || [];
+        // Expect chart files as array of { path, name }
+        const fileMetas = options.files || [];
+        const files = fileMetas
+            .filter(f => f && f.path && f.name)
+            .map(f => new AttachmentBuilder(f.path, { name: f.name }));
         if (files.length > 0) {
             await interaction.reply({
                 content: 'Here are the charts:',

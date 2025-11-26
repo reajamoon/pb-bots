@@ -402,13 +402,13 @@ async function handleStats(interaction) {
     }
 
     // Cache chart files with a unique key (userId)
-    const chartFiles = [
-        pieAttachment,
-        chartAttachment,
-        avgWordcountChartAttachment,
-        oneshotVsChapteredChartAttachment,
-        tagWordcountChartAttachment
-    ].filter(Boolean);
+    // Cache file paths and names for chart files (not AttachmentBuilder objects)
+    const chartFiles = [];
+    if (pieChartPath) chartFiles.push({ path: pieChartPath, name: 'ratings-pie.png' });
+    if (barChartPath) chartFiles.push({ path: barChartPath, name: 'recs-by-year.png' });
+    if (avgWordcountChartPath) chartFiles.push({ path: avgWordcountChartPath, name: 'avg-wordcount-by-year.png' });
+    if (oneshotVsChapteredChartPath) chartFiles.push({ path: oneshotVsChapteredChartPath, name: 'oneshot-vs-chaptered.png' });
+    if (tagWordcountChartPath) chartFiles.push({ path: tagWordcountChartPath, name: 'top-tags-by-wordcount.png' });
     const cacheKey = `stats:${interaction.user.id}`;
     setStatsChartCache(cacheKey, chartFiles);
 
