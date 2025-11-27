@@ -24,7 +24,6 @@ export function setStatsChartCache(key, files, ttl = DEFAULT_TTL) {
 export function getStatsChartCache(key) {
     const entry = cache.get(key);
     logger.info(`[getStatsChartCache] key=${key}, found=${!!entry}, files=${entry ? JSON.stringify(entry.files.map(f => f.name || f.path || f.attachment)) : 'null'}`);
-    console.log(`[getStatsChartCache] key=${key}, found=${!!entry}, files=${entry ? JSON.stringify(entry.files.map(f => f.name || f.path || f.attachment)) : 'null'}`);
     if (!entry) return null;
     if (Date.now() > entry.expires) {
         cache.delete(key);

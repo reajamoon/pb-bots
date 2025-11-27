@@ -444,7 +444,7 @@ async function handleStats(interaction) {
     );
     // Always edit the reply to add the button, even if no charts
     await sentMsg.edit({ components: [chartsRow] });
-    console.log('[handleStats] Added View Charts button to message:', sentMsg.id);
+
 }
 
 export default handleStats;

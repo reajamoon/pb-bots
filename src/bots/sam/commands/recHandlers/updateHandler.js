@@ -279,48 +279,6 @@ export default async function handleUpdateRecommendation(interaction) {
                                 await interaction.editReply({
                                     content: msg
                                 });
-                                // Upsert UserFicMetadata after successful instant update
-                                if (recommendation.seriesId && seriesEntry) {
-                                  await UserFicMetadata.upsert({
-                                    userID: interaction.user.id,
-                                    ao3ID: null,
-                                    seriesId: seriesEntry.id,
-                                    manual_title: newTitle || null,
-                                    manual_authors: newAuthor ? [newAuthor] : null,
-                                    manual_summary: newSummary || null,
-                                    manual_tags: newTags || [],
-                                    manual_rating: newRating || null,
-                                    manual_wordcount: newWordCount || null,
-                                    manual_chapters: newChapters || null,
-                                    manual_status: newStatus || null,
-                                    manual_archive_warnings: newArchiveWarnings || [],
-                                    manual_seriesName: newSeriesName || null,
-                                    manual_seriesPart: newSeriesPart || null,
-                                    manual_seriesUrl: newSeriesUrl || null,
-                                    additional_tags: additionalTagsToSend || [],
-                                    rec_note: newNotes || null
-                                  });
-                                } else {
-                                  await UserFicMetadata.upsert({
-                                    userID: interaction.user.id,
-                                    ao3ID: recommendation.ao3ID,
-                                    seriesId: recommendation.seriesId || null,
-                                    manual_title: newTitle || null,
-                                    manual_authors: newAuthor ? [newAuthor] : null,
-                                    manual_summary: newSummary || null,
-                                    manual_tags: newTags || [],
-                                    manual_rating: newRating || null,
-                                    manual_wordcount: newWordCount || null,
-                                    manual_chapters: newChapters || null,
-                                    manual_status: newStatus || null,
-                                    manual_archive_warnings: newArchiveWarnings || [],
-                                    manual_seriesName: newSeriesName || null,
-                                    manual_seriesPart: newSeriesPart || null,
-                                    manual_seriesUrl: newSeriesUrl || null,
-                                    additional_tags: additionalTagsToSend || [],
-                                    rec_note: newNotes || null
-                                  });
-                                }
                                 return;
                             }
                             if (queueEntry.status === 'error') {

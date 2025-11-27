@@ -8,7 +8,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { debugLoginAndFetchWork } from './src/shared/recUtils/ao3/ao3Utils.js';
 
-debugLoginAndFetchWork(workUrl)
 const workUrl = process.argv[2];
 if (!workUrl) {
   console.error('Usage: node debug-ao3-fetch.js <workUrl>');

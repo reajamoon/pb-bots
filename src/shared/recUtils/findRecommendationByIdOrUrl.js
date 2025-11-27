@@ -15,8 +15,6 @@ import { Recommendation } from '../../models/index.js';
  */
 
 async function findRecommendationByIdOrUrl(interaction, identifier) {
-    // Debug: log actual value received
-    console.log('[findRecommendationByIdOrUrl] identifier:', identifier);
     if (!identifier || typeof identifier !== 'string' || identifier.trim().length === 0) {
         throw new Error(updateMessages.needIdentifier);
     }

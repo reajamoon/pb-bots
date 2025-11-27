@@ -17,11 +17,6 @@ import { validateDeanCasRec } from '../../../../shared/recUtils/ao3/validateDean
 export default async function handleAddRecommendation(interaction) {
 
   try {
-    console.log('[rec add] Handler called', {
-      user: interaction.user?.id,
-      url: interaction.options.getString('url'),
-      options: interaction.options.data
-    });
     await interaction.deferReply();
     let url = interaction.options.getString('url');
     url = normalizeAO3Url(url);
