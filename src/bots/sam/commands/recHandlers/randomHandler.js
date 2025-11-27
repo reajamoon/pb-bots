@@ -32,12 +32,32 @@ function filterRecommendations(recs, { allowWIP, allowDeleted, allowAbandoned, r
     return filtered;
 }
 
-// Helper: filter by tag
+// Helper: filter by tag with advanced AND/OR logic
 function filterByTag(recs, tagFilter) {
     if (!tagFilter) return recs;
+    
+    // Parse advanced tag syntax: 'canon divergence+bottom dean, angst'
+    // means (canon divergence AND bottom dean) OR (angst)
+    const orGroups = tagFilter.split(',').map(group => group.trim()).filter(Boolean);
+    
     return recs.filter(rec => {
         const allTags = Array.isArray(rec.getParsedTags?.()) ? rec.getParsedTags() : [];
-        return allTags.some(tag => tag.toLowerCase().includes(tagFilter.toLowerCase()));
+        const tagStrings = allTags.map(tag => tag.toLowerCase());
+        
+        // Check if rec matches any OR group
+        return orGroups.some(group => {
+            if (group.includes('+')) {
+                // AND group: all tags must be present
+                const andTags = group.split('+').map(t => t.trim().toLowerCase()).filter(Boolean);
+                return andTags.every(tag => 
+                    tagStrings.some(recTag => recTag.includes(tag))
+                );
+            } else {
+                // Single tag: just check if it matches any tag
+                const tag = group.toLowerCase();
+                return tagStrings.some(recTag => recTag.includes(tag));
+            }
+        });
     });
 }
 
