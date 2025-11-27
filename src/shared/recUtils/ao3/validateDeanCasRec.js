@@ -10,6 +10,7 @@ const CANONICAL_FANDOM = 'Supernatural (TV 2005)';
  * @param {string[]} relationshipTags - Array of relationship tags
  * @returns {{ valid: boolean, reason: string|null }}
  */
+
 export function validateDeanCasRec(fandomTags, relationshipTags) {
   // 1. Must have Supernatural (TV 2005) fandom
   if (!fandomTags.some(f => f.trim().toLowerCase() === CANONICAL_FANDOM.toLowerCase())) {
@@ -21,31 +22,23 @@ export function validateDeanCasRec(fandomTags, relationshipTags) {
     return { valid: true, reason: null };
   }
 
-  // 3. Allow if canonical ship is present (allow for double slashes, whitespace, etc)
-  const canonRegex = /^Castiel\s*\/\/?\s*Dean Winchester$/i;
-  if (relationshipTags.some(tag => canonRegex.test(tag.trim()))) {
-    return { valid: true, reason: null };
-  }
-
-  // 4. Exclude if any tag is a Castiel/X or Dean Winchester/X ship (not canon, not gen), unless 'past' or 'minor' in tag
+  // 3. Strict multishipping exclusion: if any tag (not past/minor/&)
+  // contains 'dean winchester' or 'castiel' and also anyone else (not just each other), reject
   for (const tag of relationshipTags) {
     const t = tag.trim();
     if (t.includes('&')) continue; // friendship, allowed
     if (/past|minor/i.test(t)) continue; // allow if marked as past/minor
-    // Exclude if Castiel or Dean Winchester paired with anyone but each other
-    // Allow only if tag is exactly canon ship (already checked above)
-    // Exclude if tag contains both but also others (e.g. Castiel/Dean Winchester/Other)
     const parts = t.split('/').map(s => s.trim().toLowerCase()).filter(Boolean);
-    if (parts.includes('castiel') && parts.includes('dean winchester')) {
-      if (parts.length > 2) {
-        return { valid: false, reason: `Detected Multishipping: ${tag}` };
-      }
-      // else would have matched canonRegex above
-    } else if (parts.includes('castiel') || parts.includes('dean winchester')) {
-      return { valid: false, reason: `Detected Multishipping: ${tag}` };
+    const hasDean = parts.includes('dean winchester');
+    const hasCas = parts.includes('castiel');
+    // If tag is exactly Dean/Cas (in any order, only those two), allow
+    if (hasDean && hasCas && parts.length === 2) continue;
+    // If tag contains Dean or Cas and anyone else, reject
+    if ((hasDean || hasCas) && parts.length > 1) {
+      return { valid: false, reason: `Detected multishipping or non-OTP: ${tag}` };
     }
   }
 
-  // 5. If only gen or canon ship, allow
+  // 4. If only gen or exactly Dean/Cas, allow
   return { valid: true, reason: null };
 }
