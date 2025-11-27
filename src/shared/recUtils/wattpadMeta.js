@@ -165,8 +165,7 @@ async function fetchWattpadMetadata(url, includeRawHtml = false) {
             };
         }
 
-        console.error('Error parsing Wattpad metadata:', error);
-        return null;
+        return { error: 'Failed to parse Wattpad metadata' };
     }
 }
 

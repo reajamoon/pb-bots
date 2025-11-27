@@ -1,20 +1,21 @@
-// PM2 ecosystem file for Jack (queue worker)
+// PM2 ecosystem file for Sam bot
 module.exports = {
   apps: [
     {
-      name: 'jack',
-      script: './src/bots/jack/jack.js',
+      name: "sam",
+      script: "./src/bots/sam/sam.js",
       instances: 1,
       autorestart: true,
       watch: false,
-      exec_mode: "fork",
+      exec_mode: "cluster",
       max_memory_restart: '700M',
       max_restarts: 5,
       restart_delay: 10000,
       interpreter: 'node',
       env: {
-        NODE_ENV: 'production',
+        NODE_ENV: "production",
+        DATABASE_URL: process.env.DATABASE_URL
       }
     }
-  ],
+  ]
 };

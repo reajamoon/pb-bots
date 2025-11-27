@@ -1,40 +1,19 @@
-/**
- * FanFiction.Net metadata fetcher and parser
- * @module FFNetMeta
- */
-
-import { fetchHTML } from './fetchHtmlUtil.js';
 import updateMessages from '../text/updateMessages.js';
+import { fetchHTML } from './fetchHtmlUtil.js';
 import normalizeMetadata from './normalizeMetadata.js';
 
 /**
- * Fetches metadata from FanFiction.Net
- * @param {string} url - The story URL
+ * Fetch metadata from a FFNet story
+ * @param {string} url - The FFNet story URL
  * @param {boolean} includeRawHtml - Include raw HTML for debugging
- * @returns {Promise<Object|null>} - Metadata object or null if failed
+ * @returns {Promise<Object>} - Fic metadata object
  */
 async function fetchFFNetMetadata(url, includeRawHtml = false) {
+    let html;
+    
     try {
-        const html = await fetchHTML(url);
-        if (!html) return null;
-
-        console.log('FFNet HTML length:', html.length);
-
-        // Check for Cloudflare or other protection
-        if (html.includes('challenge') || html.includes('cloudflare') || html.includes('Enable JavaScript')) {
-            console.log('Cloudflare protection detected on FFNet');
-            const result = {
-                title: 'Unknown Title',
-                authors: ['Unknown Author'],
-                url: url,
-                error: 'Site protection detected',
-                summary: updateMessages.siteProtection
-            };
-            if (includeRawHtml) result.rawHtml = html.substring(0, 500) + '...';
-            return result;
-        }
+        html = await fetchHTML(url);
     } catch (error) {
-        // Handle HTTP errors
         if (error.message === 'HTTP_404_NOT_FOUND') {
             return {
                 title: 'Story Not Found',
@@ -63,15 +42,26 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
                 isHttpError: true
             };
         }
+        return { error: 'Failed to fetch FFNet metadata' };
+    }
 
-        console.error('Error fetching FFNet metadata:', error);
-        return null;
+    // Check for Cloudflare or other protection
+    if (html.includes('challenge') || html.includes('cloudflare') || html.includes('Enable JavaScript')) {
+        const result = {
+            title: 'Unknown Title',
+            authors: ['Unknown Author'],
+            url: url,
+            error: 'Site protection detected',
+            summary: updateMessages.siteProtection
+        };
+        if (includeRawHtml) result.rawHtml = html.substring(0, 500) + '...';
+        return result;
     }
 
     try {
-    const metadata = { url: url };
-    // Always set archiveWarnings to an empty array unless found
-    metadata.archiveWarnings = [];
+        const metadata = { url: url };
+        // Always set archiveWarnings to an empty array unless found
+        metadata.archiveWarnings = [];
 
         // Multiple patterns for title - FFNet has changed their HTML structure over time
         let titleMatch = html.match(/<b class='xcontrast_txt'>([^<]+)/);
@@ -88,16 +78,12 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
             metadata.title = 'Unknown Title';
         }
 
-        console.log('FFNet parsed title:', metadata.title);
-
         // Multiple patterns for author
         let authorMatch = html.match(/<a class='xcontrast_txt' href='\/u\/\d+\/[^']*'>([^<]+)/);
         if (!authorMatch) {
             authorMatch = html.match(/By:\s*<a[^>]*>([^<]+)/i);
         }
         metadata.authors = [authorMatch ? authorMatch[1].trim() : 'Unknown Author'];
-
-        console.log('FFNet parsed authors:', metadata.authors);
 
         // Summary - multiple patterns
         let summaryMatch = html.match(/<div class='xcontrast_txt' style='margin-top:2px'>([^<]+)/);
@@ -109,8 +95,6 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
         } else {
             metadata.summary = summaryMatch[1].trim();
         }
-
-        console.log('FFNet parsed summary:', metadata.summary?.substring(0, 100));
 
         // Try to find metadata in various formats
         const metaPatterns = [
@@ -127,8 +111,6 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
                 break;
             }
         }
-
-        console.log('FFNet metadata text:', metaText.substring(0, 200));
 
         if (metaText) {
             // Look for rating
@@ -156,9 +138,9 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
             const publishedMatch = metaText.match(/Published:\s*([^-]+)/i);
             if (publishedMatch) {
                 try {
-                    metadata.publishedDate = new Date(publishedMatch[1].trim()).toISOString().split('T')[0];
-                } catch (e) {
-                    console.log('Could not parse published date:', publishedMatch[1]);
+                    metadata.publishedDate = new Date(publishedMatch[1]).toISOString().split('T')[0];
+                } catch {
+                    metadata.publishedDate = null;
                 }
             }
 
@@ -166,24 +148,25 @@ async function fetchFFNetMetadata(url, includeRawHtml = false) {
             if (updatedMatch) {
                 try {
                     metadata.updatedDate = new Date(updatedMatch[1].trim()).toISOString().split('T')[0];
-                } catch (e) {
-                    console.log('Could not parse updated date:', updatedMatch[1]);
+                } catch {
+                    metadata.updatedDate = null;
                 }
             }
         }
 
-        console.log('FFNet final metadata:', JSON.stringify(metadata, null, 2));
         if (includeRawHtml) metadata.rawHtml = html;
-    // Remove legacy 'author' field if present
-    if (metadata.author) delete metadata.author;
-    // Ensure archiveWarnings is always an array
-    if (!Array.isArray(metadata.archiveWarnings)) metadata.archiveWarnings = [];
-    return normalizeMetadata(metadata, 'ffnet');
+        
+        // Remove legacy 'author' field if present
+        if (metadata.author) delete metadata.author;
+        
+        // Ensure archiveWarnings is always an array
+        if (!Array.isArray(metadata.archiveWarnings)) metadata.archiveWarnings = [];
+        
+        return normalizeMetadata(metadata, 'ffnet');
+        
     } catch (error) {
-        console.error('Error parsing FFNet metadata:', error);
-        return null;
+        return { error: 'Failed to parse FFNet metadata' };
     }
 }
-
 
 export { fetchFFNetMetadata };
