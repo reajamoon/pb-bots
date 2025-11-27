@@ -3,14 +3,54 @@ import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import processRecommendationJob from '../../../../shared/recUtils/processRecommendationJob.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
 import { Recommendation, UserFicMetadata } from '../../../../models/index.js';
+import { User } from '../../../../models/index.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
 import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
 import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
+import { getLockedFieldsForRec } from '../../../../shared/getLockedFieldsForRec.js';
+import { isFieldGloballyModlocked } from '../../../../shared/modlockUtils.js';
 // import { markPrimaryAndNotPrimaryWorks } from './seriesUtils.js';
 
 // Adds a new fic rec. Checks for duplicates, fetches metadata, and builds the embed.
 export default async function handleAddRecommendation(interaction) {
+      // Check if a previously deleted fic exists (by ao3ID)
+      let previouslyDeleted = false;
+      if (ao3ID) {
+        // Find any recs that ever existed for this ao3ID (including soft-deleted if you add that in future)
+        const prevRec = await Recommendation.findOne({ where: { ao3ID } });
+        if (!prevRec) {
+          // Check for any modlocks for this ao3ID (from previously deleted recs)
+          const { ModLock } = await import('../../../../models/index.js');
+          const locks = await ModLock.findAll({
+            where: { locked: true },
+            include: [{
+              model: Recommendation,
+              as: 'recommendation',
+              where: { ao3ID },
+              required: true
+            }]
+          });
+          if (locks.length > 0) {
+            previouslyDeleted = true;
+          }
+        }
+      }
+
+      // If previously deleted, DM all superadmins
+      if (previouslyDeleted && interaction.client) {
+        const superadmins = await User.findAll({ where: { permissionLevel: 'superadmin' } });
+        for (const admin of superadmins) {
+          try {
+            const userObj = await interaction.client.users.fetch(admin.discordId);
+            if (userObj) {
+              await userObj.send(`A fic with AO3 ID ${ao3ID} was re-added, but modlocks exist from a previously deleted rec. Please review and fix metadata if needed.`);
+            }
+          } catch (err) {
+            console.error('Failed to DM superadmin:', admin.discordId, err);
+          }
+        }
+      }
   try {
     console.log('[rec add] Handler called', {
       user: interaction.user?.id,
@@ -18,6 +58,7 @@ export default async function handleAddRecommendation(interaction) {
       options: interaction.options.data
     });
     await interaction.deferReply();
+
 
     let url = interaction.options.getString('url');
     url = normalizeAO3Url(url);
@@ -27,6 +68,12 @@ export default async function handleAddRecommendation(interaction) {
     const manualWordCount = interaction.options.getInteger('wordcount');
     let manualRating = interaction.options.getString('rating');
     manualRating = normalizeRating(manualRating);
+    const manualChapters = interaction.options.getString('chapters');
+    const manualStatus = interaction.options.getString('status');
+    const manualArchiveWarnings = interaction.options.getString('archive_warnings');
+    const manualSeriesName = interaction.options.getString('seriesName');
+    const manualSeriesPart = interaction.options.getInteger('seriesPart');
+    const manualSeriesUrl = interaction.options.getString('seriesUrl');
     // Robust tag parsing and deduplication
     let additionalTags = interaction.options.getString('tags')
       ? interaction.options.getString('tags').split(',').map(t => t.trim()).filter(Boolean)
@@ -34,6 +81,33 @@ export default async function handleAddRecommendation(interaction) {
     // Deduplicate, case-insensitive
     additionalTags = Array.from(new Set(additionalTags.map(t => t.toLowerCase())));
     const notes = interaction.options.getString('notes');
+
+    // --- ModLock enforcement for re-adds ---
+    // We'll check for modlocks by ao3ID if this is a new rec
+    let ao3ID = null;
+    const ao3Match = url.match(/archiveofourown\.org\/(works|series)\/(\d+)/);
+    if (ao3Match) {
+      ao3ID = parseInt(ao3Match[2], 10);
+    }
+    let modLocksByField = {};
+    // If rec exists, get per-rec locks and merge with global locks
+    let rec = null;
+    if (ao3ID) {
+      rec = await Recommendation.findOne({ where: { ao3ID } });
+      if (rec) {
+        const lockedFields = await getLockedFieldsForRec(rec.id);
+        for (const field of lockedFields) modLocksByField[field] = true;
+      }
+    }
+    // Add global modlocks to modLocksByField
+    const allFields = [
+      'title','summary','status','language','category','attachmentUrl','authors','tags','character_tags','fandom_tags','archive_warnings','wordCount','part','manual_seriesPart','rating','chapters','publishedDate','updatedDate','manualTitle','manualAuthor','manualSummary','manualWordCount','manualRating','manualChapters','manualStatus','manualArchiveWarnings','manualSeriesName','manualSeriesPart','manualSeriesUrl','rec_note','additional_tags'
+    ];
+    for (const field of allFields) {
+      if (await isFieldGloballyModlocked(field)) {
+        modLocksByField[field] = true;
+      }
+    }
 
     if (!url || !isValidFanficUrl(url)) {
       return await interaction.editReply({
@@ -61,7 +135,13 @@ export default async function handleAddRecommendation(interaction) {
           manual_authors: manualAuthor ? [manualAuthor] : null,
           manual_summary: manualSummary || null,
           manual_wordcount: manualWordCount || null,
-          manual_rating: manualRating || null
+          manual_rating: manualRating || null,
+          manual_chapters: manualChapters || null,
+          manual_status: manualStatus || null,
+          manual_archive_warnings: manualArchiveWarnings || null,
+          manual_seriesName: manualSeriesName || null,
+          manual_seriesPart: manualSeriesPart || null,
+          manual_seriesUrl: manualSeriesUrl || null
         });
         return await interaction.editReply({
           content: `*${existingSeries.name || existingSeries.title || 'Series'}* (series) is already in the library${addedDate ? `, since ${addedDate}` : ''}.`
@@ -87,7 +167,13 @@ export default async function handleAddRecommendation(interaction) {
             manual_authors: manualAuthor ? [manualAuthor] : null,
             manual_summary: manualSummary || null,
             manual_wordcount: manualWordCount || null,
-            manual_rating: manualRating || null
+            manual_rating: manualRating || null,
+            manual_chapters: manualChapters || null,
+            manual_status: manualStatus || null,
+            manual_archive_warnings: manualArchiveWarnings || null,
+            manual_seriesName: manualSeriesName || null,
+            manual_seriesPart: manualSeriesPart || null,
+            manual_seriesUrl: manualSeriesUrl || null
           });
         }
         await interaction.editReply({
@@ -124,15 +210,21 @@ export default async function handleAddRecommendation(interaction) {
         // Upsert user metadata for work rec (already added by user)
         await UserFicMetadata.upsert({
           userID: interaction.user.id,
-          ao3ID: existingRec.ao3ID,
-          seriesId: existingRec.seriesId || null,
+          ao3ID: rec.ao3ID,
+          seriesId: rec.seriesId || null,
           rec_note: notes || null,
           additional_tags: additionalTags || [],
           manual_title: manualTitle || null,
           manual_authors: manualAuthor ? [manualAuthor] : null,
           manual_summary: manualSummary || null,
           manual_wordcount: manualWordCount || null,
-          manual_rating: manualRating || null
+          manual_rating: manualRating || null,
+          manual_chapters: manualChapters || null,
+          manual_status: manualStatus || null,
+          manual_archive_warnings: manualArchiveWarnings || null,
+          manual_seriesName: manualSeriesName || null,
+          manual_seriesPart: manualSeriesPart || null,
+          manual_seriesUrl: manualSeriesUrl || null
         });
         if (interaction.user.id === '638765542739673089') {
           return await interaction.editReply({
@@ -146,15 +238,21 @@ export default async function handleAddRecommendation(interaction) {
       // Upsert user metadata for work rec (already added by someone else)
       await UserFicMetadata.upsert({
         userID: interaction.user.id,
-        ao3ID: existingRec.ao3ID,
-        seriesId: existingRec.seriesId || null,
+        ao3ID: rec.ao3ID,
+        seriesId: rec.seriesId || null,
         rec_note: notes || null,
         additional_tags: additionalTags || [],
         manual_title: manualTitle || null,
         manual_authors: manualAuthor ? [manualAuthor] : null,
         manual_summary: manualSummary || null,
         manual_wordcount: manualWordCount || null,
-        manual_rating: manualRating || null
+        manual_rating: manualRating || null,
+        manual_chapters: manualChapters || null,
+        manual_status: manualStatus || null,
+        manual_archive_warnings: manualArchiveWarnings || null,
+        manual_seriesName: manualSeriesName || null,
+        manual_seriesPart: manualSeriesPart || null,
+        manual_seriesUrl: manualSeriesUrl || null
       });
       return await interaction.editReply({
         content: `*${existingRec.title}* was already added to the library by **${existingRec.recommendedByUsername}**${addedDate ? `, on ${addedDate}` : ''}! Great minds think alike though.`
@@ -170,7 +268,7 @@ export default async function handleAddRecommendation(interaction) {
       // Return cached result: fetch Recommendation and build embed directly (no AO3 access)
       const rec = await Recommendation.findOne({ where: { url } });
       if (rec) {
-        // Upsert user metadata for work rec (queue done)
+        // Upsert all user manual metadata fields for work rec (queue done)
         await UserFicMetadata.upsert({
           userID: interaction.user.id,
           ao3ID: rec.ao3ID,
@@ -181,8 +279,70 @@ export default async function handleAddRecommendation(interaction) {
           manual_authors: manualAuthor ? [manualAuthor] : null,
           manual_summary: manualSummary || null,
           manual_wordcount: manualWordCount || null,
-          manual_rating: manualRating || null
+          manual_rating: manualRating || null,
+          manual_chapters: manualChapters || null,
+          manual_status: manualStatus || null,
+          manual_archive_warnings: manualArchiveWarnings || null,
+          manual_seriesName: manualSeriesName || null,
+          manual_seriesPart: manualSeriesPart || null,
+          manual_seriesUrl: manualSeriesUrl || null
         });
+        // --- Update-like logic for new recs ---
+        // Only allow manual entry for fields that are not modlocked, not notes, not invalid/malformed, and not an exact case match
+        // For additional tags, always concat (deduplication later)
+
+        const recFields = {};
+        // Helper for string fields
+        function validString(val, current) {
+          return val && typeof val === 'string' && val.trim() && val !== current;
+        }
+        // Helper for array fields
+        function validArray(val, current) {
+          return Array.isArray(val) && (!Array.isArray(current) || val.some(v => !current.includes(v)));
+        }
+        // Helper for number fields
+        function validNumber(val, current) {
+          return typeof val === 'number' && val !== current;
+        }
+        // String fields
+        if (!modLocksByField['title'] && validString(manualTitle, rec.title)) recFields.title = manualTitle;
+        if (!modLocksByField['summary'] && validString(manualSummary, rec.summary)) recFields.summary = manualSummary;
+        if (!modLocksByField['status'] && validString(interaction.options.getString('status'), rec.status)) recFields.status = interaction.options.getString('status');
+        if (!modLocksByField['language'] && validString(interaction.options.getString('language'), rec.language)) recFields.language = interaction.options.getString('language');
+        if (!modLocksByField['category'] && validString(interaction.options.getString('category'), rec.category)) recFields.category = interaction.options.getString('category');
+        if (!modLocksByField['attachmentUrl'] && validString(interaction.options.getString('attachmentUrl'), rec.attachmentUrl)) recFields.attachmentUrl = interaction.options.getString('attachmentUrl');
+        // Array fields
+        if (!modLocksByField['authors'] && manualAuthor && Array.isArray(rec.authors) && (!rec.authors.includes(manualAuthor) || rec.authors.length === 0)) {
+          recFields.authors = [...rec.authors, manualAuthor];
+        }
+        if (!modLocksByField['tags'] && Array.isArray(additionalTags) && additionalTags.length > 0) {
+          recFields.tags = Array.isArray(rec.tags) ? rec.tags.concat(additionalTags) : additionalTags;
+        }
+        if (!modLocksByField['character_tags'] && validArray(interaction.options.getString('character_tags'), rec.character_tags)) {
+          recFields.character_tags = rec.character_tags ? rec.character_tags.concat(interaction.options.getString('character_tags')) : [interaction.options.getString('character_tags')];
+        }
+        if (!modLocksByField['fandom_tags'] && validArray(interaction.options.getString('fandom_tags'), rec.fandom_tags)) {
+          recFields.fandom_tags = rec.fandom_tags ? rec.fandom_tags.concat(interaction.options.getString('fandom_tags')) : [interaction.options.getString('fandom_tags')];
+        }
+        if (!modLocksByField['archive_warnings'] && validArray(interaction.options.getString('archive_warnings'), rec.archive_warnings)) {
+          recFields.archive_warnings = rec.archive_warnings ? rec.archive_warnings.concat(interaction.options.getString('archive_warnings')) : [interaction.options.getString('archive_warnings')];
+        }
+        // Number fields
+        if (!modLocksByField['wordCount'] && validNumber(manualWordCount, rec.wordCount)) recFields.wordCount = manualWordCount;
+        if (!modLocksByField['part'] && validNumber(interaction.options.getInteger('part'), rec.part)) recFields.part = interaction.options.getInteger('part');
+        if (!modLocksByField['manual_seriesPart'] && validNumber(interaction.options.getInteger('manual_seriesPart'), rec.manual_seriesPart)) recFields.manual_seriesPart = interaction.options.getInteger('manual_seriesPart');
+        // Other fields
+        if (!modLocksByField['rating'] && validString(manualRating, rec.rating)) recFields.rating = manualRating;
+        if (!modLocksByField['chapters'] && validString(interaction.options.getString('chapters'), rec.chapters)) recFields.chapters = interaction.options.getString('chapters');
+        if (!modLocksByField['publishedDate'] && validString(interaction.options.getString('publishedDate'), rec.publishedDate)) recFields.publishedDate = interaction.options.getString('publishedDate');
+        if (!modLocksByField['updatedDate'] && validString(interaction.options.getString('updatedDate'), rec.updatedDate)) recFields.updatedDate = interaction.options.getString('updatedDate');
+        // Never update notes (deprecated)
+
+        // Update Recommendation if any fields are valid
+        if (Object.keys(recFields).length > 0) {
+          await rec.update(recFields);
+        }
+
         const recWithSeries = await fetchRecWithSeries(rec.id, true);
         const embed = await createRecommendationEmbed(recWithSeries);
         await interaction.editReply({

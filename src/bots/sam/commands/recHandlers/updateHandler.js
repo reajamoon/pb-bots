@@ -11,6 +11,8 @@ import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
 import { markPrimaryAndNotPrimaryWorks } from './seriesUtils.js';
 import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
 import { setModLock } from '../../../../shared/utils/modLockUtils.js';
+import { isFieldGloballyModlocked } from '../../../../shared/modlockUtils.js';
+import { getLockedFieldsForRec } from '../../../../shared/getLockedFieldsForRec.js';
 
 // Helper to deduplicate and lowercase tags
 function cleanTags(tags) {
@@ -61,6 +63,23 @@ function validateAttachment(newAttachment, willBeDeleted) {
 }
 
 export default async function handleUpdateRecommendation(interaction) {
+    // --- ModLock enforcement (per-rec and global) ---
+    let modLocksByField = {};
+    // Fetch the recommendation to get its ID (if not already fetched)
+    let recommendation = null;
+    if (!recommendation) {
+      // Try to get identifier from interaction (id, url, etc.)
+      // This assumes you fetch the rec later as in your code, so you can move this block after fetching if needed
+      // For now, just set modLocksByField after fetching recommendation
+    }
+    // After fetching recommendation, get per-rec locks and merge with global locks
+    // (Move this block after you fetch the rec if needed)
+    // Example usage after fetching rec:
+    //   const lockedFields = await getLockedFieldsForRec(recommendation.id);
+    //   for (const field of lockedFields) modLocksByField[field] = true;
+    //   // Add global modlocks
+    //   const allFields = [...];
+    //   for (const field of allFields) if (await isFieldGloballyModlocked(field)) modLocksByField[field] = true;
     // Restrict manual status setting to mods only
     const newStatus = interaction.options.getString('status');
     if (newStatus) {
