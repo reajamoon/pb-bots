@@ -96,6 +96,25 @@ async function processRecommendationJob({
     if (metadata.isHttpError) {
       return { error: 'connection_error' };
     }
+    // --- Dean/Cas AO3 validation always runs here ---
+    try {
+      const { validateDeanCasRec } = await import('./ao3/validateDeanCasRec.js');
+      const fandomTags = metadata.fandom_tags || metadata.fandom || [];
+      const relationshipTags = metadata.relationship_tags || [];
+      const validation = validateDeanCasRec(fandomTags, relationshipTags);
+      if (!validation.valid) {
+        metadata.status = 'nOTP';
+        metadata.validation_reason = validation.reason || 'Failed Dean/Cas validation';
+        if (typeof notify === 'function') {
+          await notify(null, null, metadata);
+        }
+        return { error: metadata.validation_reason };
+      }
+    } catch (err) {
+      console.error('[processRecommendationJob] Error in Dean/Cas validation:', err);
+      // Fail closed: block rec if validation cannot be run
+      return { error: 'Dean/Cas validation error' };
+    }
   // Allow manual override of individual fields
   if (manualFields.title) metadata.title = manualFields.title;
   if (manualFields.authors) metadata.authors = manualFields.authors;
@@ -112,8 +131,6 @@ async function processRecommendationJob({
       url.includes('livejournal.com') ? 'livejournal' :
       url.includes('dreamwidth.org') ? 'dreamwidth' :
       url.includes('tumblr.com') ? 'tumblr' : 'other'));
-
-    // Prefer manualFields.notes over AO3 metadata.notes
     if (manualFields.notes && manualFields.notes.trim()) {
       notes = manualFields.notes.trim();
     } else if (metadata.notes && metadata.notes.trim()) {
@@ -122,8 +139,6 @@ async function processRecommendationJob({
       notes = '';
     }
   }
-
-
   // If AO3 validation failed, do not create/update Recommendation, just notify and return
   if (metadata && metadata.status === 'nOTP') {
     if (typeof notify === 'function') {
