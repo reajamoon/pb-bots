@@ -235,6 +235,23 @@ function addNotesField(embed, rec) {
 
 // Helper: Add engagement fields (Hits, Kudos, Bookmarks)
 function addEngagementFields(embed, rec) {
+    // Debug logging for recommendations with notes
+    if (rec.notes) {
+        console.log('[DEBUG] Recommendation with notes - engagement data:', {
+            id: rec.id,
+            hasNotes: true,
+            hits: rec.hits,
+            kudos: rec.kudos,
+            bookmarks: rec.bookmarks,
+            hitsType: typeof rec.hits,
+            kudosType: typeof rec.kudos,
+            bookmarksType: typeof rec.bookmarks,
+            hitsTruthy: !!rec.hits,
+            kudosTruthy: !!rec.kudos,
+            bookmarksTruthy: !!rec.bookmarks
+        });
+    }
+    
     const engagementFields = [];
     if (rec.hits) engagementFields.push({ name: 'Hits', value: rec.hits.toLocaleString(), inline: true });
     if (rec.kudos) engagementFields.push({ name: 'Kudos', value: rec.kudos.toLocaleString(), inline: true });
