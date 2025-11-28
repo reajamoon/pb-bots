@@ -63,6 +63,9 @@ function validateAttachment(newAttachment, willBeDeleted) {
 }
 
 export default async function handleUpdateRecommendation(interaction) {
+    // Defer reply since this operation may take time
+    await interaction.deferReply();
+    
     // Extract identifier from interaction options
     const identifier = interaction.options.getString('identifier');
     
