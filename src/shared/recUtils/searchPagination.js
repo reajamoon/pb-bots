@@ -20,11 +20,15 @@ async function buildSearchPaginationRow(page, totalPages, customIdBase = 'recsea
     // If we have query data, create a short hash and cache it in database
     if (queryData && typeof queryData === 'object') {
         const queryString = JSON.stringify(queryData);
+        console.log(`[SearchCache] Original queryData:`, queryData);
+        console.log(`[SearchCache] Stringified queryString:`, queryString);
+        console.log(`[SearchCache] queryString type:`, typeof queryString);
         queryId = crypto.createHash('md5').update(queryString).digest('hex').substring(0, 8);
         
         // Cache the query data in PostgreSQL with 30-minute expiration
         try {
             console.log(`[SearchCache] Caching query with ID: ${queryId}`);
+            console.log(`[SearchCache] About to store queryData:`, queryString.substring(0, 100));
             const result = await sequelize.query(`
                 INSERT INTO search_cache (query_id, query_data, expires_at)
                 VALUES (:queryId, :queryData, NOW() + INTERVAL '30 minutes')
@@ -105,12 +109,18 @@ async function getCachedQuery(queryId) {
         }
         
         console.log(`[SearchCache] Found cache entry for ${queryId}, expires:`, results[0].expires_at);
+        console.log(`[SearchCache] Raw query_data from DB:`, results[0].query_data);
+        console.log(`[SearchCache] query_data type:`, typeof results[0].query_data);
+        console.log(`[SearchCache] query_data preview:`, results[0].query_data.substring(0, 100));
         
         try {
-            return JSON.parse(results[0].query_data);
+            const parsed = JSON.parse(results[0].query_data);
+            console.log(`[SearchCache] Successfully parsed JSON for ${queryId}`);
+            return parsed;
         } catch (parseError) {
             // If JSON parsing fails, this is a corrupted entry - delete it
-            console.warn(`Removing corrupted cache entry for queryId ${queryId}`);
+            console.warn(`[SearchCache] JSON parse error for queryId ${queryId}:`, parseError.message);
+            console.warn(`[SearchCache] Corrupted data:`, results[0].query_data);
             await sequelize.query(`
                 DELETE FROM search_cache WHERE query_id = :queryId
             `, {
