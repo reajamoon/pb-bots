@@ -62,21 +62,21 @@ export function createTagSearchConditions(tag, operation, tagFields = ['tags', '
     
     for (const field of tagFields) {
         for (const variation of variations) {
-            // Use JSONB @> operator for containment checks - the proper PostgreSQL way
+            // Use proper JSONB array search with ? operator for exact matches or jsonb_path_exists for partial
             if (operation === Op.iLike) {
-                // For case-insensitive partial matches in JSONB arrays, we need to convert to text and search
+                // For partial matching in JSONB arrays, use a subquery approach that PostgreSQL accepts
                 conditions.push(
-                    sequelize.where(
-                        sequelize.fn('LOWER', sequelize.cast(sequelize.col(field), 'text')),
-                        { [Op.iLike]: `%${variation.toLowerCase()}%` }
-                    )
+                    sequelize.literal(`EXISTS (
+                        SELECT 1 FROM jsonb_array_elements_text("Recommendation"."${field}") AS element 
+                        WHERE LOWER(element::text) LIKE LOWER('%${variation.replace(/'/g, "''")}%')
+                    )`)
                 );
             } else if (operation === Op.notILike) {
                 conditions.push(
-                    sequelize.where(
-                        sequelize.fn('LOWER', sequelize.cast(sequelize.col(field), 'text')),
-                        { [Op.notILike]: `%${variation.toLowerCase()}%` }
-                    )
+                    sequelize.literal(`NOT EXISTS (
+                        SELECT 1 FROM jsonb_array_elements_text("Recommendation"."${field}") AS element 
+                        WHERE LOWER(element::text) LIKE LOWER('%${variation.replace(/'/g, "''")}%')
+                    )`)
                 );
             }
         }
