@@ -169,8 +169,8 @@ async function handleRandomRecommendation(interaction) {
         }
         let embed = null;
         try {
-            // Check if this is a series rec and fetch series with user metadata
-            if (recWithSeries && recWithSeries.series && Array.isArray(recWithSeries.series.works) && recWithSeries.series.works.length > 0) {
+            // Check if this is a series rec using the proper helper function
+            if (isSeriesRec(recWithSeries)) {
                 const { fetchSeriesWithUserMetadata } = await import('../../../../models/fetchSeriesWithUserMetadata.js');
                 const seriesWithUserMetadata = await fetchSeriesWithUserMetadata(recWithSeries.series.id);
                 if (seriesWithUserMetadata) {
@@ -180,6 +180,7 @@ async function handleRandomRecommendation(interaction) {
                     embed = await createRecommendationEmbed(null, recWithSeries.series, recWithSeries.series.works);
                 }
             } else {
+                // For individual work recommendations (even if part of a series)
                 embed = await createRecommendationEmbed(recWithSeries);
             }
         } catch (err) {
