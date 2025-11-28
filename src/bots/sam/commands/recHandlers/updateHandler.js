@@ -177,7 +177,7 @@ export default async function handleUpdateRecommendation(interaction) {
                         const { Recommendation } = await import('../../../../models/index.js');
                         const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
                         const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
-                        const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
+                        const updatedRec = await findRecommendationByIdOrUrl(interaction, recommendation.id, urlToUse, null);
                         if (updatedRec) {
                             const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
                             const embed = await createRecommendationEmbed(recWithSeries);
@@ -186,11 +186,11 @@ export default async function handleUpdateRecommendation(interaction) {
                                 embeds: [embed]
                             });
                             // Upsert UserFicMetadata after successful instant update
-                            if (recommendation.seriesId && seriesEntry) {
+                            if (recommendation.seriesId) {
                               await UserFicMetadata.upsert({
                                 userID: interaction.user.id,
                                 ao3ID: null,
-                                seriesId: seriesEntry.id,
+                                seriesId: recommendation.seriesId,
                                 manual_title: newTitle || null,
                                 manual_authors: newAuthor ? [newAuthor] : null,
                                 manual_summary: newSummary || null,
@@ -337,16 +337,16 @@ export default async function handleUpdateRecommendation(interaction) {
                         const { Recommendation } = await import('../../../../models/index.js');
                         const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
                         const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
-                        const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
+                        const updatedRec = await findRecommendationByIdOrUrl(interaction, recommendation.id, urlToUse, null);
                         if (updatedRec) {
                             const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
                             resultEmbed = await createRecommendationEmbed(recWithSeries);
                             // Upsert UserFicMetadata after successful instant update
-                            if (recommendation.seriesId && seriesEntry) {
+                            if (recommendation.seriesId) {
                               await UserFicMetadata.upsert({
                                 userID: interaction.user.id,
                                 ao3ID: null,
-                                seriesId: seriesEntry.id,
+                                seriesId: recommendation.seriesId,
                                 manual_title: newTitle || null,
                                 manual_authors: newAuthor ? [newAuthor] : null,
                                 manual_summary: newSummary || null,
@@ -402,7 +402,7 @@ export default async function handleUpdateRecommendation(interaction) {
                     const { Recommendation } = await import('../../../../models/index.js');
                     const { createRecommendationEmbed } = await import('../../../../shared/recUtils/asyncEmbeds.js');
                     const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
-                    const updatedRec = await findRecommendationByIdOrUrl(interaction, recId, urlToUse, null);
+                    const updatedRec = await findRecommendationByIdOrUrl(interaction, recommendation.id, urlToUse, null);
                     if (updatedRec) {
                         const recWithSeries = await fetchRecWithSeries(updatedRec.id, true);
                         const embed = await createRecommendationEmbed(recWithSeries);
