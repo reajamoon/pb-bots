@@ -35,8 +35,6 @@ async function handleSearchPagination(interaction) {
             return;
         }
 
-        console.log('[SearchPagination] Retrieved queryParams:', queryParams);
-
     const { titleQuery, authorQuery, tagsQuery, ratingQuery, summaryQuery } = queryParams;    // Build the same search logic as searchHandler.js
     const whereClauses = [];
 
@@ -146,12 +144,10 @@ async function handleSearchPagination(interaction) {
     }
 
     // Perform the search with all the same logic as searchHandler
-    console.log('[SearchPagination] whereClauses:', JSON.stringify(whereClauses, null, 2));
     const allResultsRaw = await Recommendation.findAll({
         where: whereClauses.length > 0 ? { [Op.and]: whereClauses } : {},
         order: [['updatedAt', 'DESC']]
     });
-    console.log('[SearchPagination] Raw results count:', allResultsRaw.length);
 
     // Deduplicate by URL
     const seen = new Set();
@@ -161,8 +157,6 @@ async function handleSearchPagination(interaction) {
         seen.add(key);
         return true;
     });
-    console.log('[SearchPagination] Deduplicated results count:', allResults.length);
-    console.log('[SearchPagination] Requested page:', page, 'of', Math.ceil(allResults.length / 3));
 
     const perPage = 3;
     const actualTotalPages = Math.ceil(allResults.length / perPage);
@@ -180,7 +174,6 @@ async function handleSearchPagination(interaction) {
     // Clamp page to valid range
     page = Math.max(1, Math.min(page, actualTotalPages));
     const recs = allResults.slice((page - 1) * perPage, page * perPage);
-    console.log('[SearchPagination] Results for this page:', recs.length);
 
     // Build display query for user feedback
     const queryParts = [];
