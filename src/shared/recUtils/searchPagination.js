@@ -16,19 +16,14 @@ import { sequelize } from '../../models/index.js';
  */
 async function buildSearchPaginationRow(page, totalPages, customIdBase = 'recsearch', queryData = null) {
     let queryId = '';
-    
+
     // If we have query data, create a short hash and cache it in database
     if (queryData && typeof queryData === 'object') {
         const queryString = JSON.stringify(queryData);
-        console.log(`[SearchCache] Original queryData:`, queryData);
-        console.log(`[SearchCache] Stringified queryString:`, queryString);
-        console.log(`[SearchCache] queryString type:`, typeof queryString);
         queryId = crypto.createHash('md5').update(queryString).digest('hex').substring(0, 8);
-        
+
         // Cache the query data in PostgreSQL with 30-minute expiration
         try {
-            console.log(`[SearchCache] Caching query with ID: ${queryId}`);
-            console.log(`[SearchCache] About to store queryData:`, queryString.substring(0, 100));
             const result = await sequelize.query(`
                 INSERT INTO search_cache (query_id, query_data, expires_at)
                 VALUES (:queryId, :queryData, NOW() + INTERVAL '30 minutes')
@@ -42,8 +37,8 @@ async function buildSearchPaginationRow(page, totalPages, customIdBase = 'recsea
                     queryData: queryString  // Use queryString, not JSON.stringify(queryData) again
                 }
             });
-            console.log(`[SearchCache] Successfully cached query ${queryId}, expires:`, result[0][0]?.expires_at);
-            
+
+
             // Occasional cleanup of expired entries (5% chance)
             if (Math.random() < 0.05) {
                 await sequelize.query('DELETE FROM search_cache WHERE expires_at < NOW()');
@@ -60,7 +55,7 @@ async function buildSearchPaginationRow(page, totalPages, customIdBase = 'recsea
             customIdBase = parts[0];
         }
     }
-    
+
     const row = new ActionRowBuilder();
     row.addComponents(
         new ButtonBuilder()
@@ -94,23 +89,17 @@ async function buildSearchPaginationRow(page, totalPages, customIdBase = 'recsea
  */
 async function getCachedQuery(queryId) {
     try {
-        console.log(`[SearchCache] Looking up query ID: ${queryId}`);
         const [results] = await sequelize.query(`
             SELECT query_data, expires_at
-            FROM search_cache 
+            FROM search_cache
             WHERE query_id = :queryId AND expires_at > NOW()
         `, {
             replacements: { queryId }
         });
-        
+
         if (results.length === 0) {
-            console.log(`[SearchCache] No valid cache entry found for ${queryId}`);
             return null;
-        }
-        
-        console.log(`[SearchCache] Found cache entry for ${queryId}, expires:`, results[0].expires_at);
-        
-        // JSONB column returns JavaScript object directly, no parsing needed
+        }        // JSONB column returns JavaScript object directly, no parsing needed
         return results[0].query_data;
     } catch (error) {
         console.error('Error retrieving cached query:', error);

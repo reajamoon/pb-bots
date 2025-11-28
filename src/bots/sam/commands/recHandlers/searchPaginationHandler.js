@@ -144,8 +144,7 @@ async function handleSearchPagination(interaction) {
     // Perform the search with all the same logic as searchHandler
     const allResultsRaw = await Recommendation.findAll({
         where: whereClauses.length > 0 ? { [Op.and]: whereClauses } : {},
-        order: [['updatedAt', 'DESC']],
-        limit: 25
+        order: [['updatedAt', 'DESC']]
     });
     
     // Deduplicate by URL
@@ -158,7 +157,18 @@ async function handleSearchPagination(interaction) {
     });
     
     const perPage = 3;
+    const actualTotalPages = Math.ceil(allResults.length / perPage);
     const recs = allResults.slice((page - 1) * perPage, page * perPage);
+    
+    // If no results on this page, show appropriate message
+    if (recs.length === 0 && allResults.length === 0) {
+        await interaction.update({
+            content: 'No results found. Try adjusting your search terms!',
+            embeds: [],
+            components: []
+        });
+        return;
+    }
     
     // Build display query for user feedback
     const queryParts = [];
@@ -168,12 +178,12 @@ async function handleSearchPagination(interaction) {
     if (ratingQuery) queryParts.push(`rating:"${ratingQuery}"`);
     const displayQuery = queryParts.join(' ');
     
-    const embed = createSearchResultsEmbed(recs, page, totalPages, displayQuery);
-    const row = await buildSearchPaginationRow(page, totalPages, 'recsearch', queryParams);
+    const embed = createSearchResultsEmbed(recs, page, actualTotalPages, displayQuery);
+    const row = await buildSearchPaginationRow(page, actualTotalPages, 'recsearch', queryParams);
     
     await interaction.update({
         embeds: [embed],
-        components: totalPages > 1 ? [row] : [],
+        components: actualTotalPages > 1 ? [row] : [],
         content: `Here are your search results for ${displayQuery}:`
     });
     
