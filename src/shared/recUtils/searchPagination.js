@@ -24,18 +24,21 @@ async function buildSearchPaginationRow(page, totalPages, customIdBase = 'recsea
         
         // Cache the query data in PostgreSQL with 30-minute expiration
         try {
-            await sequelize.query(`
+            console.log(`[SearchCache] Caching query with ID: ${queryId}`);
+            const result = await sequelize.query(`
                 INSERT INTO search_cache (query_id, query_data, expires_at)
                 VALUES (:queryId, :queryData, NOW() + INTERVAL '30 minutes')
                 ON CONFLICT (query_id) DO UPDATE SET
                     query_data = EXCLUDED.query_data,
                     expires_at = EXCLUDED.expires_at
+                RETURNING query_id, expires_at
             `, {
                 replacements: {
                     queryId,
                     queryData: queryString  // Use queryString, not JSON.stringify(queryData) again
                 }
             });
+            console.log(`[SearchCache] Successfully cached query ${queryId}, expires:`, result[0][0]?.expires_at);
             
             // Occasional cleanup of expired entries (5% chance)
             if (Math.random() < 0.05) {
@@ -87,8 +90,9 @@ async function buildSearchPaginationRow(page, totalPages, customIdBase = 'recsea
  */
 async function getCachedQuery(queryId) {
     try {
+        console.log(`[SearchCache] Looking up query ID: ${queryId}`);
         const [results] = await sequelize.query(`
-            SELECT query_data 
+            SELECT query_data, expires_at
             FROM search_cache 
             WHERE query_id = :queryId AND expires_at > NOW()
         `, {
@@ -96,8 +100,11 @@ async function getCachedQuery(queryId) {
         });
         
         if (results.length === 0) {
+            console.log(`[SearchCache] No valid cache entry found for ${queryId}`);
             return null;
         }
+        
+        console.log(`[SearchCache] Found cache entry for ${queryId}, expires:`, results[0].expires_at);
         
         try {
             return JSON.parse(results[0].query_data);
