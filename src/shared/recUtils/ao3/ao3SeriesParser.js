@@ -31,6 +31,16 @@ function parseAO3SeriesMetadata(html, url) {
     // Summary/Description
     metadata.summary = $('div.summary.module blockquote.userstuff').first().text().trim();
 
+    // Series-level fandom extraction
+    metadata.fandom = [];
+    $('h5.fandoms.heading a.tag').each((i, el) => {
+        const fandom = $(el).text().trim();
+        if (fandom) metadata.fandom.push(fandom);
+    });
+    
+    // Ensure fandom_tags array for consistency with work parsing
+    metadata.fandom_tags = [...metadata.fandom];
+
     // List of works in the series
     metadata.works = [];
     $('ul.series.work.index.group li.work').each((i, el) => {
