@@ -109,25 +109,9 @@ async function getCachedQuery(queryId) {
         }
         
         console.log(`[SearchCache] Found cache entry for ${queryId}, expires:`, results[0].expires_at);
-        console.log(`[SearchCache] Raw query_data from DB:`, results[0].query_data);
-        console.log(`[SearchCache] query_data type:`, typeof results[0].query_data);
-        console.log(`[SearchCache] query_data preview:`, results[0].query_data.substring(0, 100));
         
-        try {
-            const parsed = JSON.parse(results[0].query_data);
-            console.log(`[SearchCache] Successfully parsed JSON for ${queryId}`);
-            return parsed;
-        } catch (parseError) {
-            // If JSON parsing fails, this is a corrupted entry - delete it
-            console.warn(`[SearchCache] JSON parse error for queryId ${queryId}:`, parseError.message);
-            console.warn(`[SearchCache] Corrupted data:`, results[0].query_data);
-            await sequelize.query(`
-                DELETE FROM search_cache WHERE query_id = :queryId
-            `, {
-                replacements: { queryId }
-            });
-            return null;
-        }
+        // JSONB column returns JavaScript object directly, no parsing needed
+        return results[0].query_data;
     } catch (error) {
         console.error('Error retrieving cached query:', error);
         return null;
