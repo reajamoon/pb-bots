@@ -3,7 +3,8 @@ import Discord from 'discord.js';
 const { MessageFlags } = Discord;
 import { fetchRecWithSeries } from '../../../../models/fetchRecWithSeries.js';
 import { fetchAllRecsWithSeries } from '../../../../models/fetchAllRecsWithSeries.js';
-import createRecommendationEmbed, { isSeriesRec } from '../../../../shared/recUtils/createRecommendationEmbed.js';
+import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
+import { isSeriesRec } from '../../../../shared/recUtils/createRecommendationEmbed.js';
 import { matchesTagWithSynonyms } from '../../../../utils/tagUtils.js';
 
 

@@ -3,7 +3,7 @@ const { MessageFlags } = Discord;
 import { Recommendation, sequelize } from '../../../../models/index.js';
 import { Op, literal } from 'sequelize';
 import createSearchResultsEmbed from '../../../../shared/recUtils/createSearchResultsEmbed.js';
-import createRecommendationEmbed from '../../../../shared/recUtils/createRecommendationEmbed.js';
+import { createRecommendationEmbed } from '../../../../shared/recUtils/asyncEmbeds.js';
 import { buildSearchPaginationRow } from '../../../../shared/recUtils/searchPagination.js';
 import { createTagSearchConditions } from '../../../../utils/tagUtils.js';
 

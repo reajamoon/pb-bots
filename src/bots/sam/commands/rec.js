@@ -12,7 +12,6 @@ import handleRandomRecommendation from './recHandlers/randomHandler.js';
 import handleStats from './recHandlers/statsHandler.js';
 import { fetchFicMetadata } from '../../../shared/recUtils/ficParser.js';
 import findRecommendationByIdOrUrl from '../../../shared/recUtils/findRecommendationByIdOrUrl.js';
-import createRecommendationEmbed from '../../../shared/recUtils/createRecommendationEmbed.js';
 import handleUpdateRecommendation from './recHandlers/updateHandler.js';
 import handleSearchRecommendations from './recHandlers/searchHandler.js';
 import { handleHelp, handleHelpNavigation } from './recHandlers/helpHandler.js';

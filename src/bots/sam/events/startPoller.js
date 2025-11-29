@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import { ParseQueue, ParseQueueSubscriber, User, Config, Recommendation } from '../../../models/index.js';
-import createRecommendationEmbed from '../../../shared/recUtils/createRecommendationEmbed.js';
+import { createRecommendationEmbed } from '../../../shared/recUtils/asyncEmbeds.js';
 
 const POLL_INTERVAL_MS = 10000;
 
