@@ -1,4 +1,4 @@
-import { Series } from './src/models/index.js';
+import { Series } from '../src/models/index.js';
 
 const series = await Series.findAll({
   attributes: ['id', 'ao3_id', 'title', 'works_count', 'createdAt'],
