@@ -87,10 +87,15 @@ async function notifyQueueSubscribers(client) {
                 recWithSeries = await fetchRecWithSeries(job.result.id, true);
             }
             if (recWithSeries) {
-                // If this rec has a series and series.works, use series embed mode
-                if (recWithSeries.series && Array.isArray(recWithSeries.series.works) && recWithSeries.series.works.length > 0) {
+                // Check if this is a series result (either marked as series type or has series data)
+                const isSeriesResult = job.result.type === 'series' || 
+                    (recWithSeries.series && Array.isArray(recWithSeries.series.works) && recWithSeries.series.works.length > 0);
+                
+                if (isSeriesResult && recWithSeries.series) {
+                    // Use series embed mode
                     embed = await createRecommendationEmbed(null, recWithSeries.series, recWithSeries.series.works);
                 } else {
+                    // Use regular recommendation embed
                     embed = await createRecommendationEmbed(recWithSeries);
                 }
             } else {

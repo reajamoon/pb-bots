@@ -104,8 +104,13 @@ async function processQueueJob(job) {
 				const { default: batchSeriesRecommendationJob } = await import('../../shared/recUtils/batchSeriesRecommendationJob.js');
 				const result = await batchSeriesRecommendationJob(job.fic_url, user, { additionalTags, notes });
 				
-				// Mark job as done with the primary work result
-				const resultPayload = result.seriesRec && result.seriesRec.id ? { id: result.seriesRec.id } : null;
+				// Mark job as done with both primary work and series information
+				const resultPayload = { 
+					id: result.seriesRec?.id, 
+					type: 'series',
+					seriesId: result.seriesRec?.seriesId,
+					workCount: result.workRecs?.length || 0
+				};
 				await job.update({ status: 'done', result: resultPayload, error_message: null, validation_reason: null });
 				
 				// Clean up subscribers after completion

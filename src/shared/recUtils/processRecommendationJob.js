@@ -302,7 +302,8 @@ async function processRecommendationJob({
         character_tags: Array.isArray(metadata.character_tags) ? metadata.character_tags : [],
         category_tags: Array.isArray(metadata.category_tags) ? metadata.category_tags : [],
         freeform_tags: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : [],
-        ...(seriesId ? { seriesId } : {})
+        ...(seriesId ? { seriesId } : {}),
+        notPrimaryWork: metadata.notPrimaryWork || false
       });
     } catch (err) {
       console.error('[processRecommendationJob] Error creating recommendation:', {

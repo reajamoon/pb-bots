@@ -17,7 +17,11 @@ export async function fetchRecWithSeries(recId, includeSeriesWorks = false) {
       model: Series,
       as: 'series',
       ...(includeSeriesWorks
-        ? { include: [{ model: Recommendation, as: 'works', order: [['part', 'ASC']] }] }
+        ? { include: [{ 
+            model: Recommendation, 
+            as: 'works', 
+            order: [['notPrimaryWork', 'ASC'], ['createdAt', 'ASC']] // Primary work first (false), then by creation order
+          }] }
         : {})
     },
     {
