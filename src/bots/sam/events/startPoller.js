@@ -92,9 +92,9 @@ async function notifyQueueSubscribers(client) {
             let recWithSeries = null;
             // Handle different job types
             if (job.result && job.result.type === 'series' && job.result.seriesId) {
-                // For series notifications, get the Series record
-                const { Series } = await import('../../../models/index.js');
-                const series = await Series.findByPk(job.result.seriesId);
+                // For series notifications, get the Series record with works and metadata
+                const { fetchSeriesWithUserMetadata } = await import('../../../models/fetchSeriesWithUserMetadata.js');
+                const series = await fetchSeriesWithUserMetadata(job.result.seriesId);
                 if (series) {
                     embed = createSeriesEmbed(series);
                 } else {
@@ -169,8 +169,8 @@ async function notifyQueueSubscribers(client) {
             let embed = null;
             // Handle series jobs - get series data and create series embed
             if (job.result && job.result.type === 'series' && job.result.seriesId) {
-                const { Series } = await import('../../../models/index.js');
-                const series = await Series.findByPk(job.result.seriesId);
+                const { fetchSeriesWithUserMetadata } = await import('../../../models/fetchSeriesWithUserMetadata.js');
+                const series = await fetchSeriesWithUserMetadata(job.result.seriesId);
                 if (series) {
                     embed = createSeriesEmbed(series);
                 } else {
