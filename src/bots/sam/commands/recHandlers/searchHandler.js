@@ -33,13 +33,29 @@ export default async function handleSearchRecommendations(interaction) {
     // Models and helpers are imported at top
     // Build AND filter for all provided fields using [Op.and]
     const whereClauses = [];
+    let searchingSeries = false;
+    let seriesId = null;
+    
     if (idQuery) {
-        const idNum = parseInt(idQuery, 10);
-        if (!isNaN(idNum)) {
-            whereClauses.push({ id: idNum });
+        // Check if it's a series ID (starts with 'S')
+        if (idQuery.toUpperCase().startsWith('S')) {
+            const seriesIdNum = parseInt(idQuery.slice(1), 10);
+            if (!isNaN(seriesIdNum)) {
+                searchingSeries = true;
+                seriesId = seriesIdNum;
+            } else {
+                await interaction.editReply({ content: 'Series ID must be in format S123 (S followed by a number).' });
+                return;
+            }
         } else {
-            await interaction.editReply({ content: 'Fic ID must be a number.' });
-            return;
+            // Regular recommendation ID
+            const idNum = parseInt(idQuery, 10);
+            if (!isNaN(idNum)) {
+                whereClauses.push({ id: idNum });
+            } else {
+                await interaction.editReply({ content: 'Fic ID must be a number, or Series ID must be in format S123.' });
+                return;
+            }
         }
     }
     if (workIdQuery) {
@@ -167,6 +183,30 @@ export default async function handleSearchRecommendations(interaction) {
         whereClauses.push({ summary: { [Op.iLike]: `%${summaryQuery.trim()}%` } });
     }
     const where = whereClauses.length > 0 ? { [Op.and]: whereClauses } : {};
+    
+    // Handle series search if searching by series ID
+    if (searchingSeries) {
+        const { Series } = await import('../../../../models/index.js');
+        const { fetchSeriesWithUserMetadata } = await import('../../../../models/fetchSeriesWithUserMetadata.js');
+        
+        const series = await fetchSeriesWithUserMetadata(seriesId);
+        if (!series) {
+            await interaction.editReply({
+                content: `Sorry, I couldn't find series S${seriesId}. Check the series ID and try again!`
+            });
+            return;
+        }
+        
+        // Create series embed and return
+        const seriesEmbed = createSeriesEmbed(series);
+        await interaction.editReply({
+            content: `Found series S${seriesId}.`,
+            embeds: [seriesEmbed],
+            components: []
+        });
+        return;
+    }
+    
     const allResultsRaw = await Recommendation.findAll({
         where,
         order: [['updatedAt', 'DESC']],
