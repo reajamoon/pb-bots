@@ -97,6 +97,28 @@ async function processQueueJob(job) {
 		}
 		if (job.notes) notes = job.notes;
 		const startTime = Date.now();
+		
+		// Check if this is a series URL - if so, use batchSeriesRecommendationJob
+		if (job.fic_url.includes('/series/')) {
+			try {
+				const { default: batchSeriesRecommendationJob } = await import('../../shared/recUtils/batchSeriesRecommendationJob.js');
+				const result = await batchSeriesRecommendationJob(job.fic_url, user, { additionalTags, notes });
+				
+				// Mark job as done with the primary work result
+				const resultPayload = result.seriesRec && result.seriesRec.id ? { id: result.seriesRec.id } : null;
+				await job.update({ status: 'done', result: resultPayload, error_message: null, validation_reason: null });
+				
+				// Clean up subscribers after completion
+				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+				return;
+			} catch (error) {
+				console.error('[QueueWorker] Series processing failed:', error);
+				await job.update({ status: 'error', error_message: error.message || 'Failed to process series' });
+				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+				return;
+			}
+		}
+		
 		// Check for existing recommendation by URL
 		let existingRec = await Recommendation.findOne({ where: { url: job.fic_url } });
 		const isUpdate = !!existingRec;

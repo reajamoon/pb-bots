@@ -2,7 +2,6 @@
 // Handles batch parsing and storing of AO3 series and all works in the series
 
 import { Recommendation, Series } from '../../models/index.js';
-import processRecommendationJob from './processRecommendationJob.js';
 import { fetchFicMetadata } from './ficParser.js';
 
 /**
@@ -72,6 +71,9 @@ async function batchSeriesRecommendationJob(seriesUrl, user, options = {}, notif
 
   // 4. Store each work as Recommendation, setting notPrimaryWork flag and linking to Series
   const workRecs = [];
+  // Dynamic import to avoid circular dependency
+  const { default: processRecommendationJob } = await import('./processRecommendationJob.js');
+  
   for (let i = 0; i < workMetas.length; i++) {
     const { work, meta } = workMetas[i];
     const isPrimary = i === primaryIdx;
