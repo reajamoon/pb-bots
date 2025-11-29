@@ -27,7 +27,7 @@ async function findRecommendationByIdOrUrl(interaction, identifier) {
         if (series) {
             // Find any recommendation from this series to represent it
             recommendation = await Recommendation.findOne({ 
-                where: { ao3SeriesId: series.ao3SeriesId } 
+                where: { seriesId: series.ao3SeriesId } 
             });
             if (recommendation) return recommendation;
         }

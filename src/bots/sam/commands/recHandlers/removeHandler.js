@@ -33,10 +33,10 @@ export default async function handleRemoveRecommendation(interaction) {
             });
         }
         // If this is a series rec, remove all associated works and the series record
-        if (recommendation.ao3SeriesId) {
+        if (recommendation.seriesId) {
             // Remove all recommendations that belong to this series
             const seriesRecs = await Recommendation.findAll({ 
-                where: { ao3SeriesId: recommendation.ao3SeriesId } 
+                where: { seriesId: recommendation.seriesId } 
             });
             for (const rec of seriesRecs) {
                 await rec.destroy();
@@ -44,7 +44,7 @@ export default async function handleRemoveRecommendation(interaction) {
             
             // Remove the series record itself
             const seriesRecord = await Series.findOne({ 
-                where: { ao3SeriesId: recommendation.ao3SeriesId } 
+                where: { ao3SeriesId: recommendation.seriesId } 
             });
             if (seriesRecord) {
                 await seriesRecord.destroy();
