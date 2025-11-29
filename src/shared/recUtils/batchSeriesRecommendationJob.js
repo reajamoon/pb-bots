@@ -48,6 +48,11 @@ async function batchSeriesRecommendationJob(payload) {
         continue;
       }
       
+      // Check if this work already exists to determine if we should update
+      const { Recommendation } = await import('../../models/index.js');
+      const existingWork = await Recommendation.findOne({ where: { ao3ID } });
+      const shouldUpdate = !!existingWork;
+      
       // Use the proper notPrimaryWork flag from the analysis
       const isNotPrimary = markedWork.notPrimaryWork;
       
@@ -56,7 +61,7 @@ async function batchSeriesRecommendationJob(payload) {
         ao3ID,
         seriesId: seriesRecord.ao3SeriesId, // Use AO3 series ID, not database ID
         user,
-        isUpdate,
+        isUpdate: shouldUpdate,
         type: 'work',
         notPrimaryWork: isNotPrimary
       });
