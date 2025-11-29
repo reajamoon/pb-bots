@@ -194,20 +194,9 @@ export default async function handleSearchRecommendations(interaction) {
         const { fetchRecWithSeries } = await import('../../../../models/fetchRecWithSeries.js');
         recWithSeries = await fetchRecWithSeries(rec.id, true);
         if (recWithSeries) {
-            // Check if this is a series rec and fetch series with user metadata
-            if (recWithSeries.series && Array.isArray(recWithSeries.series.works) && recWithSeries.series.works.length > 0) {
-                const { fetchSeriesWithUserMetadata } = await import('../../../../models/fetchSeriesWithUserMetadata.js');
-                const seriesWithUserMetadata = await fetchSeriesWithUserMetadata(recWithSeries.series.id);
-                
-                if (seriesWithUserMetadata) {
-                    searchEmbed = createSeriesEmbed(seriesWithUserMetadata);
-                } else {
-                    // Fallback to regular series embed
-                    searchEmbed = createSeriesEmbed(recWithSeries.series);
-                }
-            } else {
-                searchEmbed = createRecEmbed(recWithSeries);
-            }
+            // Always use rec embed for individual work search results
+            // The rec embed will include series information if the work belongs to a series
+            searchEmbed = createRecEmbed(recWithSeries);
         }
         await interaction.editReply({
             content: `Found 1 fic matching your search.`,
