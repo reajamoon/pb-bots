@@ -1,5 +1,5 @@
-const processAO3Job = require('./src/shared/recUtils/processAO3Job.js').default;
-const { Recommendation } = require('./src/models');
+import processAO3Job from './src/shared/recUtils/processAO3Job.js';
+import { Recommendation } from './src/models/index.js';
 
 async function testAuthorUpdate() {
   try {
