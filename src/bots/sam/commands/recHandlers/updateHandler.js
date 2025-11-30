@@ -591,12 +591,12 @@ export default async function handleUpdateRecommendation(interaction) {
                 return;
             }
         } else {
-        // Normal mode: use queue system for metadata fetching
-        const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
+            // Normal mode: use queue system for metadata fetching
+            const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
 
-        // Check if already in queue
-        let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
-        if (queueEntry) {
+            // Check if already in queue
+            let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
+            if (queueEntry) {
             if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
                 const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
                 if (!existingSub) {
@@ -611,47 +611,47 @@ export default async function handleUpdateRecommendation(interaction) {
                 });
                 return;
             }
-        }
-
-        // Create new queue entry for Jack to process
-        const activeJobs = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
-        let isInstant = false;
-        const isSeriesUrl = /archiveofourown\.org\/series\//.test(urlToUse);
-        if (!isSeriesUrl && activeJobs === 0) {
-            isInstant = true;
-        }
-
-        try {
-            queueEntry = await ParseQueue.create({
-                fic_url: urlToUse,
-                status: 'pending',
-                requested_by: interaction.user.id,
-                instant_candidate: isInstant,
-                batch_type: isSeriesUrl ? 'series' : null
-            });
-        } catch (err) {
-            // Handle race condition
-            if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
-                queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
-                if (queueEntry && (queueEntry.status === 'pending' || queueEntry.status === 'processing')) {
-                    await interaction.editReply({
-                        content: "That fic is already being processed! You'll get a notification when it's ready."
-                    });
-                    return;
-                }
+            
+            // Create new queue entry for Jack to process
+            const activeJobs = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
+            let isInstant = false;
+            const isSeriesUrl = /archiveofourown\.org\/series\//.test(urlToUse);
+            if (!isSeriesUrl && activeJobs === 0) {
+                isInstant = true;
             }
-            throw err;
-        }
 
-        try {
-            await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
-        } catch (err) {
-            console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
-        }
+            try {
+                queueEntry = await ParseQueue.create({
+                    fic_url: urlToUse,
+                    status: 'pending',
+                    requested_by: interaction.user.id,
+                    instant_candidate: isInstant,
+                    batch_type: isSeriesUrl ? 'series' : null
+                });
+            } catch (err) {
+                // Handle race condition
+                if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
+                    queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
+                    if (queueEntry && (queueEntry.status === 'pending' || queueEntry.status === 'processing')) {
+                        await interaction.editReply({
+                            content: "That fic is already being processed! You'll get a notification when it's ready."
+                        });
+                        return;
+                    }
+                }
+                throw err;
+            }
 
-        await interaction.editReply({
-            content: "Your fic update has been added to the parsing queue! I'll notify you when it's ready."
-        });
+            try {
+                await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
+            } catch (err) {
+                console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
+            }
+
+            await interaction.editReply({
+                content: "Your fic update has been added to the parsing queue! I'll notify you when it's ready."
+            });
+        }
 
         // User metadata already saved above via saveUserMetadata
     } catch (error) {
