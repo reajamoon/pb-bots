@@ -23,8 +23,13 @@ export default async function handleAddRecommendation(interaction) {
     const manualAuthor = interaction.options.getString('author');
     const manualSummary = interaction.options.getString('summary');
     const manualWordCount = interaction.options.getInteger('wordcount');
+    // Only normalize rating if user provided it; otherwise keep null
     let manualRating = interaction.options.getString('rating');
-    manualRating = normalizeRating(manualRating);
+    if (manualRating && manualRating.trim()) {
+      manualRating = normalizeRating(manualRating);
+    } else {
+      manualRating = null;
+    }
     const manualChapters = interaction.options.getString('chapters');
     const manualStatus = interaction.options.getString('status');
     const manualArchiveWarnings = interaction.options.getString('archive_warnings');
@@ -174,7 +179,7 @@ export default async function handleAddRecommendation(interaction) {
     if (manualAuthor) manualFields.author = manualAuthor;
     if (manualSummary) manualFields.summary = manualSummary;
     if (manualWordCount) manualFields.wordCount = manualWordCount;
-    if (manualRating) manualFields.rating = manualRating;
+    if (manualRating !== null) manualFields.rating = manualRating;
     if (manualChapters) manualFields.chapters = manualChapters;
     if (manualStatus) manualFields.status = manualStatus;
     if (manualArchiveWarnings) manualFields.archiveWarnings = manualArchiveWarnings;

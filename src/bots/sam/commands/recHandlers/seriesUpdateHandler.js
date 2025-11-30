@@ -56,9 +56,12 @@ export default async function handleUpdateSeries(interaction, identifier) {
                 ? interaction.options.getString('tags').split(',')
                 : []
         );
+        // Only normalize rating if provided; otherwise keep null
         let newRating = interaction.options.getString('rating');
-        if (newRating) {
+        if (newRating && newRating.trim()) {
             newRating = normalizeRating(newRating);
+        } else {
+            newRating = null;
         }
 
         // Restrict manual status setting to mods only

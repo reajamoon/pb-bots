@@ -71,8 +71,13 @@ export default async function handleUpdateRecommendation(interaction) {
     const newTitle = interaction.options.getString('title');
     const newAuthor = interaction.options.getString('author');
     const newSummary = interaction.options.getString('summary');
-    let newRating = interaction.options.getString('rating');
-    newRating = normalizeRating(newRating);
+        // Only normalize rating if provided; otherwise keep null
+        let newRating = interaction.options.getString('rating');
+        if (newRating && newRating.trim()) {
+            newRating = normalizeRating(newRating);
+        } else {
+            newRating = null;
+        }
     // newStatus already defined above
     const newWordCount = interaction.options.getInteger('wordcount');
     const newTags = cleanTags(
@@ -139,7 +144,7 @@ export default async function handleUpdateRecommendation(interaction) {
         if (newTitle) manualFields.title = newTitle;
         if (newAuthor) manualFields.author = newAuthor;
         if (newSummary) manualFields.summary = newSummary;
-        if (newRating) manualFields.rating = newRating;
+        if (newRating !== null) manualFields.rating = newRating;
         if (newWordCount) manualFields.wordCount = newWordCount;
         if (newStatus) manualFields.status = newStatus;
         if (deleted !== null) manualFields.deleted = deleted;
