@@ -20,17 +20,10 @@ async function findRecommendationByIdOrUrl(interaction, identifier) {
     }
     let recommendation = null;
     
-    // Check for series ID with S prefix (e.g., S123)
+    // Check for series ID with S prefix (e.g., S123) 
+    // Series IDs should be handled by calling code, not this function
     if (/^S\d+$/i.test(identifier)) {
-        const seriesIdNum = parseInt(identifier.substring(1), 10);
-        const series = await Series.findOne({ where: { id: seriesIdNum } });
-        if (series) {
-            // Find any recommendation from this series to represent it
-            recommendation = await Recommendation.findOne({ 
-                where: { seriesId: series.ao3SeriesId } 
-            });
-            if (recommendation) return recommendation;
-        }
+        throw new Error(`Series ID ${identifier} should be handled separately. This function is for recommendations only.`);
     }
     
     // Try as integer ID for recommendations
@@ -54,18 +47,10 @@ async function findRecommendationByIdOrUrl(interaction, identifier) {
     if (/^https?:\/\//.test(identifier)) {
         const normalizedUrl = normalizeAO3Url(identifier);
         
-        // Check if it's a series URL
+        // Check if it's a series URL - should be handled by calling code
         const seriesMatch = normalizedUrl.match(/archiveofourown\.org\/series\/(\d+)/);
         if (seriesMatch) {
-            const ao3SeriesId = parseInt(seriesMatch[1], 10);
-            // Find series by AO3 series ID, then get a representative recommendation
-            const series = await Series.findOne({ where: { ao3SeriesId } });
-            if (series) {
-                recommendation = await Recommendation.findOne({ 
-                    where: { seriesId: series.id } 
-                });
-                if (recommendation) return recommendation;
-            }
+            throw new Error(`Series URL ${normalizedUrl} should be handled separately. This function is for recommendations only.`);
         } else {
             // Regular work URL
             recommendation = await Recommendation.findOne({ where: { url: normalizedUrl } });

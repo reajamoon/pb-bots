@@ -17,43 +17,99 @@ export default async function handleRemoveRecommendation(interaction) {
     
     const identifier = interaction.options.getString('identifier');
     try {
-        // Find the rec in the database by ID, AO3 WorkId, or URL
-        const recommendation = await findRecommendationByIdOrUrl(interaction, identifier);
-        if (!recommendation) {
-            return await interaction.editReply({
-                content: 'Recommendation not found. Please check your identifier and try again.'
-            });
-        }
-        // Only let the owner or a mod remove the rec
-        const isOwner = recommendation.recommendedBy === interaction.user.id;
-        const isAdmin = interaction.member.permissions.has('ManageMessages');
-        if (!isOwner && !isAdmin) {
-            return await interaction.editReply({
-                content: `That recommendation was added by ${recommendation.recommendedByUsername}. You can only remove your own recommendations unless you're a moderator.`
-            });
-        }
-        // If this is a series rec, remove all associated works and the series record
-        if (recommendation.seriesId) {
+        // Check if it's a series identifier (S123 or series URL)
+        if (/^S\d+$/i.test(identifier)) {
+            // Series ID - remove the series itself
+            const seriesIdNum = parseInt(identifier.substring(1), 10);
+            const series = await Series.findByPk(seriesIdNum);
+            if (!series) {
+                return await interaction.editReply({
+                    content: `Series S${seriesIdNum} not found.`
+                });
+            }
+            
+            // Only mods can remove series
+            const isAdmin = interaction.member.permissions.has('ManageMessages');
+            if (!isAdmin) {
+                return await interaction.editReply({
+                    content: 'Only moderators can remove series records.'
+                });
+            }
+            
             // Remove all recommendations that belong to this series
             const seriesRecs = await Recommendation.findAll({ 
-                where: { seriesId: recommendation.seriesId } 
+                where: { seriesId: series.id } 
             });
             for (const rec of seriesRecs) {
                 await rec.destroy();
             }
             
             // Remove the series record itself
-            const seriesRecord = await Series.findByPk(recommendation.seriesId);
-            if (seriesRecord) {
-                await seriesRecord.destroy();
+            await series.destroy();
+            
+            return await interaction.editReply({
+                content: `Successfully removed series "${series.name}" and all ${seriesRecs.length} associated recommendations.`
+            });
+            
+        } else if (/^https?:\/\/.*archiveofourown\.org\/series\/\d+/.test(identifier)) {
+            // Series URL - extract AO3 series ID and find the series
+            const seriesMatch = identifier.match(/archiveofourown\.org\/series\/(\d+)/);
+            const ao3SeriesId = parseInt(seriesMatch[1], 10);
+            const series = await Series.findOne({ where: { ao3SeriesId } });
+            if (!series) {
+                return await interaction.editReply({
+                    content: `Series with AO3 ID ${ao3SeriesId} not found.`
+                });
             }
+            
+            // Only mods can remove series
+            const isAdmin = interaction.member.permissions.has('ManageMessages');
+            if (!isAdmin) {
+                return await interaction.editReply({
+                    content: 'Only moderators can remove series records.'
+                });
+            }
+            
+            // Remove all recommendations that belong to this series
+            const seriesRecs = await Recommendation.findAll({ 
+                where: { seriesId: series.id } 
+            });
+            for (const rec of seriesRecs) {
+                await rec.destroy();
+            }
+            
+            // Remove the series record itself
+            await series.destroy();
+            
+            return await interaction.editReply({
+                content: `Successfully removed series "${series.name}" and all ${seriesRecs.length} associated recommendations.`
+            });
+            
         } else {
+            // Regular recommendation - use existing logic
+            const recommendation = await findRecommendationByIdOrUrl(interaction, identifier);
+            if (!recommendation) {
+                return await interaction.editReply({
+                    content: 'Recommendation not found. Please check your identifier and try again.'
+                });
+            }
+            
+            // Only let the owner or a mod remove the rec
+            const isOwner = recommendation.recommendedBy === interaction.user.id;
+            const isAdmin = interaction.member.permissions.has('ManageMessages');
+            if (!isOwner && !isAdmin) {
+                return await interaction.editReply({
+                    content: `That recommendation was added by ${recommendation.recommendedByUsername}. You can only remove your own recommendations unless you're a moderator.`
+                });
+            }
+            
             // Remove individual recommendation
             await recommendation.destroy();
+            
+            await interaction.editReply({
+                content: `Successfully removed "${recommendation.title}" from the Profound Bond library.`
+            });
         }
-        await interaction.editReply({
-            content: `Successfully removed "${recommendation.title}" by ${recommendation.author} from the Profound Bond library.`
-        });
     } catch (error) {
         return await interaction.editReply({
             content: error.message || 'There was an error removing the recommendation. Please try again.'
