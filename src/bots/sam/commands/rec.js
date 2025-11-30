@@ -92,6 +92,10 @@ export default {
                         .setDescription('Fic ID, AO3 WorkId, or URL')
                         .setRequired(true))
                 .addStringOption(option =>
+                    option.setName('title')
+                        .setDescription('Story title')
+                        .setRequired(false))
+                .addStringOption(option =>
                     option.setName('author')
                         .setDescription('Author name (required if auto-parsing fails)')
                         .setRequired(false))
@@ -118,6 +122,18 @@ export default {
                 .addStringOption(option =>
                     option.setName('status')
                         .setDescription('Manually set fic status (MODS ONLY)')
+                        .setRequired(false))
+                .addBooleanOption(option =>
+                    option.setName('deleted')
+                        .setDescription('Mark this fic as deleted from its original site')
+                        .setRequired(false))
+                .addAttachmentOption(option =>
+                    option.setName('attachment')
+                        .setDescription('File attachment (only for deleted fics)')
+                        .setRequired(false))
+                .addBooleanOption(option =>
+                    option.setName('manual_only')
+                        .setDescription('Skip fetching new metadata and only update provided fields')
                         .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand

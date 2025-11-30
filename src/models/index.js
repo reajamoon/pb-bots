@@ -63,8 +63,9 @@ Recommendation.hasMany(UserFicMetadata, { foreignKey: 'ao3ID', sourceKey: 'ao3ID
 Series.hasMany(UserFicMetadata, { foreignKey: 'seriesId', sourceKey: 'ao3SeriesId', as: 'userMetadata' });
 BirthdayMessage.belongsTo(User, { foreignKey: 'userId', targetKey: 'discordId', as: 'user', constraints: false });
 User.hasMany(BirthdayMessage, { foreignKey: 'userId', sourceKey: 'discordId', as: 'birthdayMessages' });
-ModLock.associate({ Recommendation, User });
-Recommendation.hasMany(ModLock, { foreignKey: 'recommendationId', as: 'modLocks' });
+ModLock.associate({ Recommendation, Series, User });
+Recommendation.hasMany(ModLock, { foreignKey: 'ao3ID', sourceKey: 'ao3ID', as: 'modLocks' });
+Series.hasMany(ModLock, { foreignKey: 'seriesId', sourceKey: 'ao3SeriesId', as: 'modLocks' });
 
 export {
     sequelize,

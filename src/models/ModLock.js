@@ -4,10 +4,19 @@ import { Model, DataTypes } from 'sequelize';
 export default (sequelize) => {
   class ModLock extends Model {
     static associate(models) {
+      // Associate ao3ID to Recommendations table
       ModLock.belongsTo(models.Recommendation, {
-        foreignKey: 'recommendationId',
+        foreignKey: 'ao3ID',
+        targetKey: 'ao3ID',
         as: 'recommendation',
-        onDelete: 'CASCADE',
+        constraints: false
+      });
+      // Associate seriesId to Series table
+      ModLock.belongsTo(models.Series, {
+        foreignKey: 'seriesId',
+        targetKey: 'ao3SeriesId',
+        as: 'series',
+        constraints: false
       });
       // Associate lockedBy and unlockedBy to User (discordId)
       ModLock.belongsTo(models.User, {
@@ -30,14 +39,15 @@ export default (sequelize) => {
       autoIncrement: true,
       primaryKey: true,
     },
-    recommendationId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'Recommendations',
-        key: 'id',
-      },
-      onDelete: 'CASCADE',
+    ao3ID: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'AO3 Work ID for work-based locks',
+    },
+    seriesId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'AO3 Series ID for series-based locks',
     },
     field: {
       type: DataTypes.STRING,
@@ -64,14 +74,14 @@ export default (sequelize) => {
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
-    unlockedBy: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      comment: 'User ID of the unlocker',
-    },
-    unlockedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
+    recommendationId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'Recommendations',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
     },
   }, {
     sequelize,

@@ -13,7 +13,7 @@ This document serves as the single source of truth for all variable names, field
 ### Server Statistics (Profound Bond Community)
 - **Total Members**: 3,700-4,000 members
 - **Active Members**: ~400 concurrent active users
-- **Bot Usage Patterns**: 
+- **Bot Usage Patterns**:
   - Peak concurrent privacy settings users: 2-3 (rare occurrence)
   - Typical privacy session: 1-3 button clicks per user
   - Profile views: Low to moderate frequency
@@ -293,7 +293,7 @@ This document serves as the single source of truth for all variable names, field
 
 ### User ID Extraction from CustomId
 ```javascript
-const targetUserId = interaction.customId.includes('_') ? 
+const targetUserId = interaction.customId.includes('_') ?
     interaction.customId.split('_')[2] : interaction.user.id;
 ```
 

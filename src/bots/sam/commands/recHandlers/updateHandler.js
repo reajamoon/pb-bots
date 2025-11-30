@@ -45,24 +45,6 @@ export default async function handleUpdateRecommendation(interaction) {
 
     // Extract identifier from interaction options
     const identifier = interaction.options.getString('identifier');
-
-    // --- ModLock enforcement (per-rec and global) ---
-    let modLocksByField = {};
-    // Fetch the recommendation to get its ID (if not already fetched)
-    let recommendation = null;
-    if (!recommendation) {
-      // Try to get identifier from interaction (id, url, etc.)
-      // This assumes you fetch the rec later as in your code, so you can move this block after fetching if needed
-      // For now, just set modLocksByField after fetching recommendation
-    }
-    // After fetching recommendation, get per-rec locks and merge with global locks
-    // (Move this block after you fetch the rec if needed)
-    // Example usage after fetching rec:
-    //   const lockedFields = await getLockedFieldsForRec(recommendation.id);
-    //   for (const field of lockedFields) modLocksByField[field] = true;
-    //   // Add global modlocks
-    //   const allFields = [...];
-    //   for (const field of allFields) if (await isFieldGloballyModlocked(field)) modLocksByField[field] = true;
     // Restrict manual status setting to mods only
     const newStatus = interaction.options.getString('status');
     if (newStatus) {
@@ -77,8 +59,7 @@ export default async function handleUpdateRecommendation(interaction) {
             return;
         }
     }
-    let newUrl = interaction.options.getString('new_url');
-    if (newUrl) newUrl = normalizeAO3Url(newUrl);
+    // Get the available fields from the command options
     const newTitle = interaction.options.getString('title');
     const newAuthor = interaction.options.getString('author');
     const newSummary = interaction.options.getString('summary');
@@ -86,25 +67,15 @@ export default async function handleUpdateRecommendation(interaction) {
     newRating = normalizeRating(newRating);
     // newStatus already defined above
     const newWordCount = interaction.options.getInteger('wordcount');
-    const newDeleted = interaction.options.getBoolean('deleted');
-    const newAttachment = interaction.options.getAttachment('attachment');
-    let newTags = cleanTags(
+    const newTags = cleanTags(
         interaction.options.getString('tags')
             ? interaction.options.getString('tags').split(',')
             : []
     );
     const newNotes = interaction.options.getString('notes');
-    const newChapters = interaction.options.getString('chapters');
-    let newArchiveWarnings = cleanTags(
-        interaction.options.getString('archive_warnings')
-            ? interaction.options.getString('archive_warnings').split(',')
-            : []
-    );
-    const newSeriesName = interaction.options.getString('series_name');
-    const newSeriesPart = interaction.options.getInteger('series_part');
-    const newSeriesUrl = interaction.options.getString('series_url');
-    // Support append mode for additional tags
-    const appendAdditional = interaction.options.getBoolean('append');
+    const deleted = interaction.options.getBoolean('deleted');
+    const newAttachment = interaction.options.getAttachment('attachment');
+    const manualOnly = interaction.options.getBoolean('manual_only');
 
     try {
         const recommendation = await findRecommendationByIdOrUrl(interaction, identifier, null, null);
@@ -115,8 +86,44 @@ export default async function handleUpdateRecommendation(interaction) {
             return;
         }
 
-        // Determine URL to use for processing (new URL if provided, otherwise existing URL)
-        const urlToUse = newUrl || recommendation.url;
+        // --- Build modlock restrictions ---
+        // Per-rec locks apply to both manual and queue modes
+        const perRecLockedFields = await getLockedFieldsForRec(recommendation);
+        // Global locks only apply to manual updates, not Jack processing
+        const globalLockedFields = new Set();
+        if (manualOnly) {
+            const allFields = [
+                'title', 'author', 'summary', 'rating', 'wordCount', 'status', 
+                'tags', 'notes', 'deleted', 'attachment'
+            ];
+            for (const field of allFields) {
+                if (await isFieldGloballyModlocked(field)) {
+                    globalLockedFields.add(field);
+                }
+            }
+        }
+
+        // Helper function to check if field is locked for manual updates
+        const isFieldLocked = (fieldName) => {
+            return perRecLockedFields.has(fieldName) || 
+                   perRecLockedFields.has('ALL') || 
+                   (manualOnly && globalLockedFields.has(fieldName));
+        };
+
+        // Determine URL to use for processing
+        const urlToUse = recommendation.url;
+
+        // Validation for attachment/deleted logic
+        if (newAttachment) {
+            const attachmentError = validateAttachment(newAttachment, deleted || recommendation.deleted);
+            if (attachmentError) {
+                await interaction.editReply({
+                    content: attachmentError,
+                    ephemeral: true
+                });
+                return;
+            }
+        }
 
         // Save user metadata immediately (before any queue processing)
         // Build manual fields object
@@ -126,12 +133,11 @@ export default async function handleUpdateRecommendation(interaction) {
         if (newSummary) manualFields.summary = newSummary;
         if (newRating) manualFields.rating = newRating;
         if (newWordCount) manualFields.wordCount = newWordCount;
-        if (newChapters) manualFields.chapters = newChapters;
         if (newStatus) manualFields.status = newStatus;
-        if (newArchiveWarnings && newArchiveWarnings.length > 0) manualFields.archiveWarnings = newArchiveWarnings;
-        if (newSeriesName) manualFields.seriesName = newSeriesName;
-        if (newSeriesPart) manualFields.seriesPart = newSeriesPart;
-        if (newSeriesUrl) manualFields.seriesUrl = newSeriesUrl;
+        if (deleted !== null) manualFields.deleted = deleted;
+        if (newAttachment) manualFields.attachment = newAttachment;
+        if (newNotes) manualFields.notes = newNotes;
+        if (newTags.length > 0) manualFields.tags = newTags;
 
         await saveUserMetadata({
             url: urlToUse,
@@ -141,18 +147,240 @@ export default async function handleUpdateRecommendation(interaction) {
             manualFields
         });
 
-        // Set up additional tags to send
-        let additionalTagsToSend = newTags;
+        // Manual-only mode: skip queue processing and apply changes directly
+        if (manualOnly) {
+            // Apply manual field updates directly to the recommendation
+            const updateFields = {};
+            let hasUpdates = false;
 
-        // --- Refactored: Use Series table for batch update of all works in a series ---
-        if (recommendation.seriesId) {
-            const { Series, Recommendation } = await import('../../../../models/index.js');
-            const createOrJoinQueueEntry = (await import('../../../../shared/recUtils/createOrJoinQueueEntry.js')).default;
-            // --- Fic Parsing Queue Logic ---
+            if (newTitle) { updateFields.title = newTitle; hasUpdates = true; }
+            if (newAuthor) { updateFields.author = newAuthor; hasUpdates = true; }
+            if (newSummary) { updateFields.summary = newSummary; hasUpdates = true; }
+            if (newRating) { updateFields.rating = newRating; hasUpdates = true; }
+            if (newWordCount) { updateFields.wordCount = newWordCount; hasUpdates = true; }
+            if (newStatus) { updateFields.status = newStatus; hasUpdates = true; }
+
+            if (hasUpdates) {
+                await recommendation.update(updateFields);
+                await recommendation.reload();
+                
+                // Return updated recommendation with embed
+                const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                const embed = createRecEmbed(recWithSeries);
+                
+                await interaction.editReply({
+                    content: 'Manual update complete! Here\'s the updated recommendation:',
+                    embeds: [embed]
+                });
+                return;
+            } else {
+                await interaction.editReply({
+                    content: 'No fields were updated. Please provide at least one field to update when using manual_only mode.'
+                });
+                return;
+            }
+        }
+
+        // For non-manual_only mode: use the queue system (current behavior)
+        // Only skip queue if manual_only is explicitly set to true
+        if (!manualOnly) {
+            // Normal mode: use queue system for metadata fetching
             const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
-            // Always use the queue for any update that requires a metadata fetch
-            const needsMetadataFetch = newUrl || (!newTitle && !newAuthor && !newSummary && !newRating && !newStatus && !newWordCount);
-            if (needsMetadataFetch) {
+
+            // Check if already in queue
+            let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
+            if (queueEntry) {
+                if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
+                    const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
+                    if (!existingSub) {
+                        try {
+                            await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
+                        } catch (err) {
+                            console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
+                        }
+                    }
+                    await interaction.editReply({
+                        content: "That fic is already being processed! You'll get a notification when it's ready."
+                    });
+                    return;
+                }
+            }
+
+            // Create new queue entry for Jack to process
+            const activeJobs = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
+            let isInstant = false;
+            const isSeriesUrl = /archiveofourown\.org\/series\//.test(urlToUse);
+            if (!isSeriesUrl && activeJobs === 0) {
+                isInstant = true;
+            }
+
+            try {
+                queueEntry = await ParseQueue.create({
+                    fic_url: urlToUse,
+                    status: 'pending',
+                    requested_by: interaction.user.id,
+                    instant_candidate: isInstant,
+                    batch_type: isSeriesUrl ? 'series' : null
+                });
+            } catch (err) {
+                // Handle race condition
+                if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
+                    queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
+                    if (queueEntry && (queueEntry.status === 'pending' || queueEntry.status === 'processing')) {
+                        await interaction.editReply({
+                            content: "That fic is already being processed! You'll get a notification when it's ready."
+                        });
+                        return;
+                    }
+                }
+                throw err;
+            }
+
+            try {
+                await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
+            } catch (err) {
+                console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
+            }
+
+            await interaction.editReply({
+                content: "Your fic update has been added to the parsing queue! I'll notify you when it's ready."
+            });
+        } else {
+            // Manual-only mode: apply only the provided fields directly, no queue
+            // Respect both per-rec locks and global locks
+            const updateFields = {};
+            let hasUpdates = false;
+            const blockedFields = [];
+
+            // Check each field against locks before adding to updateFields
+            if (newTitle) {
+                if (!isFieldLocked('title')) { 
+                    updateFields.title = newTitle; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('title');
+                }
+            }
+
+            if (newAuthor) {
+                if (!isFieldLocked('author')) { 
+                    updateFields.author = newAuthor; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('author');
+                }
+            }
+
+            if (newSummary) {
+                if (!isFieldLocked('summary')) { 
+                    updateFields.summary = newSummary; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('summary');
+                }
+            }
+
+            if (newRating) {
+                if (!isFieldLocked('rating')) { 
+                    updateFields.rating = newRating; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('rating');
+                }
+            }
+
+            if (newWordCount) {
+                if (!isFieldLocked('wordCount')) { 
+                    updateFields.wordCount = newWordCount; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('wordCount');
+                }
+            }
+
+            if (newStatus) {
+                if (!isFieldLocked('status')) { 
+                    updateFields.status = newStatus; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('status');
+                }
+            }
+
+            if (deleted !== null) {
+                if (!isFieldLocked('deleted')) { 
+                    updateFields.deleted = deleted; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('deleted');
+                }
+            }
+
+            if (newAttachment) {
+                if (!isFieldLocked('attachment')) { 
+                    updateFields.attachment = newAttachment.url; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('attachment');
+                }
+            }
+
+            if (newNotes) {
+                if (!isFieldLocked('notes')) { 
+                    updateFields.notes = newNotes; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('notes');
+                }
+            }
+
+            if (newTags.length > 0) {
+                if (!isFieldLocked('tags')) { 
+                    updateFields.tags = newTags; 
+                    hasUpdates = true; 
+                } else {
+                    blockedFields.push('tags');
+                }
+            }
+
+            // Apply the updates to Recommendation table
+            if (hasUpdates) {
+                await recommendation.update(updateFields);
+                await recommendation.reload();
+            }
+
+            // Build response message
+            let responseMessage = '';
+            if (hasUpdates) {
+                responseMessage = 'Manual update complete!';
+            }
+            
+            if (blockedFields.length > 0) {
+                const blockedList = blockedFields.join(', ');
+                if (hasUpdates) {
+                    responseMessage += ` Note: ${blockedList} ${blockedFields.length === 1 ? 'was' : 'were'} not updated due to modlock restrictions.`;
+                } else {
+                    responseMessage = `No fields were updated. The following ${blockedFields.length === 1 ? 'field is' : 'fields are'} modlocked: ${blockedList}`;
+                }
+            } else if (!hasUpdates) {
+                responseMessage = 'No fields were updated. Please provide at least one field to update when using manual_only mode.';
+            }
+
+            if (hasUpdates) {
+                // Return updated recommendation with embed
+                const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                const embed = createRecEmbed(recWithSeries);
+                
+                await interaction.editReply({
+                    content: responseMessage,
+                    embeds: [embed]
+                });
+            } else {
+                await interaction.editReply({
+                    content: responseMessage
+                });
+            }
+        }
                 let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
                 if (queueEntry) {
                     if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {

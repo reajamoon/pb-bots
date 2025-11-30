@@ -4,26 +4,30 @@ Heya! If you’re reading this, you probably already know the deal. Destiel, Sup
 
 ## What Sam Actually Does
 
-- **Fic recs:** `/rec` is your ticket to the library. Add fics, update them, pull random recs, search and browse fics.
+- **Fic recs:** `/rec` is your ticket to the library. Add fics, update them, search with multiple filters, pull random recs, and browse the collection.
 - **Profile stuff:** Birthday, pronouns, timezone, region, bio—set it up, hide it, show it off, whatever.
-- **Birthday hype:** He’ll ping you on your birthday (unless you’re hiding from the calendar).
-- **Help menus:** Lost? Type `/profile help` or `/rec help` and Sam will walk you through. He’s kind of a know-it-all.
+- **Birthday hype:** He'll ping you on your birthday (unless you're hiding from the calendar).
+- **Help menus:** Lost? Type `/profile help` or `/rec help` and Sam will walk you through. He's kind of a know-it-all.
 - **Privacy controls:** You can control what shows on your profile, disable others using the command to pull your profile, or delete your profile entirely. Sam is pretty good with secrets.
 - **Live updates:** Change something? It updates instantly. If it doesn't for some reason (server issues or whatever) just pull a new profile with `/profile` and it'll show the changes.
+- **Queue system:** All fic metadata fetches go through a smart queue system (handled by Jack) to prevent conflicts and ensure reliable parsing.
+- **Moderation tools:** Complete mod utilities for content validation, rec management, and queue administration.
 
 ## Project Overview
 
-- **Modular Architecture:** All features are split into dedicated command, handler, event, model, and utility modules. See `docs/bot-architecture-overview.md` for details.
-- **Sam Winchester’s Voice:** All member-facing text uses Sam’s voice—dry wit, practical, and a little snarky. See `docs/sam-voice-guidelines.md`. These guidelines exist for my own reference but also to kind of explain my Sam headcanons and characterizations I use for Sambot.
+- **Dual Bot Architecture:** Sam handles Discord interactions while Jack processes the fic metadata queue in the background. All features are split into dedicated command, handler, event, model, and utility modules. See `docs/bot-architecture-overview.md` for details.
+- **Queue System:** All fic metadata fetching goes through a robust, deduplicated queue system with rate limiting and notification features.
+- **Sam Winchester's Voice:** All member-facing text uses Sam's voice—dry wit, practical, and a little snarky. See `docs/sam-voice-guidelines.md`. These guidelines exist for my own reference but also to kind of explain my Sam headcanons and characterizations I use for Sambot.
 - **Database:** Uses SQLite for development and PostgreSQL for production. Database files are ignored via `.gitignore` for security.
-- **Process Management:** Uses PM2 for deployment. Never use `npm start` or `npm run dev`—those are disabled. Dude, trust me.
+- **Process Management:** Uses PM2 for deployment. Both Sam and Jack run as separate PM2 processes. Use `./start-bots.sh` to start both, or run them individually with their respective ecosystem config files.
 
 ## Documentation
 
 - [Profile System](docs/profile-system.md)
 - [Rec System](docs/rec-system.md)
 - [Bot Architecture Overview](docs/bot-architecture-overview.md)
-- [Sam’s Voice Guidelines](docs/sam-voice-guidelines.md)
+- [Fic Parsing Queue System](docs/fic-parsing-queue-implementation.md)
+- [Sam's Voice Guidelines](docs/sam-voice-guidelines.md)
 - [Message Tracking Utility](docs/message-tracking-utility.md)
 - [Naming Reference](docs/NAMING_REFERENCE.md)
 - [Changelog](CHANGELOG.md)
@@ -34,9 +38,10 @@ This is a single developer project. The source is public for transparency, featu
 
 ## Extending the Bot
 
-- Adds new commands by creating handler modules in `src/commands/`.
-- Adds new profile fields or rec features by updating models and utility logic.
+- Add new commands by creating handler modules in `src/bots/sam/commands/`.
+- Add new profile fields or rec features by updating models and utility logic.
 - Uses standardized custom ID formats for all buttons and navigation.
+- The queue system handles all fic metadata parsing. Don't bypass it.
 - Reference the docs for architecture, naming, and best practices.
 
 ## Security Best Practices

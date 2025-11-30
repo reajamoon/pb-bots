@@ -8,11 +8,11 @@
 - [x] Implement data migration scripts for schema changes
 - [ ] Optimize database queries for large library
 - [ ] Preempt case where library grows outsized
-- [ ] Color rec embed by rating/warnings
-    - Update the recommendation embed logic to set the embed color based on fic rating (e.g., Teen, Mature, Explicit) and/or content warnings. This should be handled in src/utils/recUtils/createRecommendationEmbed.js and coordinated with rating/warning parsing from fic metadata.
+- [x] Color rec embed by rating/warnings
 
 ## User Experience
- - [ ] Unify `/rec update <id>` to use a single identifier field (ID, URL, AO3 ID, etc.) with internal logic to detect and handle all types.
+- [x] Unify `/rec update <id>` to use a single identifier field
+- [x] **Search functionality** COMPLETED: Full search system implemented with multiple filters
 - [ ] Enhance help and onboarding (interactive guides)
 - [ ] Add user profile pages (show contributions, stats)
 - [ ] Allow users to favorite fics
@@ -28,19 +28,21 @@
 - [ ] Add support for author requests (removal, corrections)
 
 ## Logging & Monitoring
-- [ ] Integrate advanced logging (Winston)
+- [x] Integrate advanced logging (Winston)
+- [x] Queue system implementation
 - [ ] Add health checks and uptime monitoring
-- [ ] Suppress or resolve PM2 AXM errors
 
 ## Community & Moderation
-- [ ] Add `/modmail` improvements (auto-categorize, mod notes) [this to-do should be moved to Cas bot]
+- [/] add /modmail improvements
+- [ ]
 
 ## DevOps
-- [ ] Add test coverage for all modules
+- [/] Add test coverage for all modules
 
 ## Privacy Modularization Implementation Details
 - [ ] If privacy button bugs persist, plan to rebuild privacy buttons from scratch
 
 ---
 
-*Last updated: 2025-11-05*
+*Last updated: November 29, 2025*
+*Recent updates: Marked completed features from major implementation push*

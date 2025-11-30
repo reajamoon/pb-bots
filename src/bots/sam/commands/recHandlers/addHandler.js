@@ -88,7 +88,7 @@ export default async function handleAddRecommendation(interaction) {
     if (ao3ID) {
       rec = await Recommendation.findOne({ where: { ao3ID } });
       if (rec) {
-        const lockedFields = await getLockedFieldsForRec(rec.id);
+        const lockedFields = await getLockedFieldsForRec(rec);
         for (const field of lockedFields) modLocksByField[field] = true;
       }
     }

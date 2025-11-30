@@ -1,80 +1,199 @@
 # Sam Bot Architecture Overview
 
+## Dual Bot System
+
+As of now, we're running on a dual bot system:
+
+- **Sam** (`src/bots/sam/`): The main Discord bot that handles everything you see and interact with—slash commands, buttons, all the UI stuff
+- **Jack** (`src/bots/jack/`): Background worker that does the heavy lifting of fetching and parsing fic metadata
+
+Basically, Sam stays responsive for Discord stuff while Jack grinds away at parsing AO3 pages in the background. No more laggy interactions when someone's queuing up a bunch of fics.
+
+## Process Management
+
+Both bots run as separate PM2 processes:
+- Sam: `pm2 start ecosystem.sam.config.cjs`  
+- Jack: `pm2 start ecosystem.jack.config.cjs`
+- Both: `./start-bots.sh`
+
+## How They Talk to Each Other
+
+- Sam and Jack chat through the **shared database** (ParseQueue and ParseQueueSubscriber tables)
+- Sam throws metadata parsing jobs into the queue and signs up users for notifications
+- Jack grabs jobs from the queue, does the work, and updates the status
+- Sam checks for finished jobs and lets users know when their stuff is ready
+
+## Queue System Stuff
+
+The fic parsing queue system handles:
+- **Deduplication**: No more fetching the same URL twice
+- **Rate Limiting**: I play nice with AO3 and don't hammer their servers
+- **User Notifications**: Everyone who asked for a fic gets pinged when it's ready
+- **Error Handling**: When stuff breaks, I try to fix it and let you know what happened
+- **Instant Results**: If the queue is empty and I can grab something fast, you get it right away
+
 ## 1. Project Structure
 ```
 root/
   src/
-    commands/         # Slash and message command handlers (profile, rec, etc.)
-    events/           # Discord event handlers (ready, interactionCreate, etc.)
-    handlers/
-      buttons/        # Modular button handlers (profile, privacy, navigation, etc.)
-      modals/         # Modular modal handlers (bio, birthday, region, etc.)
-      selectMenus/    # Modular select menu handlers
-    models/           # Sequelize models (User, Guild, Recommendation, etc.)
-    utils/            # Centralized utilities (messageTracking, buttonId, logging, etc.)
-  config/             # Configuration files
-  database/           # Migrations and seeders
-  docs/               # Documentation
+    bots/
+      sam/              # Sam Discord bot (main interface)
+        commands/       # Slash command handlers (profile, rec, etc.)
+        events/         # Discord event handlers (ready, interactionCreate, etc.)
+        handlers/
+          buttons/      # Modular button handlers (profile, privacy, navigation, etc.)
+          modals/       # Modular modal handlers (bio, birthday, region, etc.)
+          selectMenus/  # Modular select menu handlers
+        utils/          # Sam-specific utilities
+      jack/             # Jack queue worker (background processing)
+      dean/             # Dean bot (placeholder for future)
+      cas/              # Cas bot (placeholder for future)
+    shared/
+      recUtils/         # Shared recommendation utilities
+      text/            # Shared text and message utilities
+      utils/           # Shared utilities (logging, etc.)
+    models/             # Sequelize models (User, Guild, Recommendation, ParseQueue, etc.)
+  config/               # Configuration files
+  database/             # Migrations and seeders
+  docs/                 # Documentation
+  ecosystem.*.config.cjs # PM2 configuration for each bot
+  start-bots.sh         # Script to start both Sam and Jack
 ```
 
-## 2. Modular Handler & Utility Design
-- **Handlers:** Each feature (profile, privacy, rec, etc.) has dedicated button, modal, and select menu handlers. Event handlers route all Discord interactions to the correct modular handler.
-- **Utilities:** All customId building, parsing, encoding, and decoding are centralized in `messageTracking.js` and `buttonId.js`. Utilities handle message tracking, ID propagation, and dual update logic for all menus and buttons.
-- **Naming Scheme:** All customIds use the format `[action]_[context]_[primaryId]_[secondaryId]` (see `buttonId.js`). Message IDs are encoded (base64) for compactness and reliability.
-- **Redundancy Prevention:** All modules use shared utilities for ID building and parsing, eliminating duplicate code and reducing recurring bugs.
+## 2. Sam Bot (Discord Interface)
 
-## 3. Centralized ID & Message Tracking
-- **messageTracking.js:**
-  - Encodes/decodes message IDs for safe customId inclusion
-  - Builds and parses customIds for profile, privacy, modal, and select menu interactions
-  - Ensures all buttons/menus propagate the original messageId for dual updates
-- **buttonId.js:**
-  - Standardized builder and parser for all button customIds
-  - Enforces length limits and hashes IDs if needed
-- **Best Practice:** Always use these utilities for any customId logic. Never build or parse IDs manually.
+### What Sam Does
+- **Profile System:** User profiles with birthday, timezone, bio, and privacy stuff
+- **Rec System:** Add, search, update, and manage fanfic recommendations
+- **Birthday Notifications:** I automatically post birthday shoutouts every day
+- **Help System:** Tons of help and navigation menus when you get lost
+- **Moderation Tools:** Rec validation, queue management, and admin utilities
 
-## 4. Unified Button System
-- All buttons (profile, privacy, rec, navigation) use the standardized customId format and centralized builders/parsers
-- Security and permission checks use parsed IDs for reliability
-- Dual update logic is available for all button types where relevant
-- Error handling and logging are standardized via the logging utility
+### How It's Built
+- **Commands:** Slash command handlers in `src/bots/sam/commands/`
+- **Handlers:** Modular button, modal, and select menu handlers
+- **Events:** Discord event processing (interactions, ready, etc.)
+- **Utilities:** Sam-specific utilities for UI and interaction stuff
 
-## 5. Database Integration
-- **Sequelize ORM:** Models for User, Guild, Recommendation, etc.
-- **Migrations:** All schema changes managed via migration files
-- **Seeders:** Initial data population for development/testing
+## 3. Jack Bot (Queue Worker)
 
-## 6. Configuration & Deployment
-- **Config files:** Environment variables and bot settings in `/config`
-- **PM2:** Process manager for production deployment
-- **Database:** SQLite for development, PostgreSQL for production
+### What Jack Does
+- **Metadata Parsing:** Grabs and processes AO3 and other fanfic site info
+- **Rate Limiting:** Plays nice with site policies so we don't get banned
+- **Queue Management:** Works through jobs in order and doesn't double-up
+- **Error Handling:** When things go wrong, tries to recover and lets people know
+- **Background Processing:** Runs separately so Discord doesn't get laggy
 
-## 7. Extensibility & Maintainability
-- **Modularization:** All features are split into dedicated handlers and utilities
-- **Centralized tracking:** All message, user, and context tracking is handled by utilities, preventing duplication and errors
-- **Clear separation:** UI logic (menus, buttons, modals) is separated from business logic and database operations
-- **Documentation:** All architectural decisions, migration steps, and utility APIs are documented in `/docs`
+### Architecture
+- **Main Process:** Single Node.js process that polls the ParseQueue
+- **Job Processing:** Routes to appropriate metadata processors (AO3, FFN, etc.)
+- **Rate Control:** Smart timing and backoff algorithms for site respect
+- **Shared Utilities:** Uses shared recUtils for metadata processing
 
-## 8. Best Practices
-- Always use centralized utilities for customId and message tracking
-- Add new features by creating dedicated handler and utility files
-- Keep UI logic (Discord components) separate from business/database logic
-- Use migrations for all database schema changes
-- Document new architecture decisions and utility APIs
+## 4. Shared Components
+
+### Models (src/models/)
+- **User, Guild, Recommendation:** Core data models
+- **ParseQueue, ParseQueueSubscriber:** Queue system tables
+- **Config, ModLock, Series:** Additional feature models
+
+### Utilities (src/shared/)
+- **recUtils:** Metadata parsing, validation, and processing
+- **text:** Message formatting and update utilities
+- **utils:** Logging, database helpers, and common functions
+## 5. Queue System Details
+
+### Workflow
+1. **User Request:** User runs `/rec add` or `/rec update`
+2. **Queue Check:** Sam checks if URL already queued
+3. **Enqueue/Subscribe:** Creates queue entry or subscribes to existing
+4. **Processing:** Jack picks up job, sets status to 'processing'
+5. **Metadata Fetch:** Jack fetches metadata from AO3/other sites
+6. **Database Update:** Jack saves parsed data and updates job status
+7. **Notification:** Jack notifies subscribers of completion
+
+### Status Types
+- `pending`: Job waiting to be processed
+- `processing`: Job currently being processed by Jack
+- `done`: Job completed successfully
+- `error`: Job failed with error
+- `nOTP`: Job failed Dean/Cas validation (mods can override)
+- `series-done`: Series processing completed
+
+### Rate Limiting
+- **AO3 Rate Limiter:** 20-second minimum intervals (configurable)
+- **Queue-Aware:** Considers all pending jobs when scheduling
+- **Adaptive Delays:** Variable delays based on server load
+- **Think Time:** Random 0.5-2 second pauses between jobs
+
+## 6. UI & Interaction System
+
+### CustomID Format
+All buttons use standardized format: `[action]_[context]_[primaryId]_[secondaryId]`
+
+### Message Tracking
+- **Encoding:** Message IDs base64-encoded for customID inclusion
+- **Dual Updates:** Original message updated alongside ephemeral responses
+- **Centralized Utilities:** `messageTracking.js` and `buttonId.js` handle all ID logic
+
+### Modular Handlers
+- **Buttons:** Dedicated handlers for profile, privacy, rec, navigation
+- **Modals:** Separate handlers for bio, birthday, region input
+- **Select Menus:** Handlers for various selection interfaces
+
+## 7. Database & Configuration
+
+### Database Setup
+- **Development:** SQLite (`./database/bot.sqlite`)
+- **Production:** PostgreSQL (via `DATABASE_URL` environment variable)
+- **Migrations:** Sequelize migrations in `/migrations` folder
+- **Models:** Sequelize models with relationships in `/src/models`
+
+### Configuration
+- **Environment Variables:** Database URL, Discord tokens, AO3 credentials
+- **Config Table:** Runtime configuration stored in database Config model
+- **PM2 Configs:** Separate ecosystem files for Sam and Jack
+
+## 8. AO3 Integration
+
+### Parser Features
+- **Cheerio & Zod:** Modern HTML parsing with schema validation
+- **Login System:** Automated AO3 login for age-restricted content
+- **Rate Limiting:** Respectful request spacing and queue awareness
+- **Error Recovery:** Robust error handling with retry logic
+
+### Supported Sites
+- **AO3:** Full metadata parsing including series support
+- **Other Sites:** Extensible system for additional fanfiction sites
+
+## 9. Development & Deployment Stuff
+
+### Process Management
+- **PM2:** Production process manager for both bots
+- **Ecosystem Configs:** `ecosystem.sam.config.cjs` and `ecosystem.jack.config.cjs`
+- **Start Script:** `./start-bots.sh` for convenient dual startup
+
+### Making It Bigger
+- **Modular Design:** Easy to add new commands and features
+- **Shared Utilities:** Common functions so I don't have to write the same thing twice
+- **Clear Architecture:** Well-defined separation between UI and business logic
+- **Documentation:** Docs for all the major systems so you don't have to guess
+
+## 10. How to Not Break Things
+
+### Development Guidelines
+- **Use the Queue System:** Don't try to bypass the queue for metadata fetching, seriously
+- **Use the Utilities:** messageTracking.js and buttonId.js exist for a reason—use them for all UI interactions
+- **Keep Things Modular:** Make separate handlers for new features
+- **Database Migrations:** Use migrations for all schema changes, don't just edit the models
+- **Shared Code:** Put reusable stuff in `/src/shared` so both bots can use it
+
+### Where Things Go
+- **Sam-Specific:** Discord interaction code goes in `/src/bots/sam`
+- **Jack-Specific:** Background processing code goes in `/src/bots/jack`
+- **Shared:** Common utilities and models in `/src/shared` and `/src/models`
+- **Documentation:** Update docs when you add new features or change how things work
 
 ---
 
-## Privacy Button Handler Cleanup (2025-11-05)
-
-All privacy button handlers (`togglePrivacyModeFull.js`, `togglePrivacyModeAgeHidden.js`) have been cleaned up and unified:
-- Patch artifacts and excess logging removed
-- Reliable privacy setting toggling even if dual-update fails
-- Warning embed added when dual-update is bypassed
-- Unified customId format and centralized parsing utilities used throughout
-- Error handling and logging standardized
-
-All documentation and changelogs have been updated. The codebase is ready for further privacy features and morning review.
-
----
-
-This overview reflects the current bot architecture and should guide future development. For details on utilities, ID schemes, and migration steps, see the documentation in `/docs`.
+*This overview reflects the current dual-bot architecture as of November 2025. For specific implementation details, see the individual documentation files in `/docs`.*
