@@ -586,15 +586,12 @@ export default async function handleUpdateRecommendation(interaction) {
                 }
                 // If still not found, fallback to queue message
                 await interaction.editReply({
-                    content: 'Your fic has been added to the parsing queue! I’ll notify you when it’s ready.'
+                    content: 'Your fic has been added to the parsing queue! I'll notify you when it's ready.'
                 });
                 return;
             }
-
-        }
-
-        // For individual recommendation updates, also use the queue system
-        // (Sam should never call AO3 directly - that's Jack's job)
+        } else {
+        // Normal mode: use queue system for metadata fetching
         const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
 
         // Check if already in queue
