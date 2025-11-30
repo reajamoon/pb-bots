@@ -181,15 +181,7 @@ async function handleAutoQueueUpdate(interaction, series) {
     const { siteId, siteType, seriesId, workId } = detectSiteAndExtractIDs(normalizedUrl);
 
     // Create or join queue entry for background processing (no manual overrides)
-    const queueEntry = await createOrJoinQueueEntry({
-        url: normalizedUrl,
-        userId: interaction.user.id,
-        channelId: interaction.channelId,
-        siteId,
-        siteType,
-        seriesId,
-        workId
-    });
+    const queueEntry = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
 
     const responseMessage = `🔄 Series "${series.name}" has been queued for refresh from AO3. You'll be notified when processing is complete.`;
     await interaction.editReply({
@@ -285,27 +277,7 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
     await saveUserMetadata(metadataPayload);
 
     // Create or join queue entry for background processing
-    const queueEntry = await createOrJoinQueueEntry({
-        url: normalizedUrl,
-        userId: interaction.user.id,
-        channelId: interaction.channelId,
-        siteId,
-        siteType,
-        seriesId,
-        workId,
-        notes: newNotes,
-        // Include user-provided overrides for Jack to apply
-        userOverrides: {
-            ...(newTitle !== null && { manual_title: newTitle }),
-            ...(newAuthor !== null && { manual_authors: Array.isArray(newAuthor) ? newAuthor : [newAuthor] }),
-            ...(newSummary !== null && { manual_summary: newSummary }),
-            ...(newTags && newTags.length > 0 && { manual_tags: newTags }),
-            ...(newRating !== null && { manual_rating: newRating }),
-            ...(newNotes !== null && { rec_note: newNotes }),
-            ...(newStatus !== null && { manual_status: newStatus }),
-            ...(deleted !== null && { deleted })
-        }
-    });
+    const queueEntry = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
 
     const responseMessage = `🔄 Series "${series.name}" has been queued for update. You'll be notified when processing is complete.`;
     await interaction.editReply({
