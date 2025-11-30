@@ -256,25 +256,24 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
     // Detect site and extract IDs for queue processing
     const { siteId, siteType, seriesId, workId } = detectSiteAndExtractIDs(normalizedUrl);
 
-    // Save user metadata immediately using proper UserFicMetadata structure
-    const metadataPayload = {
-        userId: interaction.user.id,
-        seriesId: series.ao3SeriesId, // Use AO3 series ID
-        ficType: 'series',
-        action: 'queue_update',
-        url: normalizedUrl
+    // Save user metadata immediately using proper function signature
+    const userMetadataOptions = {
+        url: normalizedUrl,
+        user: interaction.user,
+        notes: newNotes || '',
+        additionalTags: newAdditionalTags || [],
+        manualFields: {}
     };
 
     // Add manual overrides that were provided (these will guide Jack's processing)
-    if (newTitle !== null) metadataPayload.manual_title = newTitle;
-    if (newAuthor !== null) metadataPayload.manual_authors = Array.isArray(newAuthor) ? newAuthor : [newAuthor];
-    if (newSummary !== null) metadataPayload.manual_summary = newSummary;
-    if (newTags && newTags.length > 0) metadataPayload.manual_tags = newTags;
-    if (newRating !== null) metadataPayload.manual_rating = newRating;
-    if (newNotes !== null) metadataPayload.rec_note = newNotes;
-    if (newStatus !== null) metadataPayload.manual_status = newStatus;
+    if (newTitle !== null) userMetadataOptions.manualFields.manual_title = newTitle;
+    if (newAuthor !== null) userMetadataOptions.manualFields.manual_authors = Array.isArray(newAuthor) ? newAuthor : [newAuthor];
+    if (newSummary !== null) userMetadataOptions.manualFields.manual_summary = newSummary;
+    if (newTags && newTags.length > 0) userMetadataOptions.manualFields.manual_tags = newTags;
+    if (newRating !== null) userMetadataOptions.manualFields.manual_rating = newRating;
+    if (newStatus !== null) userMetadataOptions.manualFields.manual_status = newStatus;
 
-    await saveUserMetadata(metadataPayload);
+    await saveUserMetadata(userMetadataOptions);
 
     // Create or join queue entry for background processing
     const queueEntry = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
