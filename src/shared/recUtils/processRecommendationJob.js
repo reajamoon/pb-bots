@@ -130,7 +130,18 @@ async function processAO3Job(payload) {
     }
 
     // Update with fresh AO3 data
-    const updateFields = buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork);
+    let updateFields = buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork);
+    // Respect ModLocks for this AO3 work: filter out locked fields
+    try {
+      const { ModLock } = await import('../../models/index.js');
+      const locks = await ModLock.findAll({ where: { ao3ID: String(ao3ID), locked: true } });
+      const locked = new Set(locks.map(l => l.field).filter(Boolean));
+      if (locked.size > 0) {
+        updateFields = Object.fromEntries(Object.entries(updateFields).filter(([k]) => !locked.has(k)));
+      }
+    } catch (e) {
+      console.error('[processAO3Job] Failed to resolve locked fields:', e);
+    }
     
     if (Object.keys(updateFields).length > 0) {
       try {

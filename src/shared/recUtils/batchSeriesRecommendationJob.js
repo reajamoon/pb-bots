@@ -128,12 +128,35 @@ async function upsertSeriesRecord(seriesMetadata, url) {
         summary: w.summary
       })) || []
     };
-    
-    // Upsert series record (update if exists, create if not)
-    const [seriesRecord, created] = await Series.upsert(seriesData, {
-      returning: true,
-      conflictFields: ['url'] // Use URL as unique identifier
-    });
+    // Respect modlocks: fetch locked fields for this AO3 series ID
+    let lockedFields = new Set();
+    try {
+      const { ModLock } = await import('../../models/index.js');
+      const locks = await ModLock.findAll({ where: { seriesId: String(seriesData.ao3SeriesId), locked: true } });
+      lockedFields = new Set(locks.map(l => l.field).filter(Boolean));
+    } catch (e) {
+      console.error('[upsertSeriesRecord] Failed to resolve series locks:', e);
+    }
+
+    // Find existing by URL; if exists, update only unlocked fields
+    let seriesRecord = await Series.findOne({ where: { url } });
+    let created = false;
+    if (!seriesRecord) {
+      seriesRecord = await Series.create(seriesData);
+      created = true;
+    } else {
+      const updatePayload = {};
+      const candidateFields = ['name','summary','authors','workCount','wordCount','status','workIds','series_works'];
+      for (const field of candidateFields) {
+        if (!lockedFields.has(field)) {
+          updatePayload[field] = seriesData[field];
+        }
+      }
+      if (Object.keys(updatePayload).length > 0) {
+        await seriesRecord.update(updatePayload);
+        await seriesRecord.reload();
+      }
+    }
     
     console.log(`[upsertSeriesRecord] ${created ? 'Created' : 'Updated'} series:`, {
       id: seriesRecord.id,

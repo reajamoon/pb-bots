@@ -2,7 +2,7 @@
 // Clean implementation for processing AO3 data (used by queue worker)
 // User metadata (notes, manual fields) is handled separately by command handlers
 
-import { Recommendation, Series } from '../../models/index.js';
+import { Recommendation, Series, ModLock } from '../../models/index.js';
 import { fetchFicMetadata } from './ficParser.js';
 import { createRecEmbed } from './createRecEmbed.js';
 import normalizeAO3Url from './normalizeAO3Url.js';
@@ -129,8 +129,34 @@ async function processAO3Job(payload) {
       return { error: updateMessages.genericError };
     }
 
-    // Update with fresh AO3 data
-    const updateFields = buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork);
+    // Resolve locked fields (always respect active locks regardless of requester)
+    const lockedFields = new Set();
+    try {
+      const whereConditions = [];
+      if (existingRec.ao3ID) {
+        whereConditions.push({ ao3ID: String(existingRec.ao3ID), locked: true });
+      }
+      if (seriesId) {
+        // seriesId may be AO3 series ID passed by callers
+        whereConditions.push({ seriesId: String(seriesId), locked: true });
+      } else if (existingRec.seriesId) {
+        const series = await Series.findByPk(existingRec.seriesId);
+        if (series && series.ao3SeriesId) {
+          whereConditions.push({ seriesId: String(series.ao3SeriesId), locked: true });
+        }
+      }
+      if (whereConditions.length > 0) {
+        const locks = await ModLock.findAll({ where: { [ (await import('sequelize')).Op.or ]: whereConditions } });
+        for (const lock of locks) {
+          if (lock.field) lockedFields.add(lock.field);
+        }
+      }
+    } catch (e) {
+      console.error('[processAO3Job] Failed to resolve locked fields:', e);
+    }
+
+    // Update with fresh AO3 data (filter out locked fields)
+    const updateFields = buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork, lockedFields);
     
     // Debug logging for all updates
     console.log('[processAO3Job] Update fields generated:', {
@@ -203,11 +229,11 @@ async function processAO3Job(payload) {
 /**
  * Builds update fields object by comparing existing and new metadata
  */
-function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork) {
+function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork, lockedFields = new Set()) {
   const updateFields = {};
   
   // Check each field for changes
-  if (existingRec.title !== metadata.title) {
+  if (existingRec.title !== metadata.title && !lockedFields.has('title')) {
     updateFields.title = metadata.title;
   }
   
@@ -225,36 +251,36 @@ function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork) {
     ao3ID: existingRec.ao3ID
   });
   
-  if (authorsChanged) {
+  if (authorsChanged && !lockedFields.has('author') && !lockedFields.has('authors')) {
     updateFields.authors = newAuthors;
     updateFields.author = newAuthors[0] || 'Unknown Author'; // Legacy field
     console.log('[buildUpdateFields] Authors will be updated:', { newAuthors, ao3ID: existingRec.ao3ID });
   }
   
-  if (existingRec.summary !== metadata.summary) {
+  if (existingRec.summary !== metadata.summary && !lockedFields.has('summary')) {
     updateFields.summary = metadata.summary;
   }
   
   // Tags comparison
   const newTags = Array.isArray(metadata.tags) ? metadata.tags : [];
   const oldTags = Array.isArray(existingRec.tags) ? existingRec.tags : [];
-  if (JSON.stringify(oldTags) !== JSON.stringify(newTags)) {
+  if (JSON.stringify(oldTags) !== JSON.stringify(newTags) && !lockedFields.has('tags')) {
     updateFields.tags = newTags;
   }
   
   // Basic fields
-  if (existingRec.rating !== metadata.rating) updateFields.rating = metadata.rating;
+  if (existingRec.rating !== metadata.rating && !lockedFields.has('rating')) updateFields.rating = metadata.rating;
   if (existingRec.wordCount !== metadata.wordCount) updateFields.wordCount = metadata.wordCount;
   if (existingRec.chapters !== metadata.chapters) updateFields.chapters = metadata.chapters;
-  if (existingRec.status !== metadata.status) updateFields.status = metadata.status;
-  if (existingRec.language !== metadata.language) updateFields.language = metadata.language;
-  if (existingRec.publishedDate !== metadata.publishedDate) updateFields.publishedDate = metadata.publishedDate;
-  if (existingRec.updatedDate !== metadata.updatedDate) updateFields.updatedDate = metadata.updatedDate;
+  if (existingRec.status !== metadata.status && !lockedFields.has('status')) updateFields.status = metadata.status;
+  if (existingRec.language !== metadata.language && !lockedFields.has('language')) updateFields.language = metadata.language;
+  if (existingRec.publishedDate !== metadata.publishedDate && !lockedFields.has('publishedDate')) updateFields.publishedDate = metadata.publishedDate;
+  if (existingRec.updatedDate !== metadata.updatedDate && !lockedFields.has('updatedDate')) updateFields.updatedDate = metadata.updatedDate;
   if (existingRec.kudos !== metadata.kudos) updateFields.kudos = metadata.kudos;
   if (existingRec.hits !== metadata.hits) updateFields.hits = metadata.hits;
   if (existingRec.bookmarks !== metadata.bookmarks) updateFields.bookmarks = metadata.bookmarks;
   if (existingRec.comments !== metadata.comments) updateFields.comments = metadata.comments;
-  if (existingRec.category !== metadata.category) updateFields.category = metadata.category;
+  if (existingRec.category !== metadata.category && !lockedFields.has('category')) updateFields.category = metadata.category;
   
   // Tag arrays
   const tagFields = ['fandom_tags', 'relationship_tags', 'character_tags', 'category_tags', 'freeform_tags'];
@@ -269,13 +295,13 @@ function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork) {
   // Archive warnings
   if (Array.isArray(metadata.archiveWarnings)) {
     const oldWarnings = Array.isArray(existingRec.archive_warnings) ? existingRec.archive_warnings : [];
-    if (JSON.stringify(oldWarnings) !== JSON.stringify(metadata.archiveWarnings)) {
+    if (JSON.stringify(oldWarnings) !== JSON.stringify(metadata.archiveWarnings) && !lockedFields.has('archive_warnings')) {
       updateFields.archive_warnings = metadata.archiveWarnings;
     }
   }
   
   // Series and flags
-  if (seriesId && existingRec.seriesId !== seriesId) {
+  if (seriesId && existingRec.seriesId !== seriesId && !lockedFields.has('seriesId')) {
     updateFields.seriesId = seriesId;
   }
   if (existingRec.notPrimaryWork !== notPrimaryWork) {

@@ -161,6 +161,67 @@ export default async function handleUpdateRecommendation(interaction) {
             // Normal mode: use queue system for metadata fetching
             const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
 
+            // Persist allowed manual fields to Recommendation immediately so embeds reflect changes
+            try {
+                const immediateUpdateFields = {};
+                const blockedFieldsImmediate = [];
+                const lockedFieldsToSet = [];
+                const considerField = (name, value) => {
+                    if (value !== null && value !== undefined) {
+                        if (!isFieldLocked(name)) {
+                            immediateUpdateFields[name] = value;
+                            // Lock fields that are corrections, excluding notes/additional tags
+                            if (!['notes', 'additionalTags', 'tags'].includes(name)) {
+                                lockedFieldsToSet.push(name);
+                            }
+                        } else {
+                            blockedFieldsImmediate.push(name);
+                        }
+                    }
+                };
+                considerField('title', newTitle);
+                considerField('author', newAuthor);
+                considerField('summary', newSummary);
+                considerField('rating', newRating);
+                considerField('wordCount', newWordCount);
+                considerField('status', newStatus);
+                if (deleted !== null) considerField('deleted', deleted);
+                if (newAttachment) considerField('attachmentUrl', newAttachment.url);
+                if (newTags.length > 0) considerField('tags', newTags);
+                if (Object.keys(immediateUpdateFields).length > 0) {
+                    await recommendation.update(immediateUpdateFields);
+                    await recommendation.reload();
+                    // Create ModLock entries for lockedFieldsToSet
+                    try {
+                        const { ModLock, Series, User } = await import('../../../../models/index.js');
+                        let level = 'member';
+                        const userRecord = await User.findOne({ where: { discordId: interaction.user.id } });
+                        if (userRecord && userRecord.permissionLevel) {
+                            level = userRecord.permissionLevel.toLowerCase();
+                        }
+                        for (const fieldName of lockedFieldsToSet) {
+                            const payload = {
+                                field: fieldName,
+                                locked: true,
+                                lockLevel: level,
+                                lockedBy: interaction.user.id,
+                                lockedAt: new Date(),
+                            };
+                            if (recommendation.ao3ID) payload.ao3ID = recommendation.ao3ID;
+                            if (!payload.ao3ID && recommendation.seriesId) {
+                                const series = await Series.findByPk(recommendation.seriesId);
+                                if (series && series.ao3SeriesId) payload.seriesId = series.ao3SeriesId;
+                            }
+                            await ModLock.create(payload);
+                        }
+                    } catch (lockErr) {
+                        console.error('[Rec update] Failed to create modlocks for immediate fields:', lockErr);
+                    }
+                }
+            } catch (e) {
+                console.error('[Rec update] Immediate persistence of manual fields failed (non-manual mode):', e);
+            }
+
             // Check if already in queue
             let queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
             if (queueEntry) {

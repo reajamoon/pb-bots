@@ -131,9 +131,48 @@ export default async function handleUpdateSeries(interaction, identifier) {
             return;
         }
 
-        // If manual_only is true, handle as direct UserFicMetadata update only
+        // If manual_only is true, persist allowed fields directly to Series and save metadata
         if (manualOnly) {
-            return await handleManualOnlyUpdate(interaction, series, {
+            // Build update payload honoring locks
+            const seriesUpdate = {};
+            const appliedFields = [];
+            if (newTitle !== null && !isFieldLocked('title')) { seriesUpdate.name = newTitle; appliedFields.push('title'); }
+            if (newSummary !== null && !isFieldLocked('summary')) { seriesUpdate.summary = newSummary; appliedFields.push('summary'); }
+            if (newRating !== null && !isFieldLocked('rating')) { seriesUpdate.rating = newRating; appliedFields.push('rating'); }
+            if (newStatus !== null && !isFieldLocked('status')) { seriesUpdate.status = newStatus; appliedFields.push('status'); }
+            // Persist changes if any
+            if (Object.keys(seriesUpdate).length > 0) {
+                await series.update(seriesUpdate);
+                await series.reload();
+                // Create ModLock entries for updated fields (exclude notes/additional tags)
+                try {
+                    const { ModLock, User } = await import('../../../../models/index.js');
+                    let level = 'member';
+                    const userRecord = await User.findOne({ where: { discordId: interaction.user.id } });
+                    if (userRecord && userRecord.permissionLevel) {
+                        level = userRecord.permissionLevel.toLowerCase();
+                    }
+                    const fieldsToLock = [];
+                    if (newTitle !== null && !isFieldLocked('title')) fieldsToLock.push('title');
+                    if (newSummary !== null && !isFieldLocked('summary')) fieldsToLock.push('summary');
+                    if (newRating !== null && !isFieldLocked('rating')) fieldsToLock.push('rating');
+                    if (newStatus !== null && !isFieldLocked('status')) fieldsToLock.push('status');
+                    for (const fieldName of fieldsToLock) {
+                        await ModLock.create({
+                            seriesId: String(series.ao3SeriesId),
+                            field: fieldName,
+                            locked: true,
+                            lockLevel: level,
+                            lockedBy: interaction.user.id,
+                            lockedAt: new Date(),
+                        });
+                    }
+                } catch (lockErr) {
+                    console.error('[Series update] Failed to create modlocks (manual_only):', lockErr);
+                }
+            }
+            // Save metadata record for history and additional tags/notes
+            await handleManualOnlyUpdate(interaction, series, {
                 newTitle,
                 newAuthor,
                 newSummary,
@@ -143,9 +182,48 @@ export default async function handleUpdateSeries(interaction, identifier) {
                 newStatus,
                 deleted
             });
+            return;
         }
 
         // Otherwise handle as queue update with manual overrides stored in UserFicMetadata
+        // Additionally, persist allowed manual fields now so embeds reflect changes immediately
+        const seriesUpdate = {};
+        const appliedFields = [];
+        if (newTitle !== null && !isFieldLocked('title')) { seriesUpdate.name = newTitle; appliedFields.push('title'); }
+        if (newSummary !== null && !isFieldLocked('summary')) { seriesUpdate.summary = newSummary; appliedFields.push('summary'); }
+        if (newRating !== null && !isFieldLocked('rating')) { seriesUpdate.rating = newRating; appliedFields.push('rating'); }
+        if (newStatus !== null && !isFieldLocked('status')) { seriesUpdate.status = newStatus; appliedFields.push('status'); }
+        if (Object.keys(seriesUpdate).length > 0) {
+            await series.update(seriesUpdate);
+            await series.reload();
+            // Create ModLock entries for updated fields (exclude notes/additional tags)
+            try {
+                const { ModLock, User } = await import('../../../../models/index.js');
+                let level = 'member';
+                const userRecord = await User.findOne({ where: { discordId: interaction.user.id } });
+                if (userRecord && userRecord.permissionLevel) {
+                    level = userRecord.permissionLevel.toLowerCase();
+                }
+                const fieldsToLock = [];
+                if (newTitle !== null && !isFieldLocked('title')) fieldsToLock.push('title');
+                if (newSummary !== null && !isFieldLocked('summary')) fieldsToLock.push('summary');
+                if (newRating !== null && !isFieldLocked('rating')) fieldsToLock.push('rating');
+                if (newStatus !== null && !isFieldLocked('status')) fieldsToLock.push('status');
+                for (const fieldName of fieldsToLock) {
+                    await ModLock.create({
+                        seriesId: String(series.ao3SeriesId),
+                        field: fieldName,
+                        locked: true,
+                        lockLevel: level,
+                        lockedBy: interaction.user.id,
+                        lockedAt: new Date(),
+                    });
+                }
+            } catch (lockErr) {
+                console.error('[Series update] Failed to create modlocks (non-manual path):', lockErr);
+            }
+        }
+
         await handleQueueSeriesUpdate(interaction, series, {
             newTitle,
             newAuthor,
