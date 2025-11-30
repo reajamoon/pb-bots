@@ -193,46 +193,44 @@ async function handleAutoQueueUpdate(interaction, series) {
 async function handleManualOnlyUpdate(interaction, series, updates) {
     const { newTitle, newAuthor, newSummary, newAdditionalTags, newRating, newNotes, newStatus, deleted } = updates;
 
-    // Save user metadata - this is the ONLY action for manual_only
-    const metadataPayload = {
-        userId: interaction.user.id,
-        seriesId: series.ao3SeriesId || null, // Use AO3 series ID for UserFicMetadata
-        ficType: 'series',
-        action: 'manual_only_update'
+    // Build a URL for the series so saveUserMetadata can resolve site/type correctly
+    const url = series.ao3SeriesId
+        ? `https://archiveofourown.org/series/${series.ao3SeriesId}`
+        : (series.url || null);
+
+    // Prepare payload using the standard signature expected by saveUserMetadata
+    const userMetadataOptions = {
+        url,
+        user: interaction.user,
+        notes: newNotes || '',
+        additionalTags: newAdditionalTags || [],
+        manualFields: {}
     };
 
-    // Add manual overrides that were provided
     const updates_made = [];
     if (newTitle !== null) {
-        metadataPayload.manual_title = newTitle;
+        userMetadataOptions.manualFields.manual_title = newTitle;
         updates_made.push('title');
     }
     if (newAuthor !== null) {
-        metadataPayload.manual_authors = Array.isArray(newAuthor) ? newAuthor : [newAuthor];
+        userMetadataOptions.manualFields.manual_authors = Array.isArray(newAuthor) ? newAuthor : [newAuthor];
         updates_made.push('author');
     }
     if (newSummary !== null) {
-        metadataPayload.manual_summary = newSummary;
+        userMetadataOptions.manualFields.manual_summary = newSummary;
         updates_made.push('summary');
     }
-    if (newAdditionalTags && newAdditionalTags.length > 0) {
-        metadataPayload.additional_tags = newAdditionalTags;
-        updates_made.push('additional tags');
-    }
     if (newRating !== null) {
-        metadataPayload.manual_rating = newRating;
+        userMetadataOptions.manualFields.manual_rating = newRating;
         updates_made.push('rating');
     }
-    if (newNotes !== null) {
-        metadataPayload.rec_note = newNotes;
-        updates_made.push('notes');
-    }
     if (newStatus !== null) {
-        metadataPayload.manual_status = newStatus;
+        userMetadataOptions.manualFields.manual_status = newStatus;
         updates_made.push('status');
     }
 
-    await saveUserMetadata(metadataPayload);
+    // Persist user metadata overrides
+    await saveUserMetadata(userMetadataOptions);
 
     const responseMessage = `✅ Manual overrides saved for series "${series.name}": ${updates_made.join(', ')}. These will be applied when the series is next updated.`;
     await interaction.editReply({
