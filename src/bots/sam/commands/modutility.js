@@ -1,6 +1,6 @@
 
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { Recommendation, ModLock, User, Config, ParseQueue, ParseQueueSubscriber } from '../../../models/index.js';
+import { Recommendation, ModLock, User, Config, ParseQueue, ParseQueueSubscriber, Series } from '../../../models/index.js';
 import { Op } from 'sequelize';
 
 export default {
@@ -223,13 +223,17 @@ export default {
         return await interaction.reply({ content: `Recommendation ID ${recId} not found.`, flags: MessageFlags.Ephemeral });
       }
       
-      // Find lock using ao3ID or seriesId
+      // Find lock using ao3ID or AO3 series ID
       const whereConditions = [];
       if (rec.ao3ID) {
         whereConditions.push({ ao3ID: rec.ao3ID, field, locked: true });
       }
       if (rec.seriesId) {
-        whereConditions.push({ seriesId: rec.seriesId, field, locked: true });
+        // Get the AO3 series ID from the Series table
+        const series = await Series.findByPk(rec.seriesId);
+        if (series && series.ao3SeriesId) {
+          whereConditions.push({ seriesId: series.ao3SeriesId, field, locked: true });
+        }
       }
       
       if (whereConditions.length === 0) {
