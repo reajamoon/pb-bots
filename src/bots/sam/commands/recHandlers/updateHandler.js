@@ -13,6 +13,7 @@ import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
 import { setModLock } from '../../../../shared/utils/modLockUtils.js';
 import { isFieldGloballyModlocked } from '../../../../shared/modlockUtils.js';
 import { getLockedFieldsForRec } from '../../../../shared/getLockedFieldsForRec.js';
+import handleUpdateSeries from './seriesUpdateHandler.js';
 
 // Helper to deduplicate and lowercase tags
 function cleanTags(tags) {
@@ -45,6 +46,13 @@ export default async function handleUpdateRecommendation(interaction) {
 
     // Extract identifier from interaction options
     const identifier = interaction.options.getString('identifier');
+    
+    // Check if this is a series identifier and route accordingly
+    if (/^S\d+$/i.test(identifier) || /^https?:\/\/.*archiveofourown\.org\/series\/\d+/.test(identifier)) {
+        return await handleUpdateSeries(interaction, identifier);
+    }
+    
+    // Otherwise, handle as recommendation update
     // Restrict manual status setting to mods only
     const newStatus = interaction.options.getString('status');
     if (newStatus) {
