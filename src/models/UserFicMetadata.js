@@ -33,11 +33,6 @@ export default (sequelize) => {
             type: DataTypes.TEXT,
             allowNull: true,
         },
-        manual_tags: {
-            type: DataTypes.JSONB,
-            allowNull: true,
-            defaultValue: [],
-        },
         manual_rating: {
             type: DataTypes.STRING,
             allowNull: true,

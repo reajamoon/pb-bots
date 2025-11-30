@@ -39,7 +39,6 @@ async function saveUserMetadata(options) {
       if (manualFields.manual_title) metadataRecord.manual_title = manualFields.manual_title;
       if (manualFields.manual_authors) metadataRecord.manual_authors = manualFields.manual_authors;
       if (manualFields.manual_summary) metadataRecord.manual_summary = manualFields.manual_summary;
-      if (manualFields.manual_tags) metadataRecord.manual_tags = manualFields.manual_tags;
       if (manualFields.manual_rating) metadataRecord.manual_rating = manualFields.manual_rating;
       if (manualFields.manual_wordcount) metadataRecord.manual_wordcount = manualFields.manual_wordcount;
       if (manualFields.manual_chapters) metadataRecord.manual_chapters = manualFields.manual_chapters;

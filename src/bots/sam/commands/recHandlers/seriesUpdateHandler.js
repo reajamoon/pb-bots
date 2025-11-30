@@ -51,7 +51,7 @@ export default async function handleUpdateSeries(interaction, identifier) {
 
         // Additional series-specific fields that can be updated
         const newAuthor = interaction.options.getString('author');
-        const newTags = cleanTags(
+        const newAdditionalTags = cleanTags(
             interaction.options.getString('tags')
                 ? interaction.options.getString('tags').split(',')
                 : []
@@ -69,7 +69,7 @@ export default async function handleUpdateSeries(interaction, identifier) {
             newTitle !== null ||
             newSummary !== null ||
             newAuthor !== null ||
-            (newTags && newTags.length > 0) ||
+            (newAdditionalTags && newAdditionalTags.length > 0) ||
             newRating !== null ||
             newNotes !== null ||
             deleted !== null ||
@@ -118,7 +118,7 @@ export default async function handleUpdateSeries(interaction, identifier) {
         if (newTitle !== null && isFieldLocked('title')) lockedFields.push('title');
         if (newAuthor !== null && isFieldLocked('author')) lockedFields.push('author');
         if (newSummary !== null && isFieldLocked('summary')) lockedFields.push('summary');
-        if (newTags && newTags.length > 0 && isFieldLocked('tags')) lockedFields.push('tags');
+        if (newAdditionalTags && newAdditionalTags.length > 0 && isFieldLocked('tags')) lockedFields.push('tags');
         if (newRating !== null && isFieldLocked('rating')) lockedFields.push('rating');
         if (newNotes !== null && isFieldLocked('notes')) lockedFields.push('notes');
         if (newStatus !== null && isFieldLocked('status')) lockedFields.push('status');
@@ -137,7 +137,7 @@ export default async function handleUpdateSeries(interaction, identifier) {
                 newTitle,
                 newAuthor,
                 newSummary,
-                newTags,
+                newAdditionalTags,
                 newRating,
                 newNotes,
                 newStatus,
@@ -150,7 +150,7 @@ export default async function handleUpdateSeries(interaction, identifier) {
             newTitle,
             newAuthor,
             newSummary,
-            newTags,
+            newAdditionalTags,
             newRating,
             newNotes,
             newStatus,
@@ -191,7 +191,7 @@ async function handleAutoQueueUpdate(interaction, series) {
 
 // Handle manual-only updates (no queue, just UserFicMetadata)
 async function handleManualOnlyUpdate(interaction, series, updates) {
-    const { newTitle, newAuthor, newSummary, newTags, newRating, newNotes, newStatus, deleted } = updates;
+    const { newTitle, newAuthor, newSummary, newAdditionalTags, newRating, newNotes, newStatus, deleted } = updates;
 
     // Save user metadata - this is the ONLY action for manual_only
     const metadataPayload = {
@@ -215,9 +215,9 @@ async function handleManualOnlyUpdate(interaction, series, updates) {
         metadataPayload.manual_summary = newSummary;
         updates_made.push('summary');
     }
-    if (newTags && newTags.length > 0) {
-        metadataPayload.manual_tags = newTags;
-        updates_made.push('tags');
+    if (newAdditionalTags && newAdditionalTags.length > 0) {
+        metadataPayload.additional_tags = newAdditionalTags;
+        updates_made.push('additional tags');
     }
     if (newRating !== null) {
         metadataPayload.manual_rating = newRating;
@@ -241,7 +241,7 @@ async function handleManualOnlyUpdate(interaction, series, updates) {
 }
 
 async function handleQueueSeriesUpdate(interaction, series, updates) {
-    const { newTitle, newAuthor, newSummary, newTags, newRating, newNotes, newStatus, deleted } = updates;
+    const { newTitle, newAuthor, newSummary, newAdditionalTags, newRating, newNotes, newStatus, deleted } = updates;
 
     // For queue processing, we need an AO3 URL
     if (!series.ao3SeriesId) {
@@ -269,7 +269,7 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
     if (newTitle !== null) userMetadataOptions.manualFields.manual_title = newTitle;
     if (newAuthor !== null) userMetadataOptions.manualFields.manual_authors = Array.isArray(newAuthor) ? newAuthor : [newAuthor];
     if (newSummary !== null) userMetadataOptions.manualFields.manual_summary = newSummary;
-    if (newTags && newTags.length > 0) userMetadataOptions.manualFields.manual_tags = newTags;
+
     if (newRating !== null) userMetadataOptions.manualFields.manual_rating = newRating;
     if (newStatus !== null) userMetadataOptions.manualFields.manual_status = newStatus;
 
