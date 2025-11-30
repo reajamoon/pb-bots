@@ -43,9 +43,7 @@ export default async function handleRemoveRecommendation(interaction) {
             }
             
             // Remove the series record itself
-            const seriesRecord = await Series.findOne({ 
-                where: { ao3SeriesId: recommendation.seriesId } 
-            });
+            const seriesRecord = await Series.findByPk(recommendation.seriesId);
             if (seriesRecord) {
                 await seriesRecord.destroy();
             }

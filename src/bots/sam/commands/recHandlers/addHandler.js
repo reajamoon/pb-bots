@@ -55,13 +55,10 @@ export default async function handleAddRecommendation(interaction) {
         // Check for any modlocks for this ao3ID (from previously deleted recs)
         const { ModLock } = await import('../../../../models/index.js');
         const locks = await ModLock.findAll({
-          where: { locked: true },
-          include: [{
-            model: Recommendation,
-            as: 'recommendation',
-            where: { ao3ID },
-            required: true
-          }]
+          where: { 
+            ao3ID: String(ao3ID),
+            locked: true 
+          }
         });
         if (locks.length > 0) {
           previouslyDeleted = true;
