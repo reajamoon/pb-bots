@@ -89,9 +89,24 @@ async function processAO3Job(payload) {
       overrides.push(await ModLock.findOne({ where: { ao3ID, field: 'validation_override', locked: true } }));
     }
     if (!overrides[0] && seriesId) {
-      overrides.push(await ModLock.findOne({ where: { seriesId, field: 'validation_override', locked: true } }));
+      // Map DB seriesId to AO3 series numeric ID via Series.url
+      try {
+        const seriesRecord = await Series.findByPk(seriesId);
+        const ao3SeriesMatch = seriesRecord && seriesRecord.url ? seriesRecord.url.match(/archiveofourown\.org\/series\/(\d+)/) : null;
+        const ao3SeriesId = ao3SeriesMatch ? parseInt(ao3SeriesMatch[1], 10) : null;
+        if (ao3SeriesId) {
+          overrides.push(await ModLock.findOne({ where: { seriesId: ao3SeriesId, field: 'validation_override', locked: true } }));
+        }
+      } catch {}
     }
     skipValidationDueToOverride = !!(overrides.find(Boolean));
+    if (skipValidationDueToOverride) {
+      console.log('[processAO3Job] Validation override detected; skipping Dean/Cas check.', {
+        ao3ID,
+        seriesId,
+        overrideSource: overrides[0] && overrides[0].ao3ID ? 'work' : 'series'
+      });
+    }
   } catch (e) {
     // If override check fails, do not skip validation
     skipValidationDueToOverride = false;
