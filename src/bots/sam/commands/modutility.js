@@ -20,6 +20,14 @@ export default {
             .setRequired(false))
     )
     .addSubcommand(sub =>
+      sub.setName('debug_override')
+        .setDescription('Admin: check validation override for an AO3 fic or series URL')
+        .addStringOption(opt =>
+          opt.setName('fic_url')
+            .setDescription('The AO3 fic or series URL to check for override')
+            .setRequired(true))
+    )
+    .addSubcommand(sub =>
       sub.setName('setmodlock')
         .setDescription('Set a modlock on a recommendation field')
         .addStringOption(opt =>
@@ -167,6 +175,48 @@ export default {
         // Ignore DM errors
       }
       return await interaction.reply({ content: `${noun} <${ficUrl}> approved, override set, and requeued.`, flags: MessageFlags.Ephemeral });
+    }
+
+    if (sub === 'debug_override') {
+      // Restrict to mods/admins; prefer superadmin but allow mods for quick checks
+      if (!isMod) {
+        return await interaction.reply({ content: 'You need mod perms for this one.', flags: MessageFlags.Ephemeral });
+      }
+      const ficUrl = interaction.options.getString('fic_url');
+      const workMatch = ficUrl.match(/archiveofourown\.org\/works\/(\d+)/);
+      const seriesMatch = ficUrl.match(/archiveofourown\.org\/series\/(\d+)/);
+      let workId = workMatch ? parseInt(workMatch[1], 10) : null;
+      let seriesId = seriesMatch ? parseInt(seriesMatch[1], 10) : null;
+      try {
+        const { ModLock, Recommendation, Series } = await import('../../../models/index.js');
+        let workOverride = null;
+        let seriesOverride = null;
+        if (workId) {
+          workOverride = await ModLock.findOne({ where: { ao3ID: workId, field: 'validation_override', locked: true } });
+        }
+        if (seriesId) {
+          seriesOverride = await ModLock.findOne({ where: { seriesId: seriesId, field: 'validation_override', locked: true } });
+        }
+        // Also show what the worker will resolve for this URL
+        let rec = workId ? await Recommendation.findOne({ where: { ao3ID: workId } }) : null;
+        let seriesRec = null;
+        if (seriesId) {
+          seriesRec = await Series.findOne({ where: { url: { [Op.iLike]: `%/series/${seriesId}%` } } });
+        }
+        const lines = [];
+        lines.push(`URL: <${ficUrl}>`);
+        if (workId) lines.push(`Resolved work ao3ID: ${workId}`);
+        if (seriesId) lines.push(`Resolved series ao3ID: ${seriesId}`);
+        lines.push(`Work override present: ${workOverride ? 'yes' : 'no'}`);
+        lines.push(`Series override present: ${seriesOverride ? 'yes' : 'no'}`);
+        if (rec) lines.push(`Recommendation exists for work: yes (id=${rec.id})`);
+        if (seriesRec) lines.push(`Series exists in DB: yes (id=${seriesRec.id})`);
+        await interaction.reply({ content: lines.join('\n'), flags: MessageFlags.Ephemeral });
+      } catch (e) {
+        console.error('[modutility] debug_override failed:', e);
+        await interaction.reply({ content: 'Debug failed—check logs.', flags: MessageFlags.Ephemeral });
+      }
+      return;
     }
 
     // Logging for upsert/debug

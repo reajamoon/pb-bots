@@ -141,6 +141,13 @@ async function processAO3Job(payload) {
           if (workOverride) {
             console.log('[processAO3Job] Post-validation override detected; allowing work to pass.', { ao3ID });
           } else {
+            console.log('[processAO3Job] Dean/Cas validation failed with no override; flagging nOTP.', {
+              ao3ID,
+              seriesId,
+              fandomTags,
+              relationshipTags,
+              reason: validation.reason
+            });
             return { error: 'validation_failed', error_message: validation.reason || 'Failed Dean/Cas validation' };
           }
         } catch {
