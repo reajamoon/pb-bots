@@ -102,7 +102,7 @@ async function processAO3Job(payload) {
     const validation = validateDeanCasRec(fandomTags, relationshipTags);
 
     if (!validation.valid) {
-      return { error: validation.reason || 'Failed Dean/Cas validation' };
+      return { error: 'validation_failed', error_message: validation.reason || 'Failed Dean/Cas validation' };
     }
   } catch (err) {
     console.error('[processAO3Job] Error in Dean/Cas validation:', err);

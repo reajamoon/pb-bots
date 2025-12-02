@@ -148,10 +148,13 @@ async function handleJobResult(job, result, siteInfo) {
 	try {
 		// Handle error cases
 		if (result.error) {
-			if (result.error.toLowerCase().includes('dean/cas') || result.error.toLowerCase().includes('validation')) {
+			const errCode = (result.error || '').toLowerCase();
+			const errMsg = (result.error_message || result.error || '').toLowerCase();
+			const isValidationFail = errCode === 'validation_failed' || errMsg.includes('dean/cas') || errMsg.includes('validation');
+			if (isValidationFail) {
 				await job.update({
 					status: 'nOTP',
-					validation_reason: result.error,
+					validation_reason: result.error_message || result.error,
 					error_message: null,
 					result: null
 				});

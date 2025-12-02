@@ -10,6 +10,7 @@ async function notifyQueueSubscribers(client) {
     let heartbeat_n = 0;
     let heartbeat_done = 0;
     let heartbeat_series_done = 0;
+    let heartbeat_error = 0;
     try {
         // Notify for jobs that failed Dean/Cas validation (nOTP)
         const nOTPJobs = await ParseQueue.findAll({
@@ -93,6 +94,40 @@ async function notifyQueueSubscribers(client) {
             include: [{ model: ParseQueueSubscriber, as: 'subscribers' }]
         });
         heartbeat_series_done = seriesDoneJobs.length;
+
+        // Optional: notify mods of error jobs to improve visibility
+        const errorJobs = await ParseQueue.findAll({
+            where: { status: 'error' },
+            include: [{ model: ParseQueueSubscriber, as: 'subscribers' }]
+        });
+        heartbeat_error = errorJobs.length;
+        for (const job of errorJobs) {
+            try {
+                const modmailConfig = await Config.findOne({ where: { key: 'modmail_channel_id' } });
+                const modmailChannelId = modmailConfig ? modmailConfig.value : null;
+                if (!modmailChannelId) {
+                    console.warn(`[Poller] No modmail_channel_id configured; skipping error notification for job id: ${job.id}, url: ${job.fic_url}`);
+                } else {
+                    const modmailChannel = client.channels.cache.get(modmailChannelId);
+                    if (modmailChannel) {
+                        const errMsg = job.error_message || 'Unknown error';
+                        let contentMsg = `Heads up: a fic parsing job hit an error and was dropped.`;
+                        contentMsg += `\n\n🔗 <${job.fic_url}>`;
+                        contentMsg += `\n**Error:** ${errMsg}`;
+                        const sent = await modmailChannel.send({ content: contentMsg });
+                        // no thread for errors; keep noise low
+                    }
+                }
+            } catch (err) {
+                console.error('[Poller] Failed to send error notification for job:', err, `job id: ${job.id}, url: ${job.fic_url}`);
+            }
+            // Clean up subscribers and delete job
+            const subscribers = await ParseQueueSubscriber.findAll({ where: { queue_id: job.id } });
+            if (subscribers.length) {
+                await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+            }
+            await ParseQueue.destroy({ where: { id: job.id } });
+        }
         
         // Process regular done jobs
         for (const job of doneJobs) {
@@ -233,7 +268,7 @@ async function notifyQueueSubscribers(client) {
         console.error('Error in queue notification poller:', err);
     }
     // Heartbeat: summarize this cycle's job counts
-    console.log(`[Poller] Heartbeat — nOTP: ${heartbeat_n}, done: ${heartbeat_done}, series-done: ${heartbeat_series_done}`);
+    console.log(`[Poller] Heartbeat — nOTP: ${heartbeat_n}, done: ${heartbeat_done}, series-done: ${heartbeat_series_done}, error: ${heartbeat_error}`);
 }
 
 
