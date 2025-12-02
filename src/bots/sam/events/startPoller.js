@@ -42,7 +42,12 @@ async function notifyQueueSubscribers(client) {
             let mentionList = users.filter(u => u.queueNotifyTag !== false).map(u => `<@${u.discordId}>`).filter(m => m !== submitterMention);
             let allMentions = submitterMention;
             if (mentionList.length) allMentions += (allMentions ? ' ' : '') + mentionList.join(' ');
-            if (allMentions) contentMsg += `\n**Submitted by:** ${allMentions}`;
+            if (allMentions) {
+                contentMsg += `\n**Submitted by:** ${allMentions}`;
+            } else {
+                // Fallback when no submitter or subscribers are present
+                contentMsg += `\n**Submitted by:** Unknown`;
+            }
             contentMsg += `\n\nIf this was flagged by mistake, you can approve it manually. Otherwise, you can let the member know why their fic was bounced by using @relay in this thread.`;
             try {
                 // Try to get fic title from Recommendation if it exists

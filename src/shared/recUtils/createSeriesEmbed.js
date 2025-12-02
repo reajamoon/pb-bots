@@ -303,23 +303,57 @@ export function createSeriesEmbed(series) {
     // Works in Series (show first 4 works, with 5th line as 'and N more') - MOVED BEFORE TAGS
     if (series.works && Array.isArray(series.works) && series.works.length > 0) {
         const maxWorksToShow = 4;
+
+        // Build an order map from series.series_works (AO3 order) if present
+        const orderMap = new Map(); // ao3ID -> index (1-based)
+        if (Array.isArray(series.series_works) && series.series_works.length > 0) {
+            for (let i = 0; i < series.series_works.length; i++) {
+                const sw = series.series_works[i];
+                const site = detectSiteAndExtractIDs(sw.url || '');
+                if (site && site.site === 'ao3' && site.ao3ID) {
+                    orderMap.set(Number(site.ao3ID), i + 1);
+                }
+            }
+        }
+
+        // Order works: by explicit part if present; else by AO3 order from orderMap; else by publishedDate asc
+        const orderedWorks = [...series.works].sort((a, b) => {
+            const partA = a.part || null;
+            const partB = b.part || null;
+            if (partA != null && partB != null && partA !== partB) return partA - partB;
+
+            const idxA = orderMap.size ? (orderMap.get(Number(a.ao3ID)) || Infinity) : Infinity;
+            const idxB = orderMap.size ? (orderMap.get(Number(b.ao3ID)) || Infinity) : Infinity;
+            if (idxA !== idxB) return idxA - idxB;
+
+            const dateA = a.publishedDate ? new Date(a.publishedDate).getTime() : Infinity;
+            const dateB = b.publishedDate ? new Date(b.publishedDate).getTime() : Infinity;
+            if (dateA !== dateB) return dateA - dateB;
+
+            // Final fallback: createdAt
+            const cA = a.createdAt ? new Date(a.createdAt).getTime() : Infinity;
+            const cB = b.createdAt ? new Date(b.createdAt).getTime() : Infinity;
+            return cA - cB;
+        });
+
+        const worksToDisplay = orderedWorks.slice(0, maxWorksToShow);
         let worksList = '';
-        const worksToDisplay = series.works.slice(0, maxWorksToShow);
-        
         for (let i = 0; i < worksToDisplay.length; i++) {
             const work = worksToDisplay[i];
             const title = work.title || `Work ${i + 1}`;
             const url = work.url || `https://archiveofourown.org/works/${work.ao3ID || work.id}`;
-            worksList += `${i + 1}. [${title}](${url})\n`;
+            // Determine display number: prefer explicit part, else AO3 index from orderMap, else position in this list
+            let displayNum = work.part || orderMap.get(Number(work.ao3ID)) || (i + 1);
+            worksList += `${displayNum}. [${title}](${url})\n`;
         }
-        
+
         // Add 'and N more' line if there are more than 4 works
         if (series.workCount && series.workCount > maxWorksToShow) {
             worksList += `... and ${series.workCount - maxWorksToShow} more works`;
         } else if (series.works.length > maxWorksToShow) {
             worksList += `... and ${series.works.length - maxWorksToShow} more works`;
         }
-        
+
         embed.addFields({ name: `Works in Series (${series.workCount || series.works.length})`, value: worksList.trim(), inline: false });
     }
 

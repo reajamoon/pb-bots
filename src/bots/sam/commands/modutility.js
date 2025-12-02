@@ -84,14 +84,16 @@ export default {
       }
       const ficUrl = interaction.options.getString('fic_url');
       const note = interaction.options.getString('note');
+      const isSeries = ficUrl.includes('/series/');
+      const noun = isSeries ? 'Series' : 'Fic';
       // Try to find the fic in the queue (nOTP or pending)
       let job = await ParseQueue.findOne({ where: { fic_url: ficUrl } });
       if (!job) {
-        return await interaction.reply({ content: `No queue entry found for <${ficUrl}>.`, flags: MessageFlags.Ephemeral });
+        return await interaction.reply({ content: `No queue entry found for <${ficUrl}>. If you need to force requeue, add it normally first.`, flags: MessageFlags.Ephemeral });
       }
       // Only allow override if status is nOTP or error
       if (!['nOTP', 'error'].includes(job.status)) {
-        return await interaction.reply({ content: `This fic is not flagged as nOTP or error. Current status: ${job.status}`, flags: MessageFlags.Ephemeral });
+        return await interaction.reply({ content: `This ${isSeries ? 'series' : 'fic'} is not flagged as nOTP or error. Current status: ${job.status}`, flags: MessageFlags.Ephemeral });
       }
       // Find the original submitter (requested_by)
       const originalSubmitterId = job.requested_by;
@@ -115,7 +117,7 @@ export default {
       if (modmailChannelId) {
         const modmailChannel = interaction.client.channels.cache.get(modmailChannelId);
         if (modmailChannel) {
-          let modmailMsg = `✅ Okay, I just approved and requeued this fic after a mod review: <${ficUrl}>\nSubmitted by: <@${originalSubmitterId}>\nApproved by: <@${interaction.user.id}>`;
+          let modmailMsg = `✅ Okay, I just approved and requeued this ${isSeries ? 'series' : 'fic'} after a mod review: <${ficUrl}>\nSubmitted by: <@${originalSubmitterId}>\nApproved by: <@${interaction.user.id}>`;
           if (note) modmailMsg += `\nNote: ${note}`;
           modmailMsg += `\n> If you have questions or want to leave a note for the submitter, just reply in this thread and I’ll send it along.`;
           // Start a thread for this modmail message
@@ -137,16 +139,16 @@ export default {
           const dmUser = await interaction.client.users.fetch(originalSubmitterId);
           if (dmUser) {
             await dmUser.send({
-              content: `Hey, just a heads up: your fic <${ficUrl}> was reviewed and approved by a mod. I’ve put it back in the queue for you, so you’ll get updates as it moves through the stacks. Thanks for sticking with it. - Sam`
+              content: `Hey, just a heads up: your ${isSeries ? 'series' : 'fic'} <${ficUrl}> was reviewed and approved by a mod. I’ve put it back in the queue for you, so you’ll get updates as it moves through the stacks. Thanks for sticking with it.`
             });
           }
         }
       } catch (err) {
         // Ignore DM errors
       }
-      return await interaction.reply({ content: `Fic <${ficUrl}> has been approved and requeued.`, flags: MessageFlags.Ephemeral });
+      return await interaction.reply({ content: `${noun} <${ficUrl}> has been approved and requeued.`, flags: MessageFlags.Ephemeral });
     }
-    
+
     // Logging for upsert/debug
     if (!user) {
       console.log(`[modutility] User not found in DB, will create: ${userId}`);
@@ -222,7 +224,7 @@ export default {
       if (!rec) {
         return await interaction.reply({ content: `Recommendation ID ${recId} not found.`, flags: MessageFlags.Ephemeral });
       }
-      
+
       // Find lock using ao3ID or AO3 series ID
       const whereConditions = [];
       if (rec.ao3ID) {
@@ -235,11 +237,11 @@ export default {
           whereConditions.push({ seriesId: series.ao3SeriesId, field, locked: true });
         }
       }
-      
+
       if (whereConditions.length === 0) {
         return await interaction.reply({ content: `No AO3 ID or series ID found for rec ID ${recId}.`, flags: MessageFlags.Ephemeral });
       }
-      
+
       const lock = await ModLock.findOne({ where: { [Op.or]: whereConditions } });
       if (!lock) {
         return await interaction.reply({ content: `No active lock found for field "${field}" on rec ID ${recId}.`, flags: MessageFlags.Ephemeral });

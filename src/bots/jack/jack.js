@@ -155,10 +155,13 @@ async function handleJobResult(job, result, siteInfo) {
 					error_message: null,
 					result: null
 				});
+				// Leave subscribers intact for Sam to notify via modmail.
+				console.log(`[QueueWorker] Marked job ${job.id} as nOTP; subscribers retained for modmail notification.`);
 			} else {
 				await job.update({ status: 'error', error_message: result.error });
+				// Clean up subscribers on generic errors
+				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
 			}
-			await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
 			return;
 		}
 

@@ -34,6 +34,16 @@ async function batchSeriesRecommendationJob(payload) {
     
     // Step 3: Process individual works (limit to 5)
     const worksToProcess = seriesMetadata.works.slice(0, 5);
+
+    // Build AO3 order -> part number map using the full series list
+    const ao3PartMap = new Map(); // ao3ID -> part (1-based index in AO3 list)
+    if (Array.isArray(seriesMetadata.works)) {
+      for (let i = 0; i < seriesMetadata.works.length; i++) {
+        const w = seriesMetadata.works[i];
+        const ao3Id = extractAO3WorkId(w.url);
+        if (ao3Id) ao3PartMap.set(ao3Id, i + 1);
+      }
+    }
     
     // Step 3a: Determine which works are primary vs not primary using proper logic
     const markedWorks = markPrimaryAndNotPrimaryWorks(worksToProcess);
@@ -64,7 +74,8 @@ async function batchSeriesRecommendationJob(payload) {
         user,
         isUpdate: shouldUpdate,
         type: 'work',
-        notPrimaryWork: isNotPrimary
+        notPrimaryWork: isNotPrimary,
+        part: ao3PartMap.get(ao3ID) || null
       });
       
       if (workResult.error) {

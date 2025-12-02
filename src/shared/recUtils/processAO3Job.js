@@ -28,22 +28,23 @@ async function processAO3Job(payload) {
     user,
     isUpdate = false,
     type = 'work',
-    notPrimaryWork = false
+    notPrimaryWork = false,
+    part = null
   } = payload;
 
   // Build AO3 URL from work ID
   const url = `https://archiveofourown.org/works/${ao3ID}`;
-  
+
   // Fetch AO3 metadata
   let metadata;
   try {
     metadata = await fetchFicMetadata(url);
-    
+
     // Unwrap { metadata } if present (AO3 parser returns { metadata: ... })
     if (metadata && metadata.metadata && typeof metadata.metadata === 'object') {
       metadata = metadata.metadata;
     }
-    
+
     // Restore stats fields to top-level if present in stats
     if (metadata && metadata.stats) {
       const statsMap = {
@@ -58,14 +59,14 @@ async function processAO3Job(payload) {
         bookmarks: 'bookmarks',
         comments: 'comments',
       };
-      
+
       for (const [statsKey, metaKey] of Object.entries(statsMap)) {
         if (metadata.stats[statsKey] !== undefined && metadata[metaKey] === undefined) {
           metadata[metaKey] = metadata.stats[statsKey];
         }
       }
     }
-    
+
     if (metadata && metadata.url) {
       metadata.url = normalizeAO3Url(metadata.url);
     }
@@ -99,7 +100,7 @@ async function processAO3Job(payload) {
     const fandomTags = metadata.fandom_tags || metadata.fandom || [];
     const relationshipTags = metadata.relationship_tags || [];
     const validation = validateDeanCasRec(fandomTags, relationshipTags);
-    
+
     if (!validation.valid) {
       return { error: validation.reason || 'Failed Dean/Cas validation' };
     }
@@ -124,7 +125,7 @@ async function processAO3Job(payload) {
   if (isUpdate) {
     // Find existing recommendation by ao3ID
     const existingRec = await Recommendation.findOne({ where: { ao3ID } });
-    
+
     if (!existingRec) {
       console.error('[processAO3Job] Update requested but no existing recommendation found for ao3ID:', ao3ID);
       return { error: updateMessages.genericError };
@@ -135,8 +136,8 @@ async function processAO3Job(payload) {
       const lockedFields = new Set();
 
     // Update with fresh AO3 data (filter out locked fields)
-    const updateFields = await buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork, lockedFields);
-    
+    const updateFields = await buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork, lockedFields, part);
+
     // Debug logging for all updates
     console.log('[processAO3Job] Update fields generated:', {
       ao3ID: existingRec.ao3ID,
@@ -144,7 +145,7 @@ async function processAO3Job(payload) {
       hasAuthorsUpdate: 'authors' in updateFields,
       authorsUpdate: updateFields.authors
     });
-    
+
     if (Object.keys(updateFields).length > 0) {
       try {
         await existingRec.update(updateFields);
@@ -157,7 +158,7 @@ async function processAO3Job(payload) {
     } else {
       console.log('[processAO3Job] No fields to update for:', existingRec.ao3ID);
     }
-    
+
     recommendation = existingRec;
   } else {
     // Create new recommendation
@@ -191,7 +192,8 @@ async function processAO3Job(payload) {
         category_tags: Array.isArray(metadata.category_tags) ? metadata.category_tags : [],
         freeform_tags: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : [],
         ...(seriesId ? { seriesId } : {}),
-        notPrimaryWork
+        notPrimaryWork,
+        ...(part ? { part } : {})
       });
     } catch (err) {
       console.error('[processAO3Job] Error creating recommendation:', err);
@@ -201,7 +203,7 @@ async function processAO3Job(payload) {
 
   // Generate embed from database record
   const embed = createRecEmbed(recommendation);
-  
+
   return { embed, recommendation };
 }
 
@@ -215,20 +217,20 @@ function isUnset(val) {
   return false;
 }
 
-async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork, lockedFields = new Set()) {
+async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork, lockedFields = new Set(), part = null) {
   const updateFields = {};
-  
+
   // Check each field for changes
   if (existingRec.title !== metadata.title && !lockedFields.has('title')) {
     updateFields.title = metadata.title;
   }
-  
+
   // Authors comparison
   const newAuthors = metadata.authors || (metadata.author ? [metadata.author] : ['Unknown Author']);
-  const authorsChanged = !Array.isArray(existingRec.authors) || 
-    existingRec.authors.length !== newAuthors.length || 
+  const authorsChanged = !Array.isArray(existingRec.authors) ||
+    existingRec.authors.length !== newAuthors.length ||
     existingRec.authors.some((a, i) => a !== newAuthors[i]);
-  
+
   // Debug logging for author updates
   console.log('[buildUpdateFields] Author comparison:', {
     existingAuthors: existingRec.authors,
@@ -236,24 +238,24 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
     authorsChanged: authorsChanged,
     ao3ID: existingRec.ao3ID
   });
-  
+
   if (authorsChanged && !lockedFields.has('author') && !lockedFields.has('authors')) {
     updateFields.authors = newAuthors;
     updateFields.author = newAuthors[0] || 'Unknown Author'; // Legacy field
     console.log('[buildUpdateFields] Authors will be updated:', { newAuthors, ao3ID: existingRec.ao3ID });
   }
-  
+
   if (existingRec.summary !== metadata.summary && !lockedFields.has('summary')) {
     updateFields.summary = metadata.summary;
   }
-  
+
   // Tags comparison
   const newTags = Array.isArray(metadata.tags) ? metadata.tags : [];
   const oldTags = Array.isArray(existingRec.tags) ? existingRec.tags : [];
   if (JSON.stringify(oldTags) !== JSON.stringify(newTags) && !lockedFields.has('tags')) {
     updateFields.tags = newTags;
   }
-  
+
   // Basic fields
     // Respect global modlocks unless the field is currently unset
     const applyIfAllowed = async (fieldName, newValue, currentValue, predicate = (a,b)=>a!==b) => {
@@ -284,7 +286,7 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
   if (existingRec.bookmarks !== metadata.bookmarks) updateFields.bookmarks = metadata.bookmarks;
   if (existingRec.comments !== metadata.comments) updateFields.comments = metadata.comments;
     await applyIfAllowed('category', metadata.category, existingRec.category);
-  
+
   // Tag arrays
   const tagFields = ['fandom_tags', 'relationship_tags', 'character_tags', 'category_tags', 'freeform_tags'];
   for (const field of tagFields) {
@@ -298,7 +300,7 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
       if (!lockedAndSet) updateFields[field] = newValue;
     }
   }
-  
+
   // Archive warnings
   if (Array.isArray(metadata.archiveWarnings)) {
     const oldWarnings = Array.isArray(existingRec.archive_warnings) ? existingRec.archive_warnings : [];
@@ -309,7 +311,7 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
       if (!lockedAndSet) updateFields.archive_warnings = metadata.archiveWarnings;
     }
   }
-  
+
   // Series and flags
   if (seriesId && existingRec.seriesId !== seriesId && !lockedFields.has('seriesId')) {
     updateFields.seriesId = seriesId;
@@ -317,7 +319,17 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
   if (existingRec.notPrimaryWork !== notPrimaryWork) {
     updateFields.notPrimaryWork = notPrimaryWork;
   }
-  
+
+  // Persist AO3-provided part number when available
+  if (part !== null && part !== undefined) {
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const globallyLocked = botsRespect ? await isFieldGloballyModlocked('part') : false;
+    const lockedAndSet = globallyLocked && !isUnset(existingRec.part);
+    if (!lockedAndSet && existingRec.part !== part) {
+      updateFields.part = part;
+    }
+  }
+
   return updateFields;
 }
 
