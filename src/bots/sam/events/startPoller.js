@@ -6,10 +6,11 @@ import { createSeriesEmbed } from '../../../shared/recUtils/createSeriesEmbed.js
 const POLL_INTERVAL_MS = 10000;
 
 async function notifyQueueSubscribers(client) {
+    // Heartbeat counters for this cycle
+    let heartbeat_n = 0;
+    let heartbeat_done = 0;
+    let heartbeat_series_done = 0;
     try {
-        let heartbeat_n = 0;
-        let heartbeat_done = 0;
-        let heartbeat_series_done = 0;
         // Notify for jobs that failed Dean/Cas validation (nOTP)
         const nOTPJobs = await ParseQueue.findAll({
             where: { status: 'nOTP' },
