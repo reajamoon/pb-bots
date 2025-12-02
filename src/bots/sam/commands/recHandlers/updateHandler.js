@@ -263,17 +263,48 @@ export default async function handleUpdateRecommendation(interaction) {
                     batch_type: isSeriesUrl ? 'series' : null
                 });
             } catch (err) {
-                // Handle race condition
+                // Handle existing queue entry for this URL (unique constraint)
                 if ((err && err.code === '23505') || (err && err.name === 'SequelizeUniqueConstraintError')) {
                     queueEntry = await ParseQueue.findOne({ where: { fic_url: urlToUse } });
-                    if (queueEntry && (queueEntry.status === 'pending' || queueEntry.status === 'processing')) {
+                    if (!queueEntry) throw err; // Shouldn't happen, but bubble up if it does
+
+                    // If already pending/processing, just subscribe and inform the user
+                    if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
                         await interaction.editReply({
                             content: "That fic is already being processed! You'll get a notification when it's ready."
                         });
                         return;
                     }
+
+                    // Otherwise, requeue the existing entry (handles 'error', 'nOTP', 'done', etc.)
+                    try {
+                        // Decide instant candidate again on requeue
+                        const activeJobsRecheck = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
+                        const instantRequeue = !isSeriesUrl && activeJobsRecheck === 0;
+
+                        // Preserve or update requested_by (append if different)
+                        let requestedBy = interaction.user.id;
+                        if (queueEntry.requested_by && !queueEntry.requested_by.split(',').includes(interaction.user.id)) {
+                            requestedBy = `${queueEntry.requested_by},${interaction.user.id}`;
+                        }
+
+                        await queueEntry.update({
+                            status: 'pending',
+                            validation_reason: null,
+                            error_message: null,
+                            result: null,
+                            submitted_at: new Date(),
+                            requested_by: requestedBy,
+                            instant_candidate: instantRequeue,
+                            batch_type: isSeriesUrl ? 'series' : null
+                        });
+                    } catch (updErr) {
+                        console.error('[Rec update] Failed to requeue existing ParseQueue entry:', updErr);
+                        throw err; // fall back to original error handling
+                    }
+                } else {
+                    throw err;
                 }
-                throw err;
             }
 
             try {
@@ -283,7 +314,7 @@ export default async function handleUpdateRecommendation(interaction) {
             }
 
             await interaction.editReply({
-                content: "Your fic update has been added to the parsing queue! I'll notify you when it's ready."
+                content: "Your fic update has been queued! I'll notify you when it's ready."
             });
         } else {
             // Manual-only mode: apply only the provided fields directly, no queue
