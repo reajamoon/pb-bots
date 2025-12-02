@@ -1,6 +1,7 @@
 // Utility for global modlock field checks using Config table
 import { Config, User } from '../models/index.js';
 let globalModlockedFieldsCache = null;
+let botsRespectGlobalModlocksCache = null;
 
 /**
  * Loads and caches the global modlocked fields from the Config table.
@@ -20,6 +21,23 @@ export async function getGlobalModlockedFields() {
   return globalModlockedFieldsCache;
 }
 
+/**
+ * Returns whether bots (automated AO3 updates) should respect global modlocks.
+ * Controlled via Config key 'bots_respect_global_modlocks' (string 'true'/'false').
+ * Defaults to 'true' if missing.
+ */
+export async function shouldBotsRespectGlobalModlocks() {
+  if (botsRespectGlobalModlocksCache !== null) return botsRespectGlobalModlocksCache;
+  try {
+    const cfg = await Config.findOne({ where: { key: 'bots_respect_global_modlocks' } });
+    const val = (cfg?.value || 'true').toString().trim().toLowerCase();
+    botsRespectGlobalModlocksCache = (val === 'true');
+  } catch (e) {
+    console.error('[modlockUtils] Failed to read bots_respect_global_modlocks, defaulting to true:', e);
+    botsRespectGlobalModlocksCache = true;
+  }
+  return botsRespectGlobalModlocksCache;
+}
 /**
  * Checks if a field is globally modlocked.
  * @param {string} fieldName
@@ -57,4 +75,5 @@ export async function isFieldGloballyModlockedFor(requestingUser, fieldName) {
  */
 export function clearGlobalModlockedFieldsCache() {
   globalModlockedFieldsCache = null;
+  botsRespectGlobalModlocksCache = null;
 }

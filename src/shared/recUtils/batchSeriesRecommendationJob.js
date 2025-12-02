@@ -3,6 +3,7 @@
 
 import { Series, Recommendation } from '../../models/index.js';
 import processAO3Job from './processAO3Job.js';
+import { isFieldGloballyModlocked, shouldBotsRespectGlobalModlocks } from '../modlockUtils.js';
 import { markPrimaryAndNotPrimaryWorks } from '../../bots/sam/commands/recHandlers/seriesUtils.js';
 
 /**
@@ -128,15 +129,13 @@ async function upsertSeriesRecord(seriesMetadata, url) {
         summary: w.summary
       })) || []
     };
-    // Respect modlocks: fetch locked fields for this AO3 series ID
-    let lockedFields = new Set();
-    try {
-      const { ModLock } = await import('../../models/index.js');
-      const locks = await ModLock.findAll({ where: { seriesId: String(seriesData.ao3SeriesId), locked: true } });
-      lockedFields = new Set(locks.map(l => l.field).filter(Boolean));
-    } catch (e) {
-      console.error('[upsertSeriesRecord] Failed to resolve series locks:', e);
-    }
+    // For global locks: allow AO3 to fill unset fields, but do not overwrite set fields
+    const isUnset = (val) => {
+      if (val === null || val === undefined) return true;
+      if (typeof val === 'string') return val.trim().length === 0;
+      if (Array.isArray(val)) return val.length === 0;
+      return false;
+    };
 
     // Find existing by URL; if exists, update only unlocked fields
     let seriesRecord = await Series.findOne({ where: { url } });
@@ -148,9 +147,10 @@ async function upsertSeriesRecord(seriesMetadata, url) {
       const updatePayload = {};
       const candidateFields = ['name','summary','authors','workCount','wordCount','status','workIds','series_works'];
       for (const field of candidateFields) {
-        if (!lockedFields.has(field)) {
-          updatePayload[field] = seriesData[field];
-        }
+        const botsRespect = await shouldBotsRespectGlobalModlocks();
+        const locked = botsRespect ? await isFieldGloballyModlocked(field) : false;
+        const lockedAndSet = locked && !isUnset(seriesRecord[field]);
+        if (!lockedAndSet) updatePayload[field] = seriesData[field];
       }
       if (Object.keys(updatePayload).length > 0) {
         await seriesRecord.update(updatePayload);

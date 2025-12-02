@@ -6,6 +6,7 @@ import { Recommendation, Series } from '../../models/index.js';
 import { fetchFicMetadata } from './ficParser.js';
 import { createRecEmbed } from './createRecEmbed.js';
 import normalizeAO3Url from './normalizeAO3Url.js';
+import { isFieldGloballyModlocked, shouldBotsRespectGlobalModlocks } from '../modlockUtils.js';
 import updateMessages from '../text/updateMessages.js';
 
 /**
@@ -130,18 +131,8 @@ async function processAO3Job(payload) {
     }
 
     // Update with fresh AO3 data
-    let updateFields = buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork);
-    // Respect ModLocks for this AO3 work: filter out locked fields
-    try {
-      const { ModLock } = await import('../../models/index.js');
-      const locks = await ModLock.findAll({ where: { ao3ID: String(ao3ID), locked: true } });
-      const locked = new Set(locks.map(l => l.field).filter(Boolean));
-      if (locked.size > 0) {
-        updateFields = Object.fromEntries(Object.entries(updateFields).filter(([k]) => !locked.has(k)));
-      }
-    } catch (e) {
-      console.error('[processAO3Job] Failed to resolve locked fields:', e);
-    }
+    // ModLocks apply to user edits only — automated AO3 updates bypass them
+    const updateFields = await buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork);
     
     if (Object.keys(updateFields).length > 0) {
       try {
@@ -203,7 +194,14 @@ async function processAO3Job(payload) {
 /**
  * Builds update fields object by comparing existing and new metadata
  */
-function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork) {
+function isUnset(val) {
+  if (val === null || val === undefined) return true;
+  if (typeof val === 'string') return val.trim().length === 0;
+  if (Array.isArray(val)) return val.length === 0;
+  return false;
+}
+
+async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork) {
   const updateFields = {};
   
   // Check each field for changes
@@ -230,38 +228,74 @@ function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork) {
   const newTags = Array.isArray(metadata.tags) ? metadata.tags : [];
   const oldTags = Array.isArray(existingRec.tags) ? existingRec.tags : [];
   if (JSON.stringify(oldTags) !== JSON.stringify(newTags)) {
-    updateFields.tags = newTags;
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const locked = botsRespect ? await isFieldGloballyModlocked('tags') : false;
+    if (!(locked && !isUnset(oldTags))) updateFields.tags = newTags;
   }
   
   // Basic fields
-  if (existingRec.rating !== metadata.rating) updateFields.rating = metadata.rating;
+  {
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const locked = botsRespect ? await isFieldGloballyModlocked('rating') : false;
+    const lockedAndSet = locked && !isUnset(existingRec.rating);
+    if (!lockedAndSet && existingRec.rating !== metadata.rating) updateFields.rating = metadata.rating;
+  }
   if (existingRec.wordCount !== metadata.wordCount) updateFields.wordCount = metadata.wordCount;
   if (existingRec.chapters !== metadata.chapters) updateFields.chapters = metadata.chapters;
-  if (existingRec.status !== metadata.status) updateFields.status = metadata.status;
-  if (existingRec.language !== metadata.language) updateFields.language = metadata.language;
-  if (existingRec.publishedDate !== metadata.publishedDate) updateFields.publishedDate = metadata.publishedDate;
-  if (existingRec.updatedDate !== metadata.updatedDate) updateFields.updatedDate = metadata.updatedDate;
+  {
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const locked = botsRespect ? await isFieldGloballyModlocked('status') : false;
+    const lockedAndSet = locked && !isUnset(existingRec.status);
+    if (!lockedAndSet && existingRec.status !== metadata.status) updateFields.status = metadata.status;
+  }
+  {
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const locked = botsRespect ? await isFieldGloballyModlocked('language') : false;
+    const lockedAndSet = locked && !isUnset(existingRec.language);
+    if (!lockedAndSet && existingRec.language !== metadata.language) updateFields.language = metadata.language;
+  }
+  {
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const locked = botsRespect ? await isFieldGloballyModlocked('publishedDate') : false;
+    const lockedAndSet = locked && !isUnset(existingRec.publishedDate);
+    if (!lockedAndSet && existingRec.publishedDate !== metadata.publishedDate) updateFields.publishedDate = metadata.publishedDate;
+  }
+  {
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const locked = botsRespect ? await isFieldGloballyModlocked('updatedDate') : false;
+    const lockedAndSet = locked && !isUnset(existingRec.updatedDate);
+    if (!lockedAndSet && existingRec.updatedDate !== metadata.updatedDate) updateFields.updatedDate = metadata.updatedDate;
+  }
   if (existingRec.kudos !== metadata.kudos) updateFields.kudos = metadata.kudos;
   if (existingRec.hits !== metadata.hits) updateFields.hits = metadata.hits;
   if (existingRec.bookmarks !== metadata.bookmarks) updateFields.bookmarks = metadata.bookmarks;
   if (existingRec.comments !== metadata.comments) updateFields.comments = metadata.comments;
-  if (existingRec.category !== metadata.category) updateFields.category = metadata.category;
+  {
+    const botsRespect = await shouldBotsRespectGlobalModlocks();
+    const locked = botsRespect ? await isFieldGloballyModlocked('category') : false;
+    const lockedAndSet = locked && !isUnset(existingRec.category);
+    if (!lockedAndSet && existingRec.category !== metadata.category) updateFields.category = metadata.category;
+  }
   
   // Tag arrays
   const tagFields = ['fandom_tags', 'relationship_tags', 'character_tags', 'category_tags', 'freeform_tags'];
-  tagFields.forEach(field => {
+  for (const field of tagFields) {
     const newValue = Array.isArray(metadata[field]) ? metadata[field] : [];
     const oldValue = Array.isArray(existingRec[field]) ? existingRec[field] : [];
     if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
-      updateFields[field] = newValue;
+      const botsRespect = await shouldBotsRespectGlobalModlocks();
+      const locked = botsRespect ? await isFieldGloballyModlocked(field) : false;
+      if (!(locked && !isUnset(oldValue))) updateFields[field] = newValue;
     }
-  });
+  }
   
   // Archive warnings
   if (Array.isArray(metadata.archiveWarnings)) {
     const oldWarnings = Array.isArray(existingRec.archive_warnings) ? existingRec.archive_warnings : [];
     if (JSON.stringify(oldWarnings) !== JSON.stringify(metadata.archiveWarnings)) {
-      updateFields.archive_warnings = metadata.archiveWarnings;
+      const botsRespect = await shouldBotsRespectGlobalModlocks();
+      const locked = botsRespect ? await isFieldGloballyModlocked('archive_warnings') : false;
+      if (!(locked && !isUnset(oldWarnings))) updateFields.archive_warnings = metadata.archiveWarnings;
     }
   }
   

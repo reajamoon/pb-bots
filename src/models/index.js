@@ -14,19 +14,29 @@ import SeriesModel from './Series.js';
 import ModLockModel from './ModLock.js';
 import ModmailRelayModel from './ModmailRelay.js';
 
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
-    dialect: process.env.NODE_ENV === 'production' ? 'postgres' : 'sqlite',
-    storage: process.env.NODE_ENV === 'production' ? undefined : './database/bot.sqlite',
-    logging: process.env.NODE_ENV === 'development' ? console.log : false,
-    pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
-    }
-});
+// Determine connection settings
+const rawDatabaseUrl = process.env.DATABASE_URL || '';
+const isProd = process.env.NODE_ENV === 'production';
+let sequelize;
 
-if (process.env.NODE_ENV === 'production' && sequelize.getDialect() === 'sqlite') {
+if (rawDatabaseUrl.startsWith('postgres://') || rawDatabaseUrl.startsWith('postgresql://')) {
+    // Explicit Postgres connection string provided
+    sequelize = new Sequelize(rawDatabaseUrl, {
+        dialect: 'postgres',
+        logging: process.env.NODE_ENV === 'development' ? console.log : false,
+        pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
+    });
+} else if (isProd) {
+    throw new Error('FATAL: Missing or invalid DATABASE_URL for production.');
+} else {
+    // Fallback to local sqlite for dev when no DATABASE_URL provided
+    sequelize = new Sequelize('sqlite:./database/bot.sqlite', {
+        logging: process.env.NODE_ENV === 'development' ? console.log : false,
+        pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
+    });
+}
+
+if (isProd && sequelize.getDialect() === 'sqlite') {
     throw new Error('FATAL: SQLite is not allowed in production! Check your config and environment variables.');
 }
 
