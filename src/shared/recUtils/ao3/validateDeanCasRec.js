@@ -8,6 +8,8 @@ const CANONICAL_FANDOM = 'supernatural';
 const FANDOM_ALIASES = [
   'supernatural',
   'supernatural (tv 2005)',
+  'supernatural (2005)',
+  'supernatural (tv)',
   'spn',
   'spn rpf' // allow if relationship tags clearly indicate Dean/Cas (rare)
 ];
@@ -66,15 +68,55 @@ function isQualifier(tag) {
     'behind the scenes',
     'not shown',
     'unseen',
-    'if you squint'
+    'if you squint',
     'referenced',
     'reference',
-    'mentioned'
+    'mentioned',
+    'former',
+    'ex-',
+    'previously',
+    'history of',
+    'brief',
+    'fleeting',
+    'short',
+    'small role',
+    'subplot',
+    'side-plot',
+    'incidental',
+    'subtext',
+    'read-between-the-lines',
+    'name-dropped',
+    'alluded to',
+    'nod to',
+    'not depicted',
+    'pre-relationship',
+    'pre-ship',
+    'pre-romance',
+    'before they’re together',
+    'post-breakup',
+    'after breakup',
+    'broken up',
+    'past tense',
+    'flashback',
+    'memory',
+    'recalled',
+    'prior chapter',
+    'prior event',
+    'one-sided',
+    'unrequited',
+    'pining-only',
+    'crush-only',
+    'not focus',
+    'not central',
+    'barely mentioned',
+    'a long time ago',
+    'widowed',
+    'long past',
   ];
   // Quick match on any qualifier token
   if (QUALIFIERS.some(q => t.includes(q))) return true;
   // Phrase-level checks for common disambiguations
-  if (/behind the scenes|occurs? behind the scenes|is not shown|not (depicted|shown)/i.test(tag)) return true;
+  if (/behind the scenes|occurs? behind the scenes|is not shown|not (depicted|shown)|post[- ]breakup|after (a )?breakup|broken up|pre[- ](relationship|ship|romance)|one[- ]sided|unrequited|not (the )?main pairing|secondary pairing/i.test(tag)) return true;
   return false;
 }
 
