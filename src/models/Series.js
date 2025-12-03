@@ -57,6 +57,17 @@ export default function SeriesModel(sequelize) {
       allowNull: true,
       comment: 'Completion status for the series (AO3)'
     }
+    ,
+    recommendedBy: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Discord user ID of the original series recommender'
+    },
+    recommendedByUsername: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Discord username of the original series recommender'
+    }
   }, {
     tableName: 'series',
     timestamps: true,

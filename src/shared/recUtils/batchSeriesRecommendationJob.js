@@ -26,7 +26,7 @@ async function batchSeriesRecommendationJob(payload) {
     }
 
     // Step 2: Create/update Series record in database
-    const seriesRecord = await upsertSeriesRecord(seriesMetadata, url);
+    const seriesRecord = await upsertSeriesRecord(seriesMetadata, url, user);
 
     if (!seriesRecord || !seriesRecord.id) {
       return { error: 'Failed to create/update series record' };
@@ -130,7 +130,7 @@ async function batchSeriesRecommendationJob(payload) {
 /**
  * Creates or updates Series record from AO3 series metadata
  */
-async function upsertSeriesRecord(seriesMetadata, url) {
+async function upsertSeriesRecord(seriesMetadata, url, user) {
   try {
     const seriesData = {
       name: seriesMetadata.seriesTitle || seriesMetadata.title || 'Untitled Series',
@@ -141,6 +141,8 @@ async function upsertSeriesRecord(seriesMetadata, url) {
       workCount: seriesMetadata.workCount || seriesMetadata.works?.length || 0,
       wordCount: seriesMetadata.wordCount || null,
       status: seriesMetadata.status || 'Unknown',
+      recommendedBy: user && user.id ? user.id : null,
+      recommendedByUsername: user && user.username ? user.username : null,
       // Store work IDs for reference
       workIds: seriesMetadata.works?.map(w => extractAO3WorkId(w.url)).filter(Boolean) || [],
       // Store work metadata for display
@@ -173,6 +175,11 @@ async function upsertSeriesRecord(seriesMetadata, url) {
         const locked = botsRespect ? await isFieldGloballyModlocked(field) : false;
         const lockedAndSet = locked && !isUnset(seriesRecord[field]);
         if (!lockedAndSet) updatePayload[field] = seriesData[field];
+      }
+      // Set recommender only if not already persisted
+      if (!seriesRecord.recommendedBy && user && user.id) {
+        updatePayload.recommendedBy = user.id;
+        updatePayload.recommendedByUsername = user.username || null;
       }
       if (Object.keys(updatePayload).length > 0) {
         await seriesRecord.update(updatePayload);

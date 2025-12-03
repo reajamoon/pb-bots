@@ -137,9 +137,12 @@ export default async function handleAddRecommendation(interaction) {
       } else if (status === 'created') {
         // Optionally, update notes/additional_tags if provided (for new entry only)
         if (notes || (additionalTags && additionalTags.length > 0)) {
+          const additionalTagsString = Array.isArray(additionalTags)
+            ? additionalTags.join(', ')
+            : (typeof additionalTags === 'string' ? additionalTags : '');
           await queueEntry.update({
             notes: notes || '',
-            additional_tags: additionalTags
+            additional_tags: additionalTagsString || null
           });
         }
         return await interaction.editReply({
@@ -282,9 +285,12 @@ export default async function handleAddRecommendation(interaction) {
       } else if (status === 'created') {
       // Optionally, update notes/additional_tags if provided (for new entry only)
       if (notes || (additionalTags && additionalTags.length > 0)) {
+        const additionalTagsString = Array.isArray(additionalTags)
+          ? additionalTags.join(', ')
+          : (typeof additionalTags === 'string' ? additionalTags : '');
         await queueEntry.update({
           notes: notes || '',
-          additional_tags: additionalTags
+          additional_tags: additionalTagsString || null
         });
       }
       return await interaction.editReply({

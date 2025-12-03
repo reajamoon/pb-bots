@@ -146,21 +146,11 @@ export default {
         const modmailChannel = interaction.client.channels.cache.get(modmailChannelId);
         if (modmailChannel) {
           // Try to find an existing thread for this fic URL
-          let existingThread = null;
-          try {
-            const active = await modmailChannel.threads.fetchActive();
-            const candidates = active && active.threads ? active.threads : modmailChannel.threads.cache;
-            for (const [, t] of candidates) {
-              try {
-                const starter = await t.fetchStarterMessage();
-                const content = starter && starter.content ? starter.content : '';
-                if (content && content.includes(ficUrl)) {
-                  existingThread = t;
-                  break;
-                }
-              } catch {}
-            }
-          } catch {}
+          const { findModmailThreadByUrl } = await import('../../../shared/utils/findModmailThreadByUrl.js');
+          // Use a tiny cache attached to the client for reuse across commands
+          const cache = interaction.client?.modmailThreadCache || new Map();
+          interaction.client.modmailThreadCache = cache;
+          let existingThread = await findModmailThreadByUrl(modmailChannel, ficUrl, cache);
           const approvalMsg = `✅ Approved and requeued: <${ficUrl}>\nSubmitted by: ${originalSubmitterId ? `<@${originalSubmitterId}>` : 'Unknown'}\nApproved by: <@${interaction.user.id}>${note ? `\nNote: ${note}` : ''}`;
           if (existingThread) {
             // Post inside existing thread only; do not create a new base message

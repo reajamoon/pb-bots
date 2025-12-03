@@ -1,5 +1,8 @@
 import { Op } from 'sequelize';
 import { ParseQueue, ParseQueueSubscriber, User, Config, Recommendation } from '../../../models/index.js';
+import { findModmailThreadByUrl } from '../../../shared/utils/findModmailThreadByUrl.js';
+// Tiny cache for modmail threads by normalized URL (simple Map)
+const modmailThreadCache = new Map();
 import { createRecEmbed } from '../../../shared/recUtils/createRecEmbed.js';
 import { createSeriesEmbed } from '../../../shared/recUtils/createSeriesEmbed.js';
 
@@ -69,22 +72,8 @@ async function notifyQueueSubscribers(client) {
                     // Fallback: use fic URL (truncated)
                     threadTitle = `Rec Validation: ${job.fic_url.substring(0, 60)}`;
                 }
-                // Try to find an existing active thread for this fic URL
-                let thread = null;
-                try {
-                    const active = await modmailChannel.threads.fetchActive();
-                    const candidates = active && active.threads ? active.threads : modmailChannel.threads.cache;
-                    for (const [, t] of candidates) {
-                        try {
-                            const starter = await t.fetchStarterMessage();
-                            const content = starter && starter.content ? starter.content : '';
-                            if (content && content.includes(job.fic_url)) {
-                                thread = t;
-                                break;
-                            }
-                        } catch {}
-                    }
-                } catch {}
+                // Try to find an existing thread for this fic URL
+                let thread = await findModmailThreadByUrl(modmailChannel, job.fic_url, modmailThreadCache);
                 if (!thread) {
                     const sentMsg = await modmailChannel.send({ content: contentMsg });
                     // Create a thread for this modmail
@@ -93,9 +82,7 @@ async function notifyQueueSubscribers(client) {
                         autoArchiveDuration: 1440, // 24 hours
                         reason: 'AO3 rec validation failed (nOTP)'
                     });
-                } else {
-                    // Post summary to existing thread without creating a new base message
-                    await modmailChannel.send({ content: `Thread already exists for this fic; continuing in <#${thread.id}>.` });
+                    try { modmailThreadCache.set(job.fic_url, thread.id); } catch {}
                 }
                 // Send action buttons inside the thread for intuitive mod actions
                 try {

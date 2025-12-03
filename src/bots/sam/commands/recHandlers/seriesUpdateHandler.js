@@ -356,6 +356,16 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
 
     // Create or join queue entry for background processing
     const queueEntry = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
+    // If notes or additional tags were provided, persist into ParseQueue with proper serialization
+    if (newNotes || (newAdditionalTags && newAdditionalTags.length > 0)) {
+        const additionalTagsString = Array.isArray(newAdditionalTags)
+            ? newAdditionalTags.join(', ')
+            : (typeof newAdditionalTags === 'string' ? newAdditionalTags : '');
+        await queueEntry.update({
+            notes: newNotes || '',
+            additional_tags: additionalTagsString || null
+        });
+    }
 
     const responseMessage = `🔄 Series "${series.name}" has been queued for update. You'll be notified when processing is complete.`;
     await interaction.editReply({
