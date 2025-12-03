@@ -10,6 +10,16 @@ export const ratingEmojis = {
     'unrated': '❔'
 };
 
+// Display names with proper casing for ratings
+const ratingDisplayNames = {
+    'general audiences': 'General Audiences',
+    'teen and up audiences': 'Teen And Up Audiences',
+    'mature': 'Mature',
+    'explicit': 'Explicit',
+    'not rated': 'Not Rated',
+    'unrated': 'Unrated'
+};
+
 // Archive warning emoji and logic
 export const majorWarningEmoji = '<:warn_yes:1142772202379415622>';
 export const maybeWarningEmoji = '<:warn_maybe:1142772269156933733>';
@@ -32,8 +42,8 @@ export function formatRatingWithEmoji(rating) {
     
     const key = rating.trim().toLowerCase();
     const emoji = ratingEmojis[key] || '❔';
-    
-    return `${emoji} ${rating}`;
+    const display = ratingDisplayNames[key] || rating;
+    return `${emoji} ${display}`;
 }
 
 /**

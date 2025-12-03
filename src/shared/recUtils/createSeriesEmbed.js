@@ -61,12 +61,16 @@ function findOldestWork(works) {
 function getSeriesRatingColor(rating, series) {
     if (rating) return getAo3RatingColor(rating.toLowerCase());
 
-    // Fallback: get rating from primary work if series rating is null
+    // Fallback: compute aggregate rating from works (use highest severity)
     if (series && series.works && series.works.length > 0) {
-        const primaryWork = series.works.find(work => !work.notPrimaryWork) || findOldestWork(series.works);
-        if (primaryWork && primaryWork.rating) {
-            return getAo3RatingColor(primaryWork.rating.toLowerCase());
+        const ratingOrder = ['not rated', 'general audiences', 'teen and up audiences', 'mature', 'explicit'];
+        let maxIndex = 0;
+        for (const work of series.works) {
+            const r = (work.rating || '').toLowerCase();
+            const idx = ratingOrder.indexOf(r);
+            if (idx > maxIndex) maxIndex = idx;
         }
+        return getAo3RatingColor(ratingOrder[maxIndex] || 'not rated');
     }
     return getAo3RatingColor('not rated');
 }
@@ -242,15 +246,26 @@ export function createSeriesEmbed(series) {
         }
         embed.addFields({ name: '🔗 Series Link', value: linkContent, inline: true });
     }
-    // Get rating and status with fallback to primary work
+    // Get rating and status with fallback to aggregate from works
     let seriesRating = series.rating;
     let seriesStatus = series.status;
     
-    if ((!seriesRating || !seriesStatus) && series.works && series.works.length > 0) {
-        const primaryWork = series.works.find(work => !work.notPrimaryWork) || findOldestWork(series.works);
-        if (primaryWork) {
-            if (!seriesRating) seriesRating = primaryWork.rating;
-            if (!seriesStatus) seriesStatus = primaryWork.status;
+    if (series.works && series.works.length > 0) {
+        // Aggregate rating: pick highest severity across all works
+        if (!seriesRating) {
+            const ratingOrder = ['not rated', 'general audiences', 'teen and up audiences', 'mature', 'explicit'];
+            let maxIndex = 0;
+            for (const work of series.works) {
+                const r = (work.rating || '').toLowerCase();
+                const idx = ratingOrder.indexOf(r);
+                if (idx > maxIndex) maxIndex = idx;
+            }
+            seriesRating = ['Not Rated', 'General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit'][maxIndex];
+        }
+        // Status fallback to primary work if missing
+        if (!seriesStatus) {
+            const primaryWork = series.works.find(work => !work.notPrimaryWork) || findOldestWork(series.works);
+            if (primaryWork) seriesStatus = primaryWork.status;
         }
     }
     
