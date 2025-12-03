@@ -7,7 +7,7 @@
   "scripts": {
     "start": "echo \"ERROR: Use PM2 to start the bot (npm run deploy or pm2 start ecosystem.config.js)\" && exit 1",
     "dev": "echo \"ERROR: Use PM2 for development. Do not run nodemon directly.\" && exit 1",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "db:migrate": "node migration-runner.mjs db:migrate",
     "migrate": "node migration-runner.mjs db:migrate",
     "db:seed": "node migration-runner.mjs db:seed:all",

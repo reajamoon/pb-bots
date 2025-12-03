@@ -1,8 +1,79 @@
 // AO3 fic tag validation for Castiel/Dean Winchester rec library
 // Returns { valid: boolean, reason: string|null }
 
-const CANONICAL_SHIP = 'Castiel/Dean Winchester';
-const CANONICAL_FANDOM = 'Supernatural (TV 2005)';
+const CANONICAL_SHIP = 'castiel/dean winchester';
+const CANONICAL_FANDOM = 'supernatural';
+
+// Synonyms and normalizers for fandom and relationship tags
+const FANDOM_ALIASES = [
+  'supernatural',
+  'supernatural (tv 2005)',
+  'spn',
+  'spn rpf' // allow if relationship tags clearly indicate Dean/Cas (rare)
+];
+
+const SHIP_ALIASES = [
+  'castiel/dean winchester',
+  'dean winchester/castiel',
+  'dean/castiel',
+  'castiel/dean',
+  'destiel',
+  'dean/cas',
+  'cas/dean',
+  'deancas',
+  'castiel (supernatural)/dean winchester'
+];
+
+function normalizeTag(s) {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isSupernaturalFandomTag(tag) {
+  const t = normalizeTag(tag).replace(/\s*\([^)]*\)\s*/g, match => match); // keep variants
+  return FANDOM_ALIASES.some(a => t.includes(a));
+}
+
+function isDeanCasExactShip(tag) {
+  const t = normalizeTag(tag).replace(/\s*\([^)]*\)\s*/g, '');
+  if (t.includes('&')) return false; // friendship
+  if (isQualifier(tag)) return true; // allow qualified pairings
+  // direct alias match
+  if (SHIP_ALIASES.includes(t)) return true;
+  // split and check names
+  const parts = t.split('/').map(p => p.trim()).filter(Boolean);
+  const names = parts.map(p => p.replace(/\s*\([^)]*\)\s*/g, '').trim());
+  const hasDean = names.some(n => n === 'dean winchester' || n === 'dean');
+  const hasCas = names.some(n => n === 'castiel' || n === 'cas');
+  return hasDean && hasCas && names.length === 2;
+}
+
+// Qualifiers indicating non-primary/on-rails pairing that should be allowed
+function isQualifier(tag) {
+  const t = normalizeTag(tag);
+  const QUALIFIERS = [
+    'past',
+    'minor',
+    'background',
+    'offscreen',
+    'off-screen',
+    'off stage',
+    'offstage',
+    'off camera',
+    'off-camera',
+    'implied',
+    'hinted',
+    'suggested',
+    'behind the scenes',
+    'not shown',
+    'unseen',
+    'if you squint'
+  ];
+  // Quick match on any qualifier token
+  if (QUALIFIERS.some(q => t.includes(q))) return true;
+  // Phrase-level checks for common disambiguations
+  if (/behind the scenes|occurs? behind the scenes|is not shown|not (depicted|shown)/i.test(tag)) return true;
+  return false;
+}
 
 /**
  * Checks if a fic meets the fandom/ship requirements for this library.
@@ -11,10 +82,9 @@ const CANONICAL_FANDOM = 'Supernatural (TV 2005)';
  * @returns {{ valid: boolean, reason: string|null }}
  */
 
-export function validateDeanCasRec(fandomTags, relationshipTags) {
-  // 1. Must have Supernatural fandom (allow variations with/without year/parentheses)
-  const supernaturalRegex = /^supernatural(\s*\(.*\))?$/i;
-  if (!fandomTags.some(f => supernaturalRegex.test(f.trim()))) {
+export function validateDeanCasRec(fandomTags, relationshipTags, freeformTags = []) {
+  // 1. Must have Supernatural fandom (allow common aliases)
+  if (!Array.isArray(fandomTags) || !fandomTags.some(isSupernaturalFandomTag)) {
     return { valid: false, reason: 'Missing Supernatural fandom tag.' };
   }
   // 2. If no relationship tags, treat as gen (allowed)
@@ -26,16 +96,19 @@ export function validateDeanCasRec(fandomTags, relationshipTags) {
   for (const tag of relationshipTags) {
     const t = tag.trim();
     if (t.includes('&')) continue; // friendship, allowed
-    if (/past|minor/i.test(t)) continue; // allow if marked as past/minor
-    const parts = t.split('/').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const hasDean = parts.includes('dean winchester');
-    const hasCas = parts.includes('castiel');
-    // If tag is exactly Dean/Cas (in any order, only those two), allow
-    if (hasDean && hasCas && parts.length === 2) continue;
-    // If tag contains Dean or Cas and anyone else, reject
-    if ((hasDean || hasCas) && parts.length > 1) {
+    if (isQualifier(t)) continue; // allow if marked with qualifier
+    if (isDeanCasExactShip(t)) continue; // exactly our OTP
+    const parts = normalizeTag(t).split('/').map(s => s.trim()).filter(Boolean);
+    const hasDean = parts.some(p => p === 'dean winchester' || p === 'dean');
+    const hasCas = parts.some(p => p === 'castiel' || p === 'cas');
+    // If tag contains Dean or Cas and anyone else (beyond each other), reject
+    if ((hasDean || hasCas) && parts.length > 1 && !(hasDean && hasCas && parts.length === 2)) {
       return { valid: false, reason: `Detected multishipping or non-OTP: ${tag}` };
     }
+  }
+  // 5. Consider freeform tags for qualifier context; if any strong qualifier appears, allow
+  if (Array.isArray(freeformTags) && freeformTags.some(isQualifier)) {
+    return { valid: true, reason: null };
   }
   // 4. If only gen or exactly Dean/Cas, allow
   return { valid: true, reason: null };

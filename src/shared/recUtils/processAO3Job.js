@@ -132,7 +132,8 @@ async function processAO3Job(payload) {
       const { validateDeanCasRec } = await import('./ao3/validateDeanCasRec.js');
       const fandomTags = metadata.fandom_tags || metadata.fandom || [];
       const relationshipTags = metadata.relationship_tags || [];
-      const validation = validateDeanCasRec(fandomTags, relationshipTags);
+      const freeformTags = metadata.freeform_tags || [];
+      const validation = validateDeanCasRec(fandomTags, relationshipTags, freeformTags);
       
       if (!validation.valid) {
         // Defensive: re-check override just in case it was created during requeue
@@ -146,6 +147,7 @@ async function processAO3Job(payload) {
               seriesId,
               fandomTags,
               relationshipTags,
+              freeformTags,
               reason: validation.reason
             });
             return { error: 'validation_failed', error_message: validation.reason || 'Failed Dean/Cas validation' };
