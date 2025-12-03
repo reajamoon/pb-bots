@@ -69,13 +69,34 @@ async function notifyQueueSubscribers(client) {
                     // Fallback: use fic URL (truncated)
                     threadTitle = `Rec Validation: ${job.fic_url.substring(0, 60)}`;
                 }
-                const sentMsg = await modmailChannel.send({ content: contentMsg });
-                // Create a thread for this modmail
-                const thread = await sentMsg.startThread({
-                    name: threadTitle,
-                    autoArchiveDuration: 1440, // 24 hours
-                    reason: 'AO3 rec validation failed (nOTP)'
-                });
+                // Try to find an existing active thread for this fic URL
+                let thread = null;
+                try {
+                    const active = await modmailChannel.threads.fetchActive();
+                    const candidates = active && active.threads ? active.threads : modmailChannel.threads.cache;
+                    for (const [, t] of candidates) {
+                        try {
+                            const starter = await t.fetchStarterMessage();
+                            const content = starter && starter.content ? starter.content : '';
+                            if (content && content.includes(job.fic_url)) {
+                                thread = t;
+                                break;
+                            }
+                        } catch {}
+                    }
+                } catch {}
+                if (!thread) {
+                    const sentMsg = await modmailChannel.send({ content: contentMsg });
+                    // Create a thread for this modmail
+                    thread = await sentMsg.startThread({
+                        name: threadTitle,
+                        autoArchiveDuration: 1440, // 24 hours
+                        reason: 'AO3 rec validation failed (nOTP)'
+                    });
+                } else {
+                    // Post summary to existing thread without creating a new base message
+                    await modmailChannel.send({ content: `Thread already exists for this fic; continuing in <#${thread.id}>.` });
+                }
                 // Send action buttons inside the thread for intuitive mod actions
                 try {
                     // Compose a detailed thread summary to preserve mod relay expectations
@@ -99,6 +120,14 @@ async function notifyQueueSubscribers(client) {
                         threadSummary += `\n**Submitted by:** Unknown`;
                     }
                     await thread.send({ content: threadSummary });
+                    // If this is a series job with multiple failures, list them for action
+                    if (job.result && job.result.failures && Array.isArray(job.result.failures) && job.result.failures.length) {
+                        const lines = job.result.failures.slice(0, 10).map((f, idx) => `${idx + 1}. <${f.url}> — ${f.reason || 'validation_failed'}`);
+                        await thread.send({ content: `Failed works in series:\n${lines.join('\n')}` });
+                        if (job.result.failures.length > 10) {
+                            await thread.send({ content: `...and ${job.result.failures.length - 10} more.` });
+                        }
+                    }
                     // Try to include a compact summary embed for context
                     try {
                         const rec = await Recommendation.findOne({ where: { url: job.fic_url } });

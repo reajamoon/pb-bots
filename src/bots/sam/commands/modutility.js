@@ -145,19 +145,36 @@ export default {
       if (modmailChannelId) {
         const modmailChannel = interaction.client.channels.cache.get(modmailChannelId);
         if (modmailChannel) {
-          let modmailMsg = `✅ Okay, I approved and requeued this ${isSeries ? 'series' : 'fic'} after a mod review: <${ficUrl}>\nSubmitted by: <@${originalSubmitterId}>\nApproved by: <@${interaction.user.id}>`;
-          if (note) modmailMsg += `\nNote: ${note}`;
-          modmailMsg += `\n> Got questions or want me to relay a note to them? Reply here and I’ll DM them.`;
-          // Start a thread for this modmail message
-          const threadName = ficUrl.length > 80 ? ficUrl.slice(0, 77) + '...' : ficUrl;
-          const modmailMsgObj = await modmailChannel.send({ content: modmailMsg });
+          // Try to find an existing thread for this fic URL
+          let existingThread = null;
           try {
-            await modmailMsgObj.startThread({
-              name: `Fic: ${threadName}`,
-              autoArchiveDuration: 1440 // 24 hours
-            });
-          } catch (err) {
-            // If thread creation fails, just leave the message in channel
+            const active = await modmailChannel.threads.fetchActive();
+            const candidates = active && active.threads ? active.threads : modmailChannel.threads.cache;
+            for (const [, t] of candidates) {
+              try {
+                const starter = await t.fetchStarterMessage();
+                const content = starter && starter.content ? starter.content : '';
+                if (content && content.includes(ficUrl)) {
+                  existingThread = t;
+                  break;
+                }
+              } catch {}
+            }
+          } catch {}
+          const approvalMsg = `✅ Approved and requeued: <${ficUrl}>\nSubmitted by: ${originalSubmitterId ? `<@${originalSubmitterId}>` : 'Unknown'}\nApproved by: <@${interaction.user.id}>${note ? `\nNote: ${note}` : ''}`;
+          if (existingThread) {
+            // Post inside existing thread only; do not create a new base message
+            await existingThread.send({ content: approvalMsg });
+          } else {
+            // Fall back to base message + new thread if no thread exists
+            const modmailMsgObj = await modmailChannel.send({ content: approvalMsg + `\n> Got questions or want me to relay a note to them? Reply here and I’ll DM them.` });
+            try {
+              const threadName = (isSeries ? 'Series: ' : 'Fic: ') + (ficUrl.length > 80 ? ficUrl.slice(0, 77) + '...' : ficUrl);
+              await modmailMsgObj.startThread({
+                name: threadName,
+                autoArchiveDuration: 1440
+              });
+            } catch {}
           }
         }
       }

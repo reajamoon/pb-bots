@@ -40,9 +40,9 @@ export default (sequelize) => {
       primaryKey: true,
     },
     ao3ID: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.STRING,
       allowNull: true,
-      comment: 'AO3 Work ID for work-based locks',
+      comment: 'AO3 Work ID for work-based locks (stored as string to match DB column)',
     },
     seriesId: {
       type: DataTypes.INTEGER,

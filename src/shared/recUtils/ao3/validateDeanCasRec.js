@@ -67,6 +67,9 @@ function isQualifier(tag) {
     'not shown',
     'unseen',
     'if you squint'
+    'referenced',
+    'reference',
+    'mentioned'
   ];
   // Quick match on any qualifier token
   if (QUALIFIERS.some(q => t.includes(q))) return true;

@@ -156,7 +156,7 @@ async function handleJobResult(job, result, siteInfo) {
 					status: 'nOTP',
 					validation_reason: result.error_message || result.error,
 					error_message: null,
-					result: null
+					result: result.failures ? { type: siteInfo.isSeriesUrl ? 'series' : 'work', failures: result.failures } : null
 				});
 				// Leave subscribers intact for Sam to notify via modmail.
 				console.log(`[QueueWorker] Marked job ${job.id} as nOTP; subscribers retained for modmail notification.`);

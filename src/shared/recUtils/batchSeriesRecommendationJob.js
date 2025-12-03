@@ -15,23 +15,23 @@ import { markPrimaryAndNotPrimaryWorks } from '../../bots/sam/commands/recHandle
  */
 async function batchSeriesRecommendationJob(payload) {
   const { url, user, isUpdate = false } = payload;
-  
+
   try {
     // Step 1: Parse series page to get series metadata + works list
     const { fetchAO3SeriesMetadata } = await import('../../shared/recUtils/ao3Meta.js');
     const seriesMetadata = await fetchAO3SeriesMetadata(url);
-    
+
     if (!seriesMetadata || !seriesMetadata.works || seriesMetadata.works.length === 0) {
       return { error: 'Could not parse series or no works found' };
     }
-    
+
     // Step 2: Create/update Series record in database
     const seriesRecord = await upsertSeriesRecord(seriesMetadata, url);
-    
+
     if (!seriesRecord || !seriesRecord.id) {
       return { error: 'Failed to create/update series record' };
     }
-    
+
     // Step 3: Process individual works (limit to 5)
     const worksToProcess = seriesMetadata.works.slice(0, 5);
 
@@ -44,29 +44,32 @@ async function batchSeriesRecommendationJob(payload) {
         if (ao3Id) ao3PartMap.set(ao3Id, i + 1);
       }
     }
-    
+
     // Step 3a: Determine which works are primary vs not primary using proper logic
     const markedWorks = markPrimaryAndNotPrimaryWorks(worksToProcess);
     const results = [];
-    
+    let validationFailed = false;
+    let validationReason = null;
+    const failures = [];
+
     for (let i = 0; i < markedWorks.length; i++) {
       const markedWork = markedWorks[i];
       const work = markedWork.work;
       const ao3ID = extractAO3WorkId(work.url);
-      
+
       if (!ao3ID) {
         console.warn('[batchSeriesJob] Could not extract ao3ID from work URL:', work.url);
         continue;
       }
-      
+
       // Check if this work already exists to determine if we should update
       const { Recommendation } = await import('../../models/index.js');
       const existingWork = await Recommendation.findOne({ where: { ao3ID } });
       const shouldUpdate = !!existingWork;
-      
+
       // Use the proper notPrimaryWork flag from the analysis
       const isNotPrimary = markedWork.notPrimaryWork;
-      
+
       // Process individual work
       const workResult = await processAO3Job({
         ao3ID,
@@ -77,14 +80,19 @@ async function batchSeriesRecommendationJob(payload) {
         notPrimaryWork: isNotPrimary,
         part: ao3PartMap.get(ao3ID) || null
       });
-      
+
       if (workResult.error) {
         console.error(`[batchSeriesJob] Error processing work ${ao3ID}:`, workResult.error);
+        if ((workResult.error || '').toLowerCase() === 'validation_failed') {
+          validationFailed = true;
+          validationReason = workResult.error_message || workResult.error;
+          failures.push({ url: work.url, reason: validationReason });
+        }
       } else {
         results.push(workResult);
       }
     }
-    
+
     // Step 4: Return result with series info and processed works
     // Find the primary work's result for queue notifications
     // The primary work corresponds to the work that was marked as NOT notPrimaryWork
@@ -100,7 +108,10 @@ async function batchSeriesRecommendationJob(payload) {
       primaryWorkResult = results.find(r => r.recommendation) || results[0];
     }
     const primaryRecId = primaryWorkResult?.recommendation?.id || null;
-    
+
+    if (validationFailed) {
+      return { error: 'validation_failed', error_message: validationReason, failures };
+    }
     return {
       type: 'series',
       id: primaryRecId, // ID of primary recommendation for queue notifications
@@ -109,7 +120,7 @@ async function batchSeriesRecommendationJob(payload) {
       processedWorks: results,
       totalWorks: worksToProcess.length
     };
-    
+
   } catch (err) {
     console.error('[batchSeriesJob] Error processing series:', err);
     return { error: 'Series processing failed' };
@@ -168,15 +179,15 @@ async function upsertSeriesRecord(seriesMetadata, url) {
         await seriesRecord.reload();
       }
     }
-    
+
     console.log(`[upsertSeriesRecord] ${created ? 'Created' : 'Updated'} series:`, {
       id: seriesRecord.id,
       name: seriesRecord.name,
       workCount: seriesRecord.workCount
     });
-    
+
     return seriesRecord;
-    
+
   } catch (err) {
     console.error('[upsertSeriesRecord] Error upserting series:', err);
     throw err;

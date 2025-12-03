@@ -177,7 +177,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 }
                 // --- Dean/Cas validation: set nOTP status if invalid ---
                 if (parsed && parsed.fandom_tags && parsed.relationship_tags) {
-                    const validation = validateDeanCasRec(parsed.fandom_tags, parsed.relationship_tags);
+                    const validation = validateDeanCasRec(parsed.fandom_tags, parsed.relationship_tags, parsed.freeform_tags || []);
                     if (!validation.valid) {
                         parsed.status = 'nOTP';
                         // Attach more context if possible
