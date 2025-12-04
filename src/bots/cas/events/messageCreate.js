@@ -1,4 +1,5 @@
 import { Config, ModmailRelay } from '../../../../src/models/index.js';
+import { EmbedBuilder, ChannelType, PermissionFlagsBits } from 'discord.js';
 
 export default async function onMessageCreate(message) {
   try {
@@ -58,7 +59,6 @@ export default async function onMessageCreate(message) {
 
     if (isDM && !relay) {
       // Create a new modmail thread
-      const { EmbedBuilder } = await import('discord.js');
       const baseEmbed = new EmbedBuilder()
         .setColor(0x3b88c3)
         .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
@@ -73,7 +73,6 @@ export default async function onMessageCreate(message) {
       let thread = null;
       // If modmail channel is a Forum, create a thread directly with the embed
       try {
-        const { ChannelType } = await import('discord.js');
         console.log('[cas.modmail] Creating thread. Channel type:', channel.type, 'Forum?', channel.type === ChannelType.GuildForum, 'User:', message.author.id);
         if (channel.type === ChannelType.GuildForum) {
           thread = await channel.threads.create({
@@ -84,7 +83,6 @@ export default async function onMessageCreate(message) {
           });
           console.log('[cas.modmail] Forum thread created:', thread?.id);
         } else {
-          const { PermissionFlagsBits, ChannelType } = await import('discord.js');
           const perms = channel.permissionsFor(client.user);
           if (!perms || (!perms.has(PermissionFlagsBits.CreatePublicThreads) && !perms.has(PermissionFlagsBits.CreatePrivateThreads))) {
             base = await channel.send({ embeds: [baseEmbed] });
@@ -182,7 +180,7 @@ export default async function onMessageCreate(message) {
           )
           .setFooter({ text: `Resumed by Cas • User ID: ${message.author.id}` })
           .setTimestamp(new Date());
-        const { ChannelType, EmbedBuilder } = await import('discord.js');
+        
         const threadName2 = `ModMail: ${message.author.username}`.substring(0, 100);
         let base2 = null;
         let thread2 = null;
@@ -195,7 +193,6 @@ export default async function onMessageCreate(message) {
               message: { embeds: [resumeEmbed] }
             });
           } else {
-            const { PermissionFlagsBits } = await import('discord.js');
             const perms2 = channel.permissionsFor(client.user);
             if (!perms2 || (!perms2.has(PermissionFlagsBits.CreatePublicThreads) && !perms2.has(PermissionFlagsBits.CreatePrivateThreads))) {
               base2 = await channel.send({ embeds: [resumeEmbed] });
