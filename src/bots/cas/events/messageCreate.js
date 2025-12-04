@@ -9,7 +9,19 @@ export default async function onMessageCreate(message) {
     const client = message.client;
     if (isDM) {
       // Find existing open relay for this user
-      let relay = await ModmailRelay.findOne({ where: { user_id: message.author.id, open: true } });
+        // Find existing open relays for this user and prefer Cas-owned threads
+        let relay = null;
+        const relays = await ModmailRelay.findAll({ where: { user_id: message.author.id, open: true, bot_name: 'cas' } });
+        for (const r of relays) {
+          const th = client.channels.cache.get(r.thread_id) || (channel && typeof channel.threads?.fetch === 'function' ? await channel.threads.fetch(r.thread_id).catch(() => null) : null) || await client.channels.fetch(r.thread_id).catch(() => null);
+          if (th && typeof th.isThread === 'function' && th.isThread()) {
+            // Only reuse threads created by Cas
+            if (th.ownerId === client.user.id) {
+              relay = r;
+              break;
+            }
+          }
+        }
 
     // Resolve modmail channel
     const modmailConfig = await Config.findOne({ where: { key: 'modmail_channel_id' } });
@@ -25,16 +37,21 @@ export default async function onMessageCreate(message) {
       return;
     }
 
-    // If a relay exists but the thread belongs to another bot (e.g., Sam), ignore it
+    // If a relay exists, try to use its thread; if it's a Sam-owned thread, do not post into it
     if (relay) {
       const existingThread = client.channels.cache.get(relay.thread_id);
-      if (existingThread && existingThread.isThread()) {
-        // Only reuse threads created by Cas
-        if (existingThread.ownerId !== client.user.id) {
-          relay = null; // force new thread creation for Cas
-        }
-      } else {
-        // Missing thread; allow recreation below
+      let ownerMismatch = false;
+      if (existingThread && typeof existingThread.isThread === 'function' && existingThread.isThread()) {
+        ownerMismatch = existingThread.ownerId && existingThread.ownerId !== client.user.id;
+      }
+      if (ownerMismatch) {
+        // Respect Sam-owned threads: acknowledge and do not recreate/post in main channel
+        await message.react('✅');
+        await message.reply('I see your message. Your modmail is currently being handled by the other librarian; they\'ll reply in that thread.');
+        return;
+      }
+      if (!existingThread || !(typeof existingThread.isThread === 'function' && existingThread.isThread())) {
+        // Missing or invalid thread; allow recreation below
         relay = null;
       }
     }
@@ -42,27 +59,36 @@ export default async function onMessageCreate(message) {
     if (isDM && !relay) {
       // Create a new modmail thread
       const { EmbedBuilder } = await import('discord.js');
-      const base = await channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x3b88c3)
-            .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
-            .setDescription(message.content)
-            .setFooter({ text: `Opened by Cas • User ID: ${message.author.id}` })
-            .setTimestamp(new Date())
-        ]
-      });
+      const baseEmbed = new EmbedBuilder()
+        .setColor(0x3b88c3)
+        .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
+        .setDescription(message.content)
+        .addFields(
+          { name: 'Thread Commands', value: '`@ticket` • show ticket details\n`@relay <message>` • DM the user\n`@close` • close this ticket' }
+        )
+        .setFooter({ text: `Opened by Cas • User ID: ${message.author.id}` })
+        .setTimestamp(new Date());
+      const base = await channel.send({ embeds: [baseEmbed] });
       const threadName = `ModMail: ${message.author.username}`.substring(0, 100);
       const thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'User-initiated modmail (DM)' });
+      // Compute sequential ticket per bot (simple max+1; safe under single process)
+      const last = await ModmailRelay.findOne({ where: { bot_name: 'cas' }, order: [['ticket_seq', 'DESC']] });
+      const nextSeq = (last && last.ticket_seq ? last.ticket_seq : 0) + 1;
+      const ticket = `CAS-${nextSeq}`;
       relay = await ModmailRelay.create({
         user_id: message.author.id,
+        bot_name: 'cas',
+        ticket_number: ticket,
+        ticket_seq: nextSeq,
         fic_url: null,
         base_message_id: base.id,
         thread_id: thread.id,
         open: true,
+        status: 'open',
+        created_at: new Date(),
         last_user_message_at: new Date()
       });
-      await message.reply('I’ve opened a thread for you. The moderators will reply shortly.');
+      await message.reply(`I’ve opened a thread for you. Your ticket is ${ticket}. The moderators will reply shortly.`);
     } else if (isDM) {
       // Post into existing Cas-owned thread
       // Try to resolve thread robustly (cache → fetch → threads.fetch → base message)
@@ -93,16 +119,16 @@ export default async function onMessageCreate(message) {
       } else {
         // Thread missing; recreate a Cas-owned thread (avoid posting multiple bases)
         const { EmbedBuilder } = await import('discord.js');
-        const base = await channel.send({
-          embeds: [
-            new EmbedBuilder()
-              .setColor(0x3b88c3)
-              .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
-              .setDescription(message.content)
-              .setFooter({ text: `Resumed by Cas • User ID: ${message.author.id}` })
-              .setTimestamp(new Date())
-            ]
-          });
+        const resumeEmbed = new EmbedBuilder()
+          .setColor(0x3b88c3)
+          .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
+          .setDescription(message.content)
+          .addFields(
+            { name: 'Thread Commands', value: '`@ticket` • show ticket details\n`@relay <message>` • DM the user\n`@close` • close this ticket' }
+          )
+          .setFooter({ text: `Resumed by Cas • User ID: ${message.author.id}` })
+          .setTimestamp(new Date());
+        const base = await channel.send({ embeds: [resumeEmbed] });
         const threadName = `ModMail: ${message.author.username}`.substring(0, 100);
         const thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'Resume modmail (thread missing)' });
         await relay.update({ base_message_id: base.id, thread_id: thread.id, last_user_message_at: new Date() });
@@ -120,7 +146,41 @@ export default async function onMessageCreate(message) {
       const parent = message.channel.parent;
       if (parent && parent.id === modmailChannelId) {
         const content = (message.content || '').trim();
-        if (/^(@relay|@cas\s+relay|\/relay)/i.test(content)) {
+        if (/^(@ticket|\/ticket)/i.test(content)) {
+          const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id } });
+          if (!relayEntry) {
+            await message.reply('No ticket associated with this thread.');
+            return;
+          }
+          const opened = relayEntry.created_at ? new Date(relayEntry.created_at).toLocaleString() : 'unknown';
+          const closed = relayEntry.closed_at ? new Date(relayEntry.closed_at).toLocaleString() : '—';
+          const { EmbedBuilder } = await import('discord.js');
+          const info = new EmbedBuilder()
+            .setColor(0x3b88c3)
+            .setTitle('Ticket Details')
+            .setDescription('Here’s what I’ve got for this ticket:')
+            .addFields(
+              { name: 'Ticket', value: `${relayEntry.ticket_number || 'N/A'}`, inline: true },
+              { name: 'Status', value: `${relayEntry.status || (relayEntry.open ? 'open' : 'closed')}`, inline: true },
+              { name: 'Opened', value: `${opened}`, inline: false },
+              { name: 'Closed', value: `${closed}`, inline: false },
+            )
+            .setFooter({ text: 'Cas — Use @relay to DM the user, @close to end.' })
+            .setTimestamp(new Date());
+          await message.reply({ embeds: [info] });
+          return;
+        }
+        if (/^(@close|\/close)/i.test(content)) {
+          const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id, open: true } });
+          if (!relayEntry) {
+            await message.reply('No open ticket found for this thread.');
+            return;
+          }
+          await ModmailRelay.update({ open: false, status: 'closed', closed_at: new Date() }, { where: { thread_id: message.channel.id } });
+          await message.reply('Ticket closed. I won’t relay further messages from the user to this thread.');
+          return;
+        }
+        if (/^(@relay|\/relay)/i.test(content)) {
           const relayMsg = content.replace(/^(@cas\s+relay|@relay|\/relay)/i, '').trim();
           if (!relayMsg) {
             await message.reply('Add a message after `@relay` to DM the user.');

@@ -37,7 +37,7 @@ export default {
             
             // Find if this user has any active modmail relays
             const relayEntry = await ModmailRelay.findOne({
-                where: { user_id: message.author.id },
+                where: { user_id: message.author.id, bot_name: 'sam', open: true },
                 order: [['last_relayed_at', 'DESC']]
             });
             
@@ -90,8 +90,41 @@ export default {
                     const content = message.content.trim();
                     console.log('[ModmailRelay] Message content:', content);
                     
-                    if (content.toLowerCase().startsWith('@sam relay') || 
-                        content.toLowerCase().startsWith('@relay') || 
+                    if (content.toLowerCase().startsWith('@ticket') || content.toLowerCase().startsWith('/ticket')) {
+                        const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id } });
+                        if (!relayEntry) {
+                            await message.reply('No ticket associated with this thread.');
+                        } else {
+                            const opened = relayEntry.created_at ? new Date(relayEntry.created_at).toLocaleString() : 'unknown';
+                            const closed = relayEntry.closed_at ? new Date(relayEntry.closed_at).toLocaleString() : '—';
+                            const { EmbedBuilder } = await import('discord.js');
+                            const info = new EmbedBuilder()
+                              .setColor(0x3b88c3)
+                              .setTitle('Ticket Details')
+                              .setDescription("Here's the ticket info—keep it tidy:")
+                              .addFields(
+                                { name: 'Ticket', value: `${relayEntry.ticket_number || 'N/A'}`, inline: true },
+                                { name: 'Status', value: `${relayEntry.status || (relayEntry.open ? 'open' : 'closed')}`, inline: true },
+                                { name: 'Opened', value: `${opened}`, inline: false },
+                                { name: 'Closed', value: `${closed}`, inline: false },
+                              )
+                              .setFooter({ text: 'Sam — @relay to DM, @close to finish.' })
+                              .setTimestamp(new Date());
+                            await message.reply({ embeds: [info] });
+                        }
+                        return;
+                    }
+                    if (content.toLowerCase().startsWith('@close') || content.toLowerCase().startsWith('/close')) {
+                        const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id, open: true } });
+                        if (!relayEntry) {
+                            await message.reply('No open ticket found for this thread.');
+                        } else {
+                            await ModmailRelay.update({ open: false, status: 'closed', closed_at: new Date() }, { where: { thread_id: message.channel.id } });
+                            await message.reply('Ticket closed. I won’t relay further messages from the user to this thread.');
+                        }
+                        return;
+                    }
+                    if (content.toLowerCase().startsWith('@relay') || 
                         content.toLowerCase().startsWith('/relay')) {
                         
                         console.log('[ModmailRelay] Processing relay command...');
@@ -105,9 +138,9 @@ export default {
                             console.log('[ModmailRelay] Found fic info:', ficInfo);
                             
                             // Remove the command prefix
-                            const relayMsg = content.replace(/^(@sam relay|@relay|\/relay)/i, '').trim();
+                            const relayMsg = content.replace(/^(@relay|\/relay)/i, '').trim();
                             if (!relayMsg) {
-                                await message.reply('Dude, you gotta actually tell me what you want me to say to them. Just add your message after `@sam relay`, `@relay`, or `/relay`.');
+                                await message.reply('Dude, you gotta actually tell me what you want me to say to them. Just add your message after `@relay` or `/relay`.');
                                 return;
                             }
                             
@@ -116,16 +149,40 @@ export default {
                                 const dmUser = await message.client.users.fetch(ficInfo.submitterId);
                                 if (dmUser) {
                                     await dmUser.send({
-                                        content: `Hey, the mods wanted me to pass this along about your fic <${ficInfo.ficUrl}>:\n\n"${relayMsg}"\n\nIf you've got questions or want to respond, just reply to this message and I'll make sure they see it. —Sam`
+                                        content: `Heads up about your fic <${ficInfo.ficUrl}>:\n\n"${relayMsg}"\n\nHit me back here with any questions—I'll make sure the mods see it. —Sam`
                                     });
                                     await message.reply('Got it—message delivered.');
                                     // Store relay mapping in ModmailRelay table
-                                    await ModmailRelay.upsert({
+                                    // Compute sequential ticket for Sam
+                                    const last = await ModmailRelay.findOne({ where: { bot_name: 'sam' }, order: [['ticket_seq', 'DESC']] });
+                                    const nextSeq = (last && last.ticket_seq ? last.ticket_seq : 0) + 1;
+                                    const ticket = `SAM-${nextSeq}`;
+                                                                        await ModmailRelay.upsert({
                                         user_id: ficInfo.submitterId,
+                                        bot_name: 'sam',
+                                        ticket_number: ticket,
+                                        ticket_seq: nextSeq,
                                         fic_url: ficInfo.ficUrl,
                                         thread_id: message.channel.id,
+                                        open: true,
+                                        status: 'open',
+                                        created_at: new Date(),
                                         last_relayed_at: new Date()
                                     });
+                                                                        // Post helper embed with thread commands for mods' convenience
+                                                                        const { EmbedBuilder } = await import('discord.js');
+                                                                        const help = new EmbedBuilder()
+                                                                            .setColor(0x3b88c3)
+                                                                            .setTitle('Thread Commands')
+                                                                            .setDescription('Use these to manage the ticket:')
+                                                                            .addFields(
+                                                                                { name: 'Show Ticket', value: '`@ticket` or `/ticket`', inline: true },
+                                                                                { name: 'Relay to User', value: '`@relay <message>`', inline: true },
+                                                                                { name: 'Close Ticket', value: '`@close` or `/close`', inline: true },
+                                                                            )
+                                                                            .setFooter({ text: `Ticket ${ticket}` })
+                                                                            .setTimestamp(new Date());
+                                                                        await message.channel.send({ embeds: [help] });
                                 }
                             } catch (err) {
                                 await message.reply('Couldn\'t reach them - they probably have DMs turned off.');
