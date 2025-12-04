@@ -5,7 +5,8 @@ const data = new SlashCommandBuilder()
   .setDescription('Simple health check');
 
 async function execute(interaction) {
-  await interaction.reply({ content: "I'm online and watching.", ephemeral: true });
+  const { MessageFlags } = await import('discord.js');
+  await interaction.reply({ content: "I'm online and watching.", flags: MessageFlags.Ephemeral });
 }
 
 export { data };

@@ -11,7 +11,8 @@ const data = new SlashCommandBuilder()
   );
 
 async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  const { MessageFlags } = await import('discord.js');
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const targetUser = interaction.options.getUser('user');
   const userId = targetUser ? targetUser.id : interaction.user.id;
 

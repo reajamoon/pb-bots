@@ -6,7 +6,8 @@ export default {
     .setName('emojis')
     .setDescription('List server custom emojis'),
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    const { MessageFlags } = await import('discord.js');
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId;
     const emojis = await listGuildEmojis(interaction.client, guildId);
     const text = formatEmojiList(emojis);

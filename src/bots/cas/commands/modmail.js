@@ -22,7 +22,8 @@ const data = new SlashCommandBuilder()
   );
 
 async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  const { MessageFlags } = await import('discord.js');
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const content = interaction.options.getString('message').trim();
   const topic = (interaction.options.getString('topic') || '').trim();
 

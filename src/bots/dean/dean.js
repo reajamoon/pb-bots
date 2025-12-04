@@ -34,7 +34,8 @@ client.on('interactionCreate', async interaction => {
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({ content: 'There was an error executing that command.' });
     } else {
-      await interaction.reply({ content: 'There was an error executing that command.', ephemeral: true });
+      const { MessageFlags } = await import('discord.js');
+      await interaction.reply({ content: 'There was an error executing that command.', flags: MessageFlags.Ephemeral });
     }
   }
 });

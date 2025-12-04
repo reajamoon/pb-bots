@@ -26,7 +26,8 @@ const data = new SlashCommandBuilder()
 
 async function execute(interaction) {
   try {
-    await interaction.deferReply({ ephemeral: true });
+    const { MessageFlags } = await import('discord.js');
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // Permission check via Users table
     const { User } = await import('../../../models/index.js');
