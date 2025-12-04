@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import logger from '../../shared/utils/logger.js';
 import BirthdayNotificationManager from './utils/birthdayNotifications.js';
 import registerSamCommands from './registerCommands.js';
+import { initEmojiStore } from '../../shared/emojiStore.js';
 
 dotenv.config();
 
@@ -107,3 +108,11 @@ client.on('error', (error) => {
 });
 
 startBot();
+
+// Initialize emoji store when ready
+client.once('ready', async () => {
+    const ok = await initEmojiStore(client).catch(() => false);
+    if (!ok) {
+        logger.warn('[sam] Emoji store did not initialize. Check guild ID env (SAM_GUILD_ID or GUILD_ID).');
+    }
+});

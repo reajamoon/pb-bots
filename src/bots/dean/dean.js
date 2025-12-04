@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
 import registerDeanCommands from './registerCommands.js';
+import { initEmojiStore } from '../../shared/emojiStore.js';
 
 const token = process.env.DEAN_BOT_TOKEN;
 if (!token) {
@@ -21,6 +22,10 @@ client.commands = new Collection();
 
 client.once('ready', async () => {
   console.log(`[dean] Logged in as ${client.user.tag}`);
+  const ok = await initEmojiStore(client).catch(() => false);
+  if (!ok) {
+    console.warn('[dean] Emoji store did not initialize. Check guild ID env (DEAN_GUILD_ID or GUILD_ID).');
+  }
 });
 
 client.on('interactionCreate', async interaction => {

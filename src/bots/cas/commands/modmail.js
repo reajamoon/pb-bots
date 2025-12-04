@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { Config } from '../../../../src/models/index.js';
 // If available, use ModMailRelay to track thread ↔ user mapping for DM relays
 let ModMailRelay = null;
@@ -40,7 +40,14 @@ async function execute(interaction) {
 
   // Post base message and start a thread for the user
   const base = await channel.send({
-    content: `New modmail from <@${interaction.user.id}>:\n\n${content}`
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x3b88c3)
+        .setAuthor({ name: `Modmail — ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() })
+        .setDescription(content)
+        .setFooter({ text: `Opened by Cas • User ID: ${interaction.user.id}` })
+        .setTimestamp(new Date())
+    ]
   });
   const threadName = (topic ? `ModMail: ${topic.substring(0, 80)}` : `ModMail: ${interaction.user.username}`).substring(0, 100);
   const thread = await base.startThread({
@@ -65,7 +72,7 @@ async function execute(interaction) {
     console.warn('[cas/modmail] Failed to persist ModMailRelay entry:', persistErr);
   }
 
-  await interaction.editReply({ content: 'Thanks! I’ve opened a modmail thread and the team will reply shortly.' });
+  await interaction.editReply({ content: 'Ive opened a thread for you. The moderators will reply shortly.' });
 }
 
 export { data };
