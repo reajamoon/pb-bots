@@ -33,6 +33,7 @@ See `docs/deployment.md` for PM2 commands and operational details.
 - [Fic Parsing Queue System](docs/fic-parsing-queue-implementation.md)
 - [Sam's Voice Guidelines](docs/sam-voice-guidelines.md)
 - [Changelog](CHANGELOG.md)
+- [Maintenance Workflow](docs/maintenance.md)
 - And many more in the /docs project folder. You can find project planning documents, technical spec docs, and other roadmarkers I've left for myself and folks who might want to try to build a similar project.
 
 ## Project Status & Issues

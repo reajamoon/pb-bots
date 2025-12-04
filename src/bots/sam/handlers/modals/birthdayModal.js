@@ -32,11 +32,11 @@ export async function handleBirthdayModal(interaction, originalMessageId = null)
     if (formats.fullSlash.test(birthdayInput)) {
         const [, month, day, year] = birthdayInput.match(formats.fullSlash);
         parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        birthdayToStore = `${month.padStart(2, '0')}/${day.padStart(2, '0')}/${year}`;
+        birthdayToStore = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     } else if (formats.fullDash.test(birthdayInput)) {
         const [, year, month, day] = birthdayInput.match(formats.fullDash);
         parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        birthdayToStore = `${month.padStart(2, '0')}/${day.padStart(2, '0')}/${year}`;
+        birthdayToStore = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     } else if (formats.privacySlash.test(birthdayInput)) {
         const [, month, day] = birthdayInput.match(formats.privacySlash);
         birthdayToStore = `1900-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
@@ -47,7 +47,7 @@ export async function handleBirthdayModal(interaction, originalMessageId = null)
         // Convert 2-digit year to 4-digit (assume 1900s for 50-99, 2000s for 00-49)
         const fullYear = parseInt(shortYear) >= 50 ? 1900 + parseInt(shortYear) : 2000 + parseInt(shortYear);
         parsedDate = new Date(fullYear, parseInt(month) - 1, parseInt(day));
-        birthdayToStore = `${month.padStart(2, '0')}/${day.padStart(2, '0')}/${fullYear}`;
+        birthdayToStore = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     } else {
         return await interaction.reply({
             content: '❌ **Invalid date format!**\n\nPlease use one of these formats:\n' +
@@ -112,15 +112,19 @@ export async function handleBirthdayModal(interaction, originalMessageId = null)
             ...updateData
         });
 
+        const displayDate = isPrivacyMode
+            ? `${parsedDate.getMonth() + 1}`.padStart(2, '0') + '/' + `${parsedDate.getDate()}`.padStart(2, '0')
+            : `${parsedDate.getMonth() + 1}`.padStart(2, '0') + '/' + `${parsedDate.getDate()}`.padStart(2, '0') + '/' + parsedDate.getFullYear();
+
         const responseMessage = isPrivacyMode ?
             `🎂 **Birthday set in privacy mode!**\n\n` +
-            `Your birthday (${birthdayToStore}) has been saved. Since you didn't include a birth year:\n\n` +
+            `Your birthday (${displayDate}) has been saved. Since you didn't include a birth year:\n\n` +
             `✅ Age privacy is **ON** (your age won't be shown)\n` +
             `✅ Only your zodiac sign will appear in your profile\n` +
             `✅ You'll still get birthday mentions and appear in daily lists\n\n` +
             `Want to include your birth year later? Just set your birthday again with the full date!` :
             `🎂 **Birthday set successfully!**\n\n` +
-            `Your birthday (${birthdayToStore}) has been saved!\n\n` +
+            `Your birthday (${displayDate}) has been saved!\n\n` +
             `✅ Your age and zodiac signs will appear in your profile\n` +
             `✅ You'll get birthday mentions and appear in daily lists\n` +
             `✅ You can adjust privacy settings anytime`;

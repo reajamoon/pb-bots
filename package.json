@@ -26,7 +26,8 @@
     "clear:dean": "node ./scripts/dean/clear-commands.js",
     "register:cas": "node ./scripts/cas/deploy-commands.js",
     "clear:cas": "node ./scripts/cas/clear-commands.js",
-    "lint:bot-text": "node ./scripts/check-bot-text-scope.js"
+    "lint:bot-text": "node ./scripts/check-bot-text-scope.js",
+    "fix:birthdays": "node ./scripts/normalize-birthdays.js"
   },
   "keywords": [
     "discord",
