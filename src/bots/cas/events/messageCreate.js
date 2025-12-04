@@ -65,10 +65,25 @@ export default async function onMessageCreate(message) {
       await message.reply('I’ve opened a thread for you. The moderators will reply shortly.');
     } else if (isDM) {
       // Post into existing Cas-owned thread
+      // Try to resolve thread robustly (cache → fetch → threads.fetch → base message)
       let thread = client.channels.cache.get(relay.thread_id);
+      if (!thread && channel && typeof channel.threads?.fetch === 'function') {
+        try {
+          const fetched = await channel.threads.fetch(relay.thread_id);
+          thread = fetched || null;
+        } catch {}
+      }
       if (!thread) {
         try {
           thread = await client.channels.fetch(relay.thread_id);
+        } catch {}
+      }
+      if (!thread && relay.base_message_id && channel) {
+        try {
+          const baseMsg = await channel.messages.fetch(relay.base_message_id);
+          if (baseMsg && baseMsg.hasThread) {
+            thread = baseMsg.thread;
+          }
         } catch {}
       }
       if (thread && typeof thread.isThread === 'function' && thread.isThread()) {
@@ -76,7 +91,7 @@ export default async function onMessageCreate(message) {
         await relay.update({ last_user_message_at: new Date() });
         await message.react('✅');
       } else {
-        // Thread missing; recreate a Cas-owned thread
+        // Thread missing; recreate a Cas-owned thread (avoid posting multiple bases)
         const { EmbedBuilder } = await import('discord.js');
         const base = await channel.send({
           embeds: [
