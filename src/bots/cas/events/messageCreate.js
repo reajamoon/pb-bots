@@ -14,7 +14,12 @@ export default async function onMessageCreate(message) {
     // Resolve modmail channel
     const modmailConfig = await Config.findOne({ where: { key: 'modmail_channel_id' } });
     const modmailChannelId = modmailConfig ? modmailConfig.value : null;
-    const channel = modmailChannelId ? client.channels.cache.get(modmailChannelId) : null;
+    let channel = modmailChannelId ? client.channels.cache.get(modmailChannelId) : null;
+    if (!channel && modmailChannelId) {
+      try {
+        channel = await client.channels.fetch(modmailChannelId);
+      } catch {}
+    }
     if (!channel) {
       await message.reply("I don't have modmail configured yet. Please ping a mod.");
       return;
@@ -60,8 +65,13 @@ export default async function onMessageCreate(message) {
       await message.reply('I’ve opened a thread for you. The moderators will reply shortly.');
     } else if (isDM) {
       // Post into existing Cas-owned thread
-      const thread = client.channels.cache.get(relay.thread_id);
-      if (thread && thread.isThread()) {
+      let thread = client.channels.cache.get(relay.thread_id);
+      if (!thread) {
+        try {
+          thread = await client.channels.fetch(relay.thread_id);
+        } catch {}
+      }
+      if (thread && typeof thread.isThread === 'function' && thread.isThread()) {
         await thread.send({ content: `<@${message.author.id}>: ${message.content}` });
         await relay.update({ last_user_message_at: new Date() });
         await message.react('✅');
