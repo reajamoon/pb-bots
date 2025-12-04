@@ -68,9 +68,39 @@ export default async function onMessageCreate(message) {
         )
         .setFooter({ text: `Opened by Cas • User ID: ${message.author.id}` })
         .setTimestamp(new Date());
-      const base = await channel.send({ embeds: [baseEmbed] });
       const threadName = `ModMail: ${message.author.username}`.substring(0, 100);
-      const thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'User-initiated modmail (DM)' });
+      let base = null;
+      let thread = null;
+      // If modmail channel is a Forum, create a thread directly with the embed
+      try {
+        const { ChannelType } = await import('discord.js');
+        if (channel.type === ChannelType.GuildForum) {
+          thread = await channel.threads.create({
+            name: threadName,
+            autoArchiveDuration: 1440,
+            reason: 'User-initiated modmail (DM)',
+            message: { embeds: [baseEmbed] }
+          });
+        } else {
+          const { PermissionFlagsBits, ChannelType } = await import('discord.js');
+          const perms = channel.permissionsFor(client.user);
+          if (!perms || (!perms.has(PermissionFlagsBits.CreatePublicThreads) && !perms.has(PermissionFlagsBits.CreatePrivateThreads))) {
+            base = await channel.send({ embeds: [baseEmbed] });
+            await message.reply("I can’t create threads in this channel. Please grant thread permissions or ping a mod.");
+            return;
+          }
+          base = await channel.send({ embeds: [baseEmbed] });
+          // On regular text channels, start a public thread by default
+          thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'User-initiated modmail (DM)' });
+          if (!thread || !thread.isThread()) {
+            await message.reply("I sent the modmail message but couldn’t start the thread. Please ping a mod.");
+            return;
+          }
+        }
+      } catch (e) {
+        await message.reply("I couldn't start a modmail thread here. Please ping a mod.");
+        return;
+      }
       // Compute sequential ticket per bot (simple max+1; safe under single process)
       const last = await ModmailRelay.findOne({ where: { bot_name: 'cas' }, order: [['ticket_seq', 'DESC']] });
       const nextSeq = (last && last.ticket_seq ? last.ticket_seq : 0) + 1;
@@ -128,10 +158,38 @@ export default async function onMessageCreate(message) {
           )
           .setFooter({ text: `Resumed by Cas • User ID: ${message.author.id}` })
           .setTimestamp(new Date());
-        const base = await channel.send({ embeds: [resumeEmbed] });
-        const threadName = `ModMail: ${message.author.username}`.substring(0, 100);
-        const thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'Resume modmail (thread missing)' });
-        await relay.update({ base_message_id: base.id, thread_id: thread.id, last_user_message_at: new Date() });
+        const { ChannelType } = await import('discord.js');
+        const threadName2 = `ModMail: ${message.author.username}`.substring(0, 100);
+        let base2 = null;
+        let thread2 = null;
+        try {
+          if (channel.type === ChannelType.GuildForum) {
+            thread2 = await channel.threads.create({
+              name: threadName2,
+              autoArchiveDuration: 1440,
+              reason: 'Resume modmail (thread missing)',
+              message: { embeds: [resumeEmbed] }
+            });
+          } else {
+            const { PermissionFlagsBits } = await import('discord.js');
+            const perms2 = channel.permissionsFor(client.user);
+            if (!perms2 || (!perms2.has(PermissionFlagsBits.CreatePublicThreads) && !perms2.has(PermissionFlagsBits.CreatePrivateThreads))) {
+              base2 = await channel.send({ embeds: [resumeEmbed] });
+              await message.reply("I can’t create threads in this channel. Please grant thread permissions or ping a mod.");
+              return;
+            }
+            base2 = await channel.send({ embeds: [resumeEmbed] });
+            thread2 = await base2.startThread({ name: threadName2, autoArchiveDuration: 1440, reason: 'Resume modmail (thread missing)' });
+            if (!thread2 || !thread2.isThread()) {
+              await message.reply("I sent the modmail message but couldn’t start the thread. Please ping a mod.");
+              return;
+            }
+          }
+        } catch (e) {
+          await message.reply("I couldn't reopen the modmail thread. Please ping a mod.");
+          return;
+        }
+        await relay.update({ base_message_id: base2 ? base2.id : null, thread_id: thread2.id, last_user_message_at: new Date() });
         await message.reply('Your modmail thread was missing; I’ve reopened it.');
       }
     }
