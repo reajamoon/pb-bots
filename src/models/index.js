@@ -13,6 +13,8 @@ import ConfigModel from './Config.js';
 import SeriesModel from './Series.js';
 import ModLockModel from './ModLock.js';
 import ModmailRelayModel from './ModmailRelay.js';
+import DeanSprintsModel from './DeanSprints.js';
+import GuildSprintSettingsModel from './GuildSprintSettings.js';
 
 // Determine connection settings
 const rawDatabaseUrl = process.env.DATABASE_URL || '';
@@ -51,6 +53,8 @@ const Config = ConfigModel(sequelize);
 const Series = SeriesModel(sequelize);
 const ModLock = ModLockModel(sequelize);
 const ModmailRelay = ModmailRelayModel(sequelize);
+const DeanSprints = DeanSprintsModel(sequelize);
+const GuildSprintSettings = GuildSprintSettingsModel(sequelize);
 
 // ModmailRelay associations
 ModmailRelay.belongsTo(User, { foreignKey: 'user_id', targetKey: 'discordId', as: 'user', constraints: false });
@@ -77,6 +81,10 @@ ModLock.associate({ Recommendation, Series, User });
 Recommendation.hasMany(ModLock, { foreignKey: 'ao3ID', sourceKey: 'ao3ID', as: 'modLocks' });
 Series.hasMany(ModLock, { foreignKey: 'seriesId', sourceKey: 'ao3SeriesId', as: 'modLocks' });
 
+// Dean sprint associations
+DeanSprints.belongsTo(User, { foreignKey: 'userId', targetKey: 'discordId', as: 'user', constraints: false });
+User.hasMany(DeanSprints, { foreignKey: 'userId', sourceKey: 'discordId', as: 'sprints' });
+
 export {
     sequelize,
     Sequelize,
@@ -90,5 +98,7 @@ export {
     Series,
     UserFicMetadata,
     ModLock,
-    ModmailRelay
+    ModmailRelay,
+    DeanSprints,
+    GuildSprintSettings
 };
