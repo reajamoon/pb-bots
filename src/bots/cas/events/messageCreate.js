@@ -1,4 +1,4 @@
-import { Config, ModmailRelay } from '../../../../models/index.js';
+import { Config, ModmailRelay } from '../../../../src/models/index.js';
 
 export default async function onMessageCreate(message) {
   try {
