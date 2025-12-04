@@ -44,6 +44,33 @@ export default async function handleAddRecommendation(interaction) {
     // Deduplicate, case-insensitive
     additionalTags = Array.from(new Set(additionalTags.map(t => t.toLowerCase())));
     const notes = interaction.options.getString('notes');
+    // Require a recommendation note with a minimum length
+    try {
+      const { Config } = await import('../../../../models/index.js');
+      const minCfg = await Config.findOne({ where: { key: 'min_rec_note_length' } });
+      const minLen = minCfg && Number(minCfg.value) > 0 ? Number(minCfg.value) : 50; // default 50 chars ~ a sentence
+      const noteText = (notes || '').trim();
+      if (!noteText || noteText.length < minLen) {
+        const { MessageFlags } = await import('discord.js');
+        await interaction.reply({
+          content: `Please include a recommendation note (${minLen}+ characters) explaining why you’re recommending this fic or series.`,
+          flags: MessageFlags.Ephemeral
+        });
+        return;
+      }
+    } catch (noteErr) {
+      // If Config lookup fails, enforce default
+      const noteText = (notes || '').trim();
+      const minLen = 50;
+      if (!noteText || noteText.length < minLen) {
+        const { MessageFlags } = await import('discord.js');
+        await interaction.reply({
+          content: `Please include a recommendation note (${minLen}+ characters) explaining why you’re recommending this fic or series.`,
+          flags: MessageFlags.Ephemeral
+        });
+        return;
+      }
+    }
     // --- ModLock enforcement for re-adds ---
     // We'll check for modlocks by ao3ID if this is a new rec
     let ao3ID = null;
