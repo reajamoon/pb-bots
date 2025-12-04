@@ -25,7 +25,8 @@
     "register:dean": "node ./scripts/dean/deploy-commands.js",
     "clear:dean": "node ./scripts/dean/clear-commands.js",
     "register:cas": "node ./scripts/cas/deploy-commands.js",
-    "clear:cas": "node ./scripts/cas/clear-commands.js"
+    "clear:cas": "node ./scripts/cas/clear-commands.js",
+    "lint:bot-text": "node ./scripts/check-bot-text-scope.js"
   },
   "keywords": [
     "discord",
