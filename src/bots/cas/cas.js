@@ -32,7 +32,7 @@ client.once('ready', async () => {
   // Set presence: Listening
   try {
     client.user.setPresence({
-      activities: [{ name: 'Angel Radio\nDM me or use /ModMail', type: 2 }], // 2 = Listening
+      activities: [{ name: "Angel Radio  ||  DM or /ModMail || Just DM me or use /ModMail and I'll get in touch with the mods for you.", type: 2 }], // 2 = Listening
       status: 'online'
     });
   } catch (e) {
