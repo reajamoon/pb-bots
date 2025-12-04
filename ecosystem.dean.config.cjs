@@ -2,8 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'dean',
-      script: 'node',
-      args: './src/bots/dean/dean.js',
+      script: './src/bots/dean/dean.js',
       watch: false,
       instances: 1,
       autorestart: true,

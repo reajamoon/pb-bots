@@ -2,8 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'cas',
-      script: 'node',
-      args: './src/bots/cas/cas.js',
+      script: './src/bots/cas/cas.js',
       watch: false,
       instances: 1,
       autorestart: true,
