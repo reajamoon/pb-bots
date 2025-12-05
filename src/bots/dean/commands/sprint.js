@@ -51,8 +51,8 @@ export async function execute(interaction) {
   const flags = ephemeral ? InteractionFlags.Ephemeral : undefined;
   const guildId = interaction.guildId;
   const channel = interaction.channel;
-  const channelId = channel?.id;
-  const threadId = channel?.isThread?.() ? channel.id : undefined;
+  const channelId = channel ? channel.id : undefined;
+  const threadId = (channel && typeof channel.isThread === 'function' && channel.isThread()) ? channel.id : undefined;
 
   const settings = await GuildSprintSettings.findOne({ where: { guildId } });
   if (settings) {
@@ -118,7 +118,8 @@ export async function execute(interaction) {
     await interaction.reply({ embeds: [hostTeamEmbed(minutes, label, groupId)], flags });
     await scheduleSprintNotifications(hostRow, interaction.client);
   } else if (sub === 'join') {
-    const provided = interaction.options.getString('code')?.toUpperCase();
+    const codeRaw = interaction.options.getString('code');
+    const provided = codeRaw ? codeRaw.toUpperCase() : undefined;
     const discordId = interaction.user.id;
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 

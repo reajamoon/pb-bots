@@ -14,8 +14,8 @@ export default function onReady(client) {
 
     // Set presence to "Watching sprints" using numeric flag format with start timestamp
     try {
-      const activityName = process.env.DEAN_ACTIVITY_NAME?.trim() || '⏱️ Running sprints';
-      const status = process.env.DEAN_STATUS?.trim() || 'online';
+      const activityName = (process.env.DEAN_ACTIVITY_NAME && process.env.DEAN_ACTIVITY_NAME.trim()) || '⏱️ Running sprints';
+      const status = (process.env.DEAN_STATUS && process.env.DEAN_STATUS.trim()) || 'online';
       await client.user.setPresence({
         status,
         activities: [
@@ -28,7 +28,7 @@ export default function onReady(client) {
       });
       console.log('[dean] Presence set: Watching sprints (with start timestamp)');
     } catch (err) {
-      console.warn('[dean] Failed to set activity presence:', err?.message || err);
+      console.warn('[dean] Failed to set activity presence:', (err && err.message) || err);
     }
 
     // Re-schedule any in-progress sprints after a restart
@@ -41,7 +41,7 @@ export default function onReady(client) {
         console.log(`[dean] Re-scheduled ${rows.length} in-progress sprints.`);
       }
     } catch (e) {
-      console.warn('[dean] Failed to reschedule sprints on boot:', e?.message || e);
+      console.warn('[dean] Failed to reschedule sprints on boot:', (e && e.message) || e);
     }
   });
 }

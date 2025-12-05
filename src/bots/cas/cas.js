@@ -36,7 +36,7 @@ client.once('ready', async () => {
       status: 'online'
     });
   } catch (e) {
-    console.warn('[cas] Failed to set presence:', e?.message || e);
+    console.warn('[cas] Failed to set presence:', (e && e.message) || e);
   }
 });
 

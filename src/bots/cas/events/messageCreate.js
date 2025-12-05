@@ -14,7 +14,7 @@ export default async function onMessageCreate(message) {
         let relay = null;
         const relays = await ModmailRelay.findAll({ where: { user_id: message.author.id, open: true, bot_name: 'cas' } });
         for (const r of relays) {
-          const th = client.channels.cache.get(r.thread_id) || (channel && typeof channel.threads?.fetch === 'function' ? await channel.threads.fetch(r.thread_id).catch(() => null) : null) || await client.channels.fetch(r.thread_id).catch(() => null);
+          const th = client.channels.cache.get(r.thread_id) || (channel && channel.threads && typeof channel.threads.fetch === 'function' ? await channel.threads.fetch(r.thread_id).catch(() => null) : null) || await client.channels.fetch(r.thread_id).catch(() => null);
           if (th && typeof th.isThread === 'function' && th.isThread()) {
             // Only reuse threads created by Cas
             if (th.ownerId === client.user.id) {
@@ -81,23 +81,23 @@ export default async function onMessageCreate(message) {
             reason: 'User-initiated modmail (DM)',
             message: { embeds: [baseEmbed] }
           });
-          console.log('[cas.modmail] Forum thread created:', thread?.id);
+          console.log('[cas.modmail] Forum thread created:', (thread && thread.id) || null);
         } else {
           const perms = channel.permissionsFor(client.user);
           if (!perms || (!perms.has(PermissionFlagsBits.CreatePublicThreads) && !perms.has(PermissionFlagsBits.CreatePrivateThreads))) {
             base = await channel.send({ embeds: [baseEmbed] });
             await message.reply("I can’t create threads in this channel. Please grant thread permissions or ping a mod.");
-            console.warn('[cas.modmail] Missing thread permissions. Base message id:', base?.id);
+            console.warn('[cas.modmail] Missing thread permissions. Base message id:', base ? base.id : null);
             return;
           }
           base = await channel.send({ embeds: [baseEmbed] });
-          console.log('[cas.modmail] Base message sent. base.id:', base?.id);
+          console.log('[cas.modmail] Base message sent. base.id:', base ? base.id : null);
           // On regular text channels, start a public thread by default
           thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'User-initiated modmail (DM)' });
-          console.log('[cas.modmail] startThread result:', thread?.id, 'isThread?', typeof thread?.isThread === 'function' ? thread.isThread() : null, 'ownerId:', thread?.ownerId);
+          console.log('[cas.modmail] startThread result:', (thread && thread.id) || null, 'isThread?', (thread && typeof thread.isThread === 'function') ? thread.isThread() : null, 'ownerId:', (thread && thread.ownerId) || null);
           if (!thread || !thread.isThread()) {
             await message.reply("I sent the modmail message but couldn’t start the thread. Please ping a mod.");
-            console.error('[cas.modmail] startThread failed to return a ThreadChannel. base.id:', base?.id);
+            console.error('[cas.modmail] startThread failed to return a ThreadChannel. base.id:', base ? base.id : null);
             return;
           }
         }
@@ -139,13 +139,13 @@ export default async function onMessageCreate(message) {
         created_at: new Date(),
         last_user_message_at: new Date()
       });
-      console.log('[cas.modmail] Relay created:', { user_id: message.author.id, ticket, base_message_id: base ? base.id : null, thread_id: thread?.id });
+      console.log('[cas.modmail] Relay created:', { user_id: message.author.id, ticket, base_message_id: base ? base.id : null, thread_id: thread ? thread.id : null });
       await message.reply(`I’ve opened a thread for you. Your ticket is ${ticket}. The moderators will reply shortly.`);
     } else if (isDM) {
       // Post into existing Cas-owned thread
       // Try to resolve thread robustly (cache → fetch → threads.fetch → base message)
       let thread = client.channels.cache.get(relay.thread_id);
-      if (!thread && channel && typeof channel.threads?.fetch === 'function') {
+      if (!thread && channel && channel.threads && typeof channel.threads.fetch === 'function') {
         try {
           const fetched = await channel.threads.fetch(relay.thread_id);
           thread = fetched || null;
