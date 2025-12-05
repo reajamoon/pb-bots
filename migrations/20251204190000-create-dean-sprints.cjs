@@ -25,9 +25,18 @@ module.exports = {
       createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     });
-    await queryInterface.addIndex('DeanSprints', ['userId', 'status']);
-    await queryInterface.addIndex('DeanSprints', ['guildId', 'channelId']);
-    await queryInterface.addIndex('DeanSprints', ['startedAt']);
+    // Add indexes if they don't already exist (guards for mixed .js/.cjs history)
+    const existing = await queryInterface.showIndex('DeanSprints').catch(() => []);
+    const names = new Set((existing || []).map(ix => ix.name));
+    if (!names.has('dean_sprints_user_id_status')) {
+      await queryInterface.addIndex('DeanSprints', ['userId', 'status'], { name: 'dean_sprints_user_id_status' }).catch(() => {});
+    }
+    if (!names.has('dean_sprints_guild_id_channel_id')) {
+      await queryInterface.addIndex('DeanSprints', ['guildId', 'channelId'], { name: 'dean_sprints_guild_id_channel_id' }).catch(() => {});
+    }
+    if (!names.has('dean_sprints_started_at')) {
+      await queryInterface.addIndex('DeanSprints', ['startedAt'], { name: 'dean_sprints_started_at' }).catch(() => {});
+    }
   },
 
   async down(queryInterface) {
