@@ -43,35 +43,36 @@ data.addSubcommand(sub => sub
 );
 
 export async function execute(interaction) {
-  const flags = undefined;
-  const guildId = interaction.guildId;
-  const channel = interaction.channel;
-  const channelId = channel ? channel.id : undefined;
-  const threadId = (channel && typeof channel.isThread === 'function' && channel.isThread()) ? channel.id : undefined;
-  // Defer immediately to avoid "application did not respond" under load
-  await interaction.deferReply();
+  try {
+    const flags = undefined;
+    const guildId = interaction.guildId;
+    const channel = interaction.channel;
+    const channelId = channel ? channel.id : undefined;
+    const threadId = (channel && typeof channel.isThread === 'function' && channel.isThread()) ? channel.id : undefined;
+    // Defer immediately to avoid "application did not respond" under load
+    await interaction.deferReply();
 
-  const settings = await GuildSprintSettings.findOne({ where: { guildId } });
-  if (settings) {
-    const allowed = Array.isArray(settings.allowedChannelIds) ? settings.allowedChannelIds.includes(channelId) : true;
-    const blocked = Array.isArray(settings.blockedChannelIds) && settings.blockedChannelIds.includes(channelId);
-    if (blocked || !allowed) {
-      let mention = '';
-      if (settings.defaultSummaryChannelId) {
-        mention = `<#${settings.defaultSummaryChannelId}>`;
-      } else if (Array.isArray(settings.allowedChannelIds) && settings.allowedChannelIds.length) {
-        mention = `<#${settings.allowedChannelIds[0]}>`;
-      } else if (interaction.guild && interaction.guild.channels && interaction.guild.channels.cache) {
-        const sprintsChan = interaction.guild.channels.cache.find(ch => ch.name === 'sprints' && typeof ch.isTextBased === 'function' && ch.isTextBased());
-        if (sprintsChan) mention = `<#${sprintsChan.id}>`;
+    const settings = await GuildSprintSettings.findOne({ where: { guildId } });
+    if (settings) {
+      const allowed = Array.isArray(settings.allowedChannelIds) ? settings.allowedChannelIds.includes(channelId) : true;
+      const blocked = Array.isArray(settings.blockedChannelIds) && settings.blockedChannelIds.includes(channelId);
+      if (blocked || !allowed) {
+        let mention = '';
+        if (settings.defaultSummaryChannelId) {
+          mention = `<#${settings.defaultSummaryChannelId}>`;
+        } else if (Array.isArray(settings.allowedChannelIds) && settings.allowedChannelIds.length) {
+          mention = `<#${settings.allowedChannelIds[0]}>`;
+        } else if (interaction.guild && interaction.guild.channels && interaction.guild.channels.cache) {
+          const sprintsChan = interaction.guild.channels.cache.find(ch => ch.name === 'sprints' && typeof ch.isTextBased === 'function' && ch.isTextBased());
+          if (sprintsChan) mention = `<#${sprintsChan.id}>`;
+        }
+        if (!mention) {
+          // Single-server fallback to main sprint channel
+          mention = '<#392787812073734144>';
+        }
+        return interaction.editReply({ content: notEnabledInChannelText(mention) });
       }
-      if (!mention) {
-        // Single-server fallback to main sprint channel
-        mention = '<#392787812073734144>';
-      }
-      return interaction.editReply({ content: notEnabledInChannelText(mention) });
     }
-  }
 
   const sub = interaction.options.getSubcommand();
   if (sub === 'start') {
@@ -90,7 +91,7 @@ export async function execute(interaction) {
       channelId,
       threadId,
       type: 'solo',
-      visibility,
+      visibility: 'public',
       startedAt,
       durationMinutes: minutes,
       status: 'processing',
@@ -236,5 +237,15 @@ export async function execute(interaction) {
       await GuildSprintSettings.create({ guildId, ...payload });
     }
     await interaction.editReply({ content: sprintChannelSetText(target.id, allowThreads) });
+  }
+  } catch (err) {
+    console.error('[Dean/sprint] Command error:', err);
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: "Yeah, that's on me. Try that again in a sec." });
+      } else {
+        await interaction.reply({ content: "Yeah, that's on me. Try that again in a sec.", flags: MessageFlags.SuppressNotifications });
+      }
+    } catch {}
   }
 }
