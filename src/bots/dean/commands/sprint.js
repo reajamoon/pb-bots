@@ -322,6 +322,7 @@ export async function execute(interaction) {
       }
       const content = linesSum.join('\n') || 'Nobody dropped numbers yet. Wanna be first?';
       return interaction.editReply({ content: `Here’s the tally so far:\n${content}` });
+    }
   } else if (interaction.options.getSubcommandGroup() === 'project') {
     const discordId = interaction.user.id;
     const subName = interaction.options.getSubcommand();
