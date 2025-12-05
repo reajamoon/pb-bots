@@ -310,8 +310,13 @@ export async function execute(interaction) {
         const total = Math.max(0, totalRaw);
         let extra = '';
         if (p.projectId) {
-          const proj = await Project.findByPk(p.projectId).catch(() => null);
-          if (proj?.name) extra = ` (${proj.name})`;
+          let proj = null;
+          try {
+            proj = await Project.findByPk(p.projectId);
+          } catch (e) {
+            proj = null;
+          }
+          if (proj && proj.name) extra = ` (${proj.name})`;
         }
         linesSum.push(`• <@${p.userId}>: ${total} words${extra}`);
       }
