@@ -61,13 +61,15 @@ export async function execute(interaction) {
   const channel = interaction.channel;
   const channelId = channel ? channel.id : undefined;
   const threadId = (channel && typeof channel.isThread === 'function' && channel.isThread()) ? channel.id : undefined;
+  // Defer immediately to avoid "application did not respond" under load
+  await interaction.deferReply({ flags });
 
   const settings = await GuildSprintSettings.findOne({ where: { guildId } });
   if (settings) {
     const allowed = Array.isArray(settings.allowedChannelIds) ? settings.allowedChannelIds.includes(channelId) : true;
     const blocked = Array.isArray(settings.blockedChannelIds) && settings.blockedChannelIds.includes(channelId);
     if (blocked || !allowed) {
-      return interaction.reply({ content: 'Sprints are not enabled in this channel.', flags });
+      return interaction.editReply({ content: 'Sprints are not enabled in this channel.' });
     }
   }
 
@@ -96,7 +98,7 @@ export async function execute(interaction) {
       label,
     });
 
-    await interaction.reply({ embeds: [startSoloEmbed(minutes, label, visibility)], flags });
+    await interaction.editReply({ embeds: [startSoloEmbed(minutes, label, visibility)] });
     await scheduleSprintNotifications(sprint, interaction.client);
   } else if (sub === 'host') {
     const minutes = interaction.options.getInteger('minutes');
@@ -123,7 +125,7 @@ export async function execute(interaction) {
       status: 'processing',
       label,
     });
-    await interaction.reply({ embeds: [hostTeamEmbed(minutes, label, groupId)], flags });
+    await interaction.editReply({ embeds: [hostTeamEmbed(minutes, label, groupId)] });
     await scheduleSprintNotifications(hostRow, interaction.client);
   } else if (sub === 'join') {
     const codeRaw = interaction.options.getString('code');
@@ -138,11 +140,11 @@ export async function execute(interaction) {
       host = await DeanSprints.findOne({ where: { guildId, channelId, status: 'processing', type: 'team', role: 'host' }, order: [['createdAt', 'DESC']] });
     }
     if (!host) {
-      return interaction.reply({ content: 'No active team sprint found in this channel.', flags });
+      return interaction.editReply({ content: 'No active team sprint found in this channel.' });
     }
     const existing = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (existing) {
-      return interaction.reply({ content: 'You already have an active sprint.', flags });
+      return interaction.editReply({ content: 'You already have an active sprint.' });
     }
     await DeanSprints.create({
       userId: discordId,
@@ -159,47 +161,47 @@ export async function execute(interaction) {
       status: 'processing',
       label: host.label,
     });
-    await interaction.reply({ embeds: [joinTeamEmbed()], flags });
+    await interaction.editReply({ embeds: [joinTeamEmbed()] });
   } else if (sub === 'end') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (!active) {
-      return interaction.reply({ content: 'No active sprint found.', flags });
+      return interaction.editReply({ content: 'No active sprint found.' });
     }
     if (active.type === 'team' && active.role === 'host' && active.groupId) {
       // End the team (host + all participants)
       await DeanSprints.update({ status: 'done', endNotified: true }, { where: { guildId, groupId: active.groupId, status: 'processing' } });
-      await interaction.reply({ embeds: [endTeamEmbed()], flags });
+      await interaction.editReply({ embeds: [endTeamEmbed()] });
     } else {
       await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null });
-      await interaction.reply({ embeds: [endSoloEmbed()], flags });
+      await interaction.editReply({ embeds: [endSoloEmbed()] });
     }
   } else if (sub === 'status') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (!active) {
-      return interaction.reply({ content: 'No active sprint found.', flags });
+      return interaction.editReply({ content: 'No active sprint found.' });
     }
     const endsAt = new Date(active.startedAt.getTime() + active.durationMinutes * 60000);
     const remainingMs = endsAt.getTime() - Date.now();
     const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
     if (active.type === 'team' && active.role === 'host' && active.groupId) {
       const count = await DeanSprints.count({ where: { guildId, groupId: active.groupId, status: 'processing' } });
-      await interaction.reply({ embeds: [statusTeamEmbed(remainingMin, count, active.label)], flags });
+      await interaction.editReply({ embeds: [statusTeamEmbed(remainingMin, count, active.label)] });
     } else {
-      await interaction.reply({ embeds: [statusSoloEmbed(remainingMin, active.label)], flags });
+      await interaction.editReply({ embeds: [statusSoloEmbed(remainingMin, active.label)] });
     }
   } else if (sub === 'leave') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing', type: 'team' } });
     if (!active) {
-      return interaction.reply({ content: 'You are not in an active team sprint.', flags });
+      return interaction.editReply({ content: 'You are not in an active team sprint.' });
     }
     if (active.role === 'host') {
-      return interaction.reply({ content: 'Hosts should use /sprint end to end the team sprint.', flags });
+      return interaction.editReply({ content: 'Hosts should use /sprint end to end the team sprint.' });
     }
     await active.update({ status: 'done', endNotified: true });
-    await interaction.reply({ embeds: [leaveTeamEmbed()], flags });
+    await interaction.editReply({ embeds: [leaveTeamEmbed()] });
   } else if (sub === 'list') {
     const ephem = interaction.options.getBoolean('ephemeral') ?? false;
     const listFlags = ephem ? MessageFlags.Ephemeral : undefined;
@@ -211,18 +213,18 @@ export async function execute(interaction) {
       return formatListLine(kind, remainingMin, s.userId, s.label);
     });
     const embed = listEmbeds(lines);
-    await interaction.reply({ embeds: [embed], flags: listFlags });
+    await interaction.editReply({ embeds: [embed] });
   } else if (sub === 'setchannel') {
     // Require ManageGuild permission to change settings
     const member = interaction.member;
     const hasPerm = member?.permissions?.has?.('ManageGuild') || member?.permissions?.has?.('Administrator');
     if (!hasPerm) {
-      return interaction.reply({ content: 'You need Manage Server to set the sprint channel.', flags });
+      return interaction.editReply({ content: 'You need Manage Server to set the sprint channel.' });
     }
     const target = interaction.options.getChannel('channel');
     const allowThreads = interaction.options.getBoolean('allow_threads') ?? true;
     if (!target) {
-      return interaction.reply({ content: 'Please select a channel.', flags });
+      return interaction.editReply({ content: 'Please select a channel.' });
     }
     const allowed = [target.id];
     const payload = {
@@ -236,6 +238,6 @@ export async function execute(interaction) {
     } else {
       await GuildSprintSettings.create({ guildId, ...payload });
     }
-    await interaction.reply({ content: `Sprint channel set to <#${target.id}>. Threads allowed: ${allowThreads ? 'yes' : 'no'}.`, flags });
+    await interaction.editReply({ content: `Sprint channel set to <#${target.id}>. Threads allowed: ${allowThreads ? 'yes' : 'no'}.` });
   }
 }
