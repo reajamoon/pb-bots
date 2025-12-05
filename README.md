@@ -29,6 +29,7 @@ See `docs/deployment.md` for PM2 commands and operational details.
 
 - [Profile System](docs/profile-system.md)
 - [Rec System](docs/rec-system.md)
+- [Sprint & Projects Guide (Dean)](docs/sprint-and-projects-guide.md)
 - [Bot Architecture Overview](docs/bot-architecture-overview.md)
 - [Fic Parsing Queue System](docs/fic-parsing-queue-implementation.md)
 - [Sam's Voice Guidelines](docs/sam-voice-guidelines.md)

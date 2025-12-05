@@ -1,5 +1,5 @@
 import { midpointEmbed, completeEmbed, summaryEmbed } from './text/sprintText.js';
-import { DeanSprints, GuildSprintSettings } from '../../models/index.js';
+import { DeanSprints, GuildSprintSettings, Wordcount, Project } from '../../models/index.js';
 
 function getChannelFromIds(client, guildId, channelId, threadId) {
   const guild = client.guilds.cache.get(guildId);
@@ -64,9 +64,14 @@ export async function scheduleSprintNotifications(sprint, client) {
       if (settings && settings.defaultSummaryChannelId) {
         const summaryChannel = getChannelFromIds(client, fresh.guildId, settings.defaultSummaryChannelId);
         if (summaryChannel) {
-          const sum = await buildSummaryForSprintGroup(fresh);
-          const sumEmbed = summaryEmbed(sum);
+          const sum = await buildSummaries(fresh);
+          const sumEmbed = summaryEmbed(`<#${fresh.threadId || fresh.channelId}>`, sum.label, sum.isTeam);
           await summaryChannel.send({ embeds: [sumEmbed] });
+          // Post per-member totals line-wise for readability
+          const lines = sum.members.map(m => `• <@${m.userId}>: ${m.total} words${m.projectName ? ` (${m.projectName})` : ''}`);
+          if (lines.length) {
+            await summaryChannel.send({ content: lines.join('\n') });
+          }
         }
       }
     } catch (e) {
@@ -75,23 +80,35 @@ export async function scheduleSprintNotifications(sprint, client) {
   }, endDelay);
 }
 
-async function buildSummaryForSprintGroup(sprint) {
-  if (sprint.type === 'team' && sprint.groupId) {
-    const rows = await DeanSprints.findAll({ where: { guildId: sprint.guildId, groupId: sprint.groupId }, order: [['createdAt', 'ASC']] });
-    return {
-      type: 'team',
-      label: sprint.label,
-      durationMinutes: sprint.durationMinutes,
-      count: rows.length,
-      participants: rows.map(r => ({ userId: r.userId, role: r.role })),
-    };
+async function buildSummaries(sprint) {
+  const isTeam = sprint.type === 'team' && sprint.groupId;
+  let participants;
+  if (isTeam) {
+    participants = await DeanSprints.findAll({ where: { guildId: sprint.guildId, groupId: sprint.groupId }, order: [['createdAt', 'ASC']] });
+  } else {
+    participants = [sprint];
+  }
+  const memberSummaries = [];
+  for (const p of participants) {
+    // Sum Wordcount rows recorded for this sprint/user
+    const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+    const totalRaw = wcRows.reduce((acc, r) => {
+      const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
+      return acc + (d > 0 ? d : 0);
+    }, 0);
+    const total = Math.max(0, totalRaw);
+    let projectName = null;
+    if (p.projectId) {
+      const proj = await Project.findByPk(p.projectId).catch(() => null);
+      projectName = proj?.name || null;
+    }
+    memberSummaries.push({ userId: p.userId, total, projectName });
   }
   return {
-    type: 'solo',
+    isTeam,
     label: sprint.label,
     durationMinutes: sprint.durationMinutes,
-    count: 1,
-    participants: [{ userId: sprint.userId, role: 'solo' }],
+    members: memberSummaries,
   };
 }
 import { setTimeout as delay } from 'timers/promises';
@@ -139,9 +156,13 @@ export async function startSprintWatchdog(client) {
   async function notifySummary(client, s, summaryChannelId) {
     const channel = await client.channels.fetch(summaryChannelId).catch(() => null);
     if (!channel) return;
-    const isTeam = s.type === 'team';
-    const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, s.label, isTeam);
+    const sum = await buildSummaries(s);
+    const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, sum.label, sum.isTeam);
     await channel.send({ embeds: [embed] });
+    const lines = sum.members.map(m => `• <@${m.userId}>: ${m.total} words${m.projectName ? ` (${m.projectName})` : ''}`);
+    if (lines.length) {
+      await channel.send({ content: lines.join('\n') });
+    }
   }
 
   (async function loop() {

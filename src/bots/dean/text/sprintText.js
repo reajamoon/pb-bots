@@ -10,7 +10,7 @@ const soloBoosters = [
   "Keep it rolling.",
   "Carry on, wayward writer.",
   "Turn it up, keep typing!",
-  "Stay on it, sweetheart. You got this.",
+  "Stay on it. You got this.",
   "You're cooking! Keep going.",
   "Lock in.",
   "Hey, eyes on the page."
@@ -48,7 +48,7 @@ function maybeEndearment() {
 export function startSoloEmbed(minutes, label, visibility) {
   return {
     title: 'Sprint started',
-    description: `Timer's set for ${minutes} minute${minutes === 1 ? '' : 's'}.${label ? `\nLabel: ${label}` : ''}`,
+    description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${pick(soloBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
     color: colors.info,
   };
 }
@@ -56,7 +56,7 @@ export function startSoloEmbed(minutes, label, visibility) {
 export function hostTeamEmbed(minutes, label, groupId) {
   return {
     title: 'Team sprint started',
-    description: `Timer's set for ${minutes} minute${minutes === 1 ? '' : 's'}. ${hostTeamCodeLine(groupId)}${label ? `\nLabel: ${label}` : ''}`,
+    description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${hostTeamCodeLine(groupId)} ${pick(teamBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
     color: colors.info,
   };
 }
@@ -64,7 +64,7 @@ export function hostTeamEmbed(minutes, label, groupId) {
 export function joinTeamEmbed() {
   return {
     title: 'Joined team sprint',
-    description: "You're in. Keep pace with the crew.",
+    description: "You're in. Run with the pack.",
     color: colors.success,
   };
 }
@@ -72,7 +72,7 @@ export function joinTeamEmbed() {
 export function endSoloEmbed() {
   return {
     title: 'Sprint ended',
-    description: "Nice work. Drop your wordcount when you're ready.",
+    description: `Nice work. Drop your wordcount when you're ready${maybeEndearment()}.`,
     color: colors.success,
   };
 }
@@ -80,7 +80,7 @@ export function endSoloEmbed() {
 export function endTeamEmbed() {
   return {
     title: 'Team sprint ended',
-    description: "Good run. Post your numbers when you're ready.",
+    description: `Good run. Post your numbers when you're ready${maybeEndearment()}.`,
     color: colors.success,
   };
 }
