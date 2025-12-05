@@ -1,7 +1,7 @@
 import { DataTypes } from 'sequelize';
 
 export default (sequelize) => {
-  const DeanSprints = sequelize.define('DeanSprints', {
+  const DeanSprintsModelDef = sequelize.define('DeanSprints', {
     userId: { type: DataTypes.STRING, allowNull: false },
     guildId: { type: DataTypes.STRING, allowNull: false },
     channelId: { type: DataTypes.STRING, allowNull: true },
@@ -32,5 +32,5 @@ export default (sequelize) => {
     ],
   });
 
-  return DeanSprints;
+  return DeanSprintsModelDef;
 };
