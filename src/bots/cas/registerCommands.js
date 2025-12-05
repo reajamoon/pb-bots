@@ -5,9 +5,9 @@ import modmailClose from './commands/modmailClose.js';
 import hug from './commands/hug.js';
 
 export default async function registerCasCommands(client) {
-  const guildId = process.env.CAS_GUILD_ID;
-  const appId = process.env.CAS_APP_ID;
-  const token = process.env.CAS_BOT_TOKEN;
+  const guildId = process.env.CAS_GUILD_ID || process.env.GUILD_ID;
+  const appId = process.env.CAS_CLIENT_ID || process.env.CLIENT_ID;
+  const token = (process.env.CAS_BOT_TOKEN || '').trim();
   if (!guildId || !appId || !token) {
     console.warn('[cas] Missing env: CAS_GUILD_ID, CAS_APP_ID, or CAS_BOT_TOKEN');
   }
