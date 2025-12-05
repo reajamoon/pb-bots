@@ -61,5 +61,10 @@ client.on('messageCreate', async (message) => {
   await onMessageCreate(message);
 });
 
-await registerCasCommands(client);
+const REGISTER_ON_BOOT = (process.env.CAS_REGISTER_ON_BOOT || process.env.REGISTER_ON_BOOT || 'false').toLowerCase() === 'true';
 await client.login(token);
+if (REGISTER_ON_BOOT) {
+  await registerCasCommands(client);
+} else {
+  console.log('[cas] Skipping command registration on boot (CAS_REGISTER_ON_BOOT=false).');
+}

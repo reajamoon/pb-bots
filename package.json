@@ -26,8 +26,10 @@
     "register:sam:direct": "node ./scripts/sam/deploy-commands-direct.js",
     "clear:sam": "node ./scripts/sam/clear-commands.js",
     "register:dean": "node ./scripts/dean/deploy-commands.js",
+    "register:dean:direct": "node ./scripts/dean/deploy-commands-direct.js",
     "clear:dean": "node ./scripts/dean/clear-commands.js",
     "register:cas": "node ./scripts/cas/deploy-commands.js",
+    "register:cas:direct": "node ./scripts/cas/deploy-commands-direct.js",
     "clear:cas": "node ./scripts/cas/clear-commands.js",
     "lint:bot-text": "node ./scripts/check-bot-text-scope.js",
     "fix:birthdays": "node ./scripts/normalize-birthdays.js"

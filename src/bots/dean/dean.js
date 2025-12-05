@@ -48,5 +48,10 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-await registerDeanCommands(client);
+const REGISTER_ON_BOOT = (process.env.DEAN_REGISTER_ON_BOOT || process.env.REGISTER_ON_BOOT || 'false').toLowerCase() === 'true';
 await client.login(token);
+if (REGISTER_ON_BOOT) {
+  await registerDeanCommands(client);
+} else {
+  console.log('[dean] Skipping command registration on boot (DEAN_REGISTER_ON_BOOT=false).');
+}

@@ -73,9 +73,14 @@ async function startBot() {
         logger.info('Database connection has been established successfully.');
         await sequelize.sync();
         logger.info('Database synchronized successfully.');
-        // Ensure slash commands are registered
-        await registerSamCommands(client);
-        await client.login(process.env.BOT_TOKEN);
+        const REGISTER_ON_BOOT = (process.env.SAM_REGISTER_ON_BOOT || process.env.REGISTER_ON_BOOT || 'false').toLowerCase() === 'true';
+        await client.login(process.env.SAM_BOT_TOKEN || process.env.BOT_TOKEN);
+        if (REGISTER_ON_BOOT) {
+            // Register slash commands after login to avoid duplicate REST churn on restarts
+            await registerSamCommands(client);
+        } else {
+            logger.info('[sam] Skipping command registration on boot (SAM_REGISTER_ON_BOOT=false).');
+        }
     } catch (error) {
         logger.error('Failed to start bot:', error);
         process.exit(1);
