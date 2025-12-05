@@ -12,7 +12,7 @@ export default function onReady(client) {
       console.warn('[dean] Emoji store did not initialize. Check guild ID env (DEAN_GUILD_ID or GUILD_ID).');
     }
 
-    // Set presence to "Watching sprints" using numeric flag format with start timestamp
+    // Set presence so Dean's activity shows in Discord
     try {
       const activityName = (process.env.DEAN_ACTIVITY_NAME && process.env.DEAN_ACTIVITY_NAME.trim()) || '⏱️ Running sprints';
       const status = (process.env.DEAN_STATUS && process.env.DEAN_STATUS.trim()) || 'online';
@@ -26,7 +26,7 @@ export default function onReady(client) {
           },
         ],
       });
-      console.log('[dean] Presence set: Watching sprints (with start timestamp)');
+      console.log('[dean] Presence set:', activityName);
     } catch (err) {
       console.warn('[dean] Failed to set activity presence:', (err && err.message) || err);
     }
