@@ -95,8 +95,6 @@ async function buildSummaryForSprintGroup(sprint) {
   };
 }
 import { setTimeout as delay } from 'timers/promises';
-import { DeanSprints, GuildSprintSettings } from '../../models/index.js';
-import { midpointEmbed, completeEmbed, summaryEmbed } from './text/sprintText.js';
 
 export async function startSprintWatchdog(client) {
   // Lightweight poller to send end notifications; midpoint can be added similarly
