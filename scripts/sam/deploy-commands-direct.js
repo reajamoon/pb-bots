@@ -53,17 +53,21 @@ const req = https.request(options, res => {
       try {
         const parsed = JSON.parse(body);
         console.log(`[sam:direct] ✅ Success (${res.statusCode}). Commands deployed: ${Array.isArray(parsed) ? parsed.length : 'n/a'}`);
+        process.exit(0);
       } catch {
         console.log(`[sam:direct] ✅ Success (${res.statusCode}).`);
+        process.exit(0);
       }
     } else {
       console.error(`[sam:direct] ❌ Failed (${res.statusCode}). Response: ${body}`);
+      process.exit(1);
     }
   });
 });
 
 req.on('error', err => {
   console.error('[sam:direct] Request error:', err);
+  process.exit(1);
 });
 
 req.write(payload);
