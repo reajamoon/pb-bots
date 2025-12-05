@@ -1,8 +1,9 @@
 import { SlashCommandBuilder, PermissionsBitField } from 'discord.js';
 
+// Map subcommands to fixed role IDs to avoid name mismatches
 const ROLE_MAP = {
-  'server-changes': 'Birthday Bash - Server Changes!',
-  'fun-stuff': 'Birthday Bash - Fun Stuff',
+  'server-changes': '1446394468797255794',
+  'fun-stuff': '1446393678800097361',
 };
 
 export const data = new SlashCommandBuilder()
@@ -36,17 +37,24 @@ export async function execute(interaction) {
       return interaction.editReply({ content: 'Try `/bash roles server-changes` or `/bash roles fun-stuff`.' });
     }
 
-    const roleName = ROLE_MAP[sub];
-    if (!roleName) {
+    const roleId = ROLE_MAP[sub];
+    if (!roleId) {
       return interaction.editReply({ content: 'Unknown role option. Try one of the listed subcommands.' });
     }
 
     const guild = interaction.guild;
     const me = guild.members.me;
-    const role = guild.roles.cache.find(r => r.name === roleName);
+    let role = guild.roles.cache.get(roleId);
+    if (!role) {
+      try {
+        role = await guild.roles.fetch(roleId);
+      } catch (e) {
+        role = null;
+      }
+    }
 
     if (!role) {
-      return interaction.editReply({ content: `I can\'t find the role: ${roleName}` });
+      return interaction.editReply({ content: `I can't find that role (ID: ${roleId}).` });
     }
 
     if (!me || !me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
@@ -58,12 +66,13 @@ export async function execute(interaction) {
     }
 
     const member = interaction.member;
+    const roleLabel = role?.name ?? 'that role';
     if (member.roles.cache.has(role.id)) {
       await member.roles.remove(role, 'Self-serve Birthday Bash role toggle (remove)');
-      return interaction.editReply({ content: `Got it — removed **${role.name}**.` });
+      return interaction.editReply({ content: `Got it — removed **${roleLabel}**.` });
     } else {
       await member.roles.add(role, 'Self-serve Birthday Bash role toggle (add)');
-      return interaction.editReply({ content: `All set — added **${role.name}**.` });
+      return interaction.editReply({ content: `All set — added **${roleLabel}**.` });
     }
   } catch (err) {
     console.error('[Cas/bash roles] Error:', err);
