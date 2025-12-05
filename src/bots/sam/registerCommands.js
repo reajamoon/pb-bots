@@ -3,9 +3,9 @@ import fs from 'fs';
 import path from 'path';
 
 export default async function registerSamCommands(client) {
-  const guildId = process.env.GUILD_ID;
-  const appId = process.env.CLIENT_ID;
-  const token = process.env.BOT_TOKEN;
+  const guildId = process.env.SAM_GUILD_ID || process.env.GUILD_ID;
+  const appId = process.env.SAM_CLIENT_ID || process.env.CLIENT_ID;
+  const token = process.env.SAM_BOT_TOKEN || process.env.BOT_TOKEN;
   if (!appId || !token) {
     console.warn('[sam] Missing env: CLIENT_ID or BOT_TOKEN');
   }

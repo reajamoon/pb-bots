@@ -29,7 +29,7 @@ for (const file of commandFiles) {
   commands.push(dataExport.toJSON());
 }
 
-const token = process.env.BOT_TOKEN;
+const token = process.env.SAM_BOT_TOKEN || process.env.BOT_TOKEN;
 if (!token) {
   console.error('❌ BOT_TOKEN is missing or empty. Define it in .env.');
   process.exit(1);
@@ -39,8 +39,8 @@ const rest = new REST({ version: '10' }).setToken(token, 'Bot');
 
 (async () => {
   try {
-    const guildId = (process.env.GUILD_ID || '').trim();
-    const clientId = (process.env.CLIENT_ID || '').trim();
+    const guildId = (process.env.SAM_GUILD_ID || process.env.GUILD_ID || '').trim();
+    const clientId = (process.env.SAM_CLIENT_ID || process.env.CLIENT_ID || '').trim();
     if (!guildId || !clientId) {
       console.error('❌ GUILD_ID or CLIENT_ID is missing. Set both in environment/PM2 ecosystem.');
       process.exit(1);

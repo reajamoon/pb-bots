@@ -23,6 +23,7 @@
     "migrations:check": "node ./scripts/check-migrations-extensions.js",
     "migrations:fix": "node ./scripts/fix-migrations-extensions.js",
     "register:sam": "node ./scripts/sam/deploy-commands.js",
+    "register:sam:direct": "node ./scripts/sam/deploy-commands-direct.js",
     "clear:sam": "node ./scripts/sam/clear-commands.js",
     "register:dean": "node ./scripts/dean/deploy-commands.js",
     "clear:dean": "node ./scripts/dean/clear-commands.js",
