@@ -7,7 +7,7 @@ import { readdirSync } from 'fs';
 // Ensure we load .env from the repo root, regardless of CWD
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const repoRoot = pathResolve(__dirname, '../../..');
+const repoRoot = pathResolve(__dirname, '../..');
 const envPath = join(repoRoot, '.env');
 const envResult = dotenv.config({ path: envPath });
 if (envResult.error) {
