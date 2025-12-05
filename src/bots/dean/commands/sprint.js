@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, InteractionFlags } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { DeanSprints, GuildSprintSettings, User, sequelize } from '../../../models/index.js';
 import { startSoloEmbed, hostTeamEmbed, joinTeamEmbed, endSoloEmbed, endTeamEmbed, statusSoloEmbed, statusTeamEmbed, leaveTeamEmbed, listEmbeds, formatListLine } from '../text/sprintText.js';
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
@@ -48,7 +48,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   const ephemeral = interaction.options.getBoolean('ephemeral') ?? false;
-  const flags = ephemeral ? InteractionFlags.Ephemeral : undefined;
+  const flags = ephemeral ? MessageFlags.Ephemeral : undefined;
   const guildId = interaction.guildId;
   const channel = interaction.channel;
   const channelId = channel ? channel.id : undefined;
@@ -194,7 +194,7 @@ export async function execute(interaction) {
     await interaction.reply({ embeds: [leaveTeamEmbed()], flags });
   } else if (sub === 'list') {
     const ephem = interaction.options.getBoolean('ephemeral') ?? false;
-    const listFlags = ephem ? InteractionFlags.Ephemeral : undefined;
+    const listFlags = ephem ? MessageFlags.Ephemeral : undefined;
     const sprints = await DeanSprints.findAll({ where: { guildId, channelId, status: 'processing' }, order: [['startedAt', 'DESC']] });
     const lines = sprints.map(s => {
       const endsAt = new Date(s.startedAt.getTime() + s.durationMinutes * 60000);
