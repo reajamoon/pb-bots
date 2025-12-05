@@ -3,6 +3,8 @@ import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
 import registerDeanCommands from './registerCommands.js';
 import { startSprintWatchdog } from './sprintScheduler.js';
 import { initEmojiStore } from '../../shared/emojiStore.js';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { join, dirname } from 'path';
 
 const token = process.env.DEAN_BOT_TOKEN;
 if (!token) {
@@ -20,6 +22,17 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+
+// Startup diagnostics to confirm runtime and module resolution
+try {
+  console.log('[dean] Node', process.version, 'platform', process.platform);
+  const here = fileURLToPath(import.meta.url);
+  const dir = dirname(here);
+  const schedPath = join(dir, 'sprintScheduler.js');
+  console.log('[dean] scheduler path', schedPath, 'url', pathToFileURL(schedPath).href);
+} catch (e) {
+  console.log('[dean] startup diagnostics failed:', e && e.message ? e.message : e);
+}
 
 client.once('ready', async () => {
   console.log(`[dean] Logged in as ${client.user.tag}`);
@@ -46,6 +59,13 @@ client.on('interactionCreate', async interaction => {
       await interaction.reply({ content: 'There was an error executing that command.', flags: MessageFlags.Ephemeral });
     }
   }
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[dean] uncaughtException:', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[dean] unhandledRejection:', reason && reason.stack ? reason.stack : reason);
 });
 
 const REGISTER_ON_BOOT = (process.env.DEAN_REGISTER_ON_BOOT || process.env.REGISTER_ON_BOOT || 'false').toLowerCase() === 'true';

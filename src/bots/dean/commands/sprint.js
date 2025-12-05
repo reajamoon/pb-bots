@@ -36,7 +36,7 @@ export const data = new SlashCommandBuilder()
     .setDescription('End your active sprint'))
   .addSubcommand(sub => sub
     .setName('status')
-    .setDescription('Show current sprint status'));
+    .setDescription('Show current sprint status'))
   .addSubcommand(sub => sub
     .setName('leave')
     .setDescription('Leave the current team sprint')
