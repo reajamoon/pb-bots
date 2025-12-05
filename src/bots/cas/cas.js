@@ -3,6 +3,9 @@ import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
 import registerCasCommands from './registerCommands.js';
 import onMessageCreate from './events/messageCreate.js';
 import { initEmojiStore } from '../../shared/emojiStore.js';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { join, dirname } from 'path';
+import { readdirSync } from 'fs';
 
 const token = (process.env.CAS_BOT_TOKEN || '').trim();
 if (!token) {
@@ -21,6 +24,24 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+
+// Dynamically load command handlers from ./commands
+try {
+  const here = fileURLToPath(import.meta.url);
+  const dir = dirname(here);
+  const commandsDir = join(dir, 'commands');
+  const files = readdirSync(commandsDir).filter(f => f.endsWith('.js'));
+  for (const file of files) {
+    const mod = await import(pathToFileURL(join(commandsDir, file)).href);
+    const cmd = (mod && (mod.default || mod)) || undefined;
+    if (cmd?.data?.name && typeof cmd.execute === 'function') {
+      client.commands.set(cmd.data.name, cmd);
+    }
+  }
+  console.log('[cas] Loaded commands:', Array.from(client.commands.keys()).join(', '));
+} catch (e) {
+  console.warn('[cas] Failed loading commands:', e && e.message ? e.message : e);
+}
 
 client.once('ready', async () => {
   console.log(`[cas] Logged in as ${client.user.tag}`);

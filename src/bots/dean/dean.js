@@ -6,6 +6,7 @@ import onInteractionCreate from './events/interactionCreate.js';
 import { initEmojiStore } from '../../shared/emojiStore.js';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { join, dirname } from 'path';
+import { readdirSync } from 'fs';
 
 const token = (process.env.DEAN_BOT_TOKEN || '').trim();
 if (!token) {
@@ -23,6 +24,24 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+
+// Dynamically load command handlers from ./commands
+try {
+  const here = fileURLToPath(import.meta.url);
+  const dir = dirname(here);
+  const commandsDir = join(dir, 'commands');
+  const files = readdirSync(commandsDir).filter(f => f.endsWith('.js'));
+  for (const file of files) {
+    const mod = await import(pathToFileURL(join(commandsDir, file)).href);
+    const cmd = mod.default || mod;
+    if (cmd?.data?.name && typeof cmd.execute === 'function') {
+      client.commands.set(cmd.data.name, cmd);
+    }
+  }
+  console.log('[dean] Loaded commands:', Array.from(client.commands.keys()).join(', '));
+} catch (e) {
+  console.warn('[dean] Failed loading commands:', e && e.message ? e.message : e);
+}
 
 // Startup diagnostics to confirm runtime and module resolution
 try {
