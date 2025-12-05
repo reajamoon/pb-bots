@@ -117,7 +117,7 @@ export async function startSprintWatchdog(client) {
             await notify(client, s, { embeds: [completeEmbed()] });
             // Also send to summary channel if configured
             const settings = await GuildSprintSettings.findOne({ where: { guildId: s.guildId } });
-            if (settings?.defaultSummaryChannelId) {
+            if (settings && settings.defaultSummaryChannelId) {
               await notifySummary(client, s, settings.defaultSummaryChannelId);
             }
           }
