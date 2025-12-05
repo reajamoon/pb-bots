@@ -10,14 +10,44 @@ if (!token || !clientId) {
   process.exit(1);
 }
 
-let commands = [];
-try {
-  const { default: casCommands } = await import('../../src/bots/cas/registerCommands.js');
-  if (Array.isArray(casCommands)) commands = casCommands;
-} catch (e) {
-  console.warn('[cas] Could not import registerCommands.js as array; using []');
+import 'dotenv/config';
+import https from 'https';
+import { readdirSync } from 'fs';
+import { join } from 'path';
+
+const token = process.env.CAS_BOT_TOKEN;
+const clientId = process.env.CAS_CLIENT_ID;
+const guildId = process.env.CAS_GUILD_ID;
+
+if (!token || !clientId) {
+  console.error('[cas] Missing token or clientId. Set CAS_BOT_TOKEN and CAS_CLIENT_ID.');
+  process.exit(1);
 }
 
+async function buildCommands() {
+  const commands = [];
+  const commandsPath = join(process.cwd(), 'src', 'bots', 'cas', 'commands');
+  let files = [];
+  try {
+    files = readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+  } catch (e) {
+    console.warn('[cas] Could not read commands folder:', e?.message || e);
+  }
+  for (const file of files) {
+    try {
+      const mod = await import(join(commandsPath, file).replace(/\\/g, '/'));
+      const command = mod.default || mod;
+      if (command?.data?.toJSON) {
+        commands.push(command.data.toJSON());
+      }
+    } catch (e) {
+      console.warn(`[cas] Failed to import command ${file}:`, e?.message || e);
+    }
+  }
+  return commands;
+}
+
+const commands = await buildCommands();
 const body = JSON.stringify(commands);
 const path = guildId
   ? `/api/v10/applications/${clientId}/guilds/${guildId}/commands`
