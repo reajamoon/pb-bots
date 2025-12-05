@@ -1,9 +1,21 @@
 import Discord from 'discord.js';
 const { REST, Routes } = Discord;
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join, resolve as pathResolve } from 'path';
 import { readdirSync } from 'fs';
 import { join } from 'path';
-dotenv.config();
+// Ensure we load .env from the repo root, regardless of CWD
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const repoRoot = pathResolve(__dirname, '../../..');
+const envPath = join(repoRoot, '.env');
+const envResult = dotenv.config({ path: envPath });
+if (envResult.error) {
+  console.warn('[sam] dotenv failed to load .env:', envResult.error.message);
+} else {
+  console.log(`[sam] dotenv loaded .env from ${envPath}`);
+}
 
 const commands = [];
 
@@ -23,15 +35,42 @@ for (const file of commandFiles) {
   commands.push(dataExport.toJSON());
 }
 
-const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
+let token = (process.env.BOT_TOKEN || '').trim();
+// Normalize token if user mistakenly prefixed with "Bot "
+if (token.toLowerCase().startsWith('bot ')) {
+  console.warn('⚠️ BOT_TOKEN appears to include the "Bot " prefix; removing it for REST client.');
+  token = token.slice(4).trim();
+}
+// Guard common quoting mistakes
+if ((token.startsWith('"') && token.endsWith('"')) || (token.startsWith("'") && token.endsWith("'"))) {
+  console.warn('⚠️ BOT_TOKEN appears to be quoted; stripping quotes.');
+  token = token.slice(1, -1).trim();
+}
+console.log(`[sam] Using BOT_TOKEN length: ${token.length}`);
+if (!token) {
+  console.error('❌ BOT_TOKEN is missing or empty. Set it in your environment/PM2 ecosystem.');
+  process.exit(1);
+}
+const token = process.env.BOT_TOKEN;
+if (!token) {
+  console.error('❌ BOT_TOKEN is missing or empty. Define it in .env.');
+  process.exit(1);
+}
+console.log(`[sam] BOT_TOKEN present (length: ${token.length}).`);
+const rest = new REST({ version: '10' }).setToken(token);
 
 (async () => {
   try {
-    const guildId = process.env.GUILD_ID;
+    const guildId = (process.env.GUILD_ID || '').trim();
+    const clientId = (process.env.CLIENT_ID || '').trim();
+    if (!guildId || !clientId) {
+      console.error('❌ GUILD_ID or CLIENT_ID is missing. Set both in environment/PM2 ecosystem.');
+      process.exit(1);
+    }
     console.log(`Started refreshing ${commands.length} application (/) commands for guild: ${guildId}`);
 
     const data = await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
+      Routes.applicationGuildCommands(clientId, guildId),
       { body: commands },
     );
 
