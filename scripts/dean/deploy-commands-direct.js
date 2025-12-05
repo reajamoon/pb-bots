@@ -3,9 +3,11 @@ import https from 'https';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 
-const token = process.env.DEAN_BOT_TOKEN;
-const clientId = process.env.DEAN_CLIENT_ID;
-const guildId = process.env.DEAN_GUILD_ID;
+const token = (process.env.DEAN_BOT_TOKEN || '').trim();
+const clientIdRaw = (process.env.DEAN_CLIENT_ID || '').trim();
+const guildIdRaw = (process.env.DEAN_GUILD_ID || '').trim();
+const clientId = encodeURIComponent(clientIdRaw);
+const guildId = guildIdRaw ? encodeURIComponent(guildIdRaw) : '';
 
 if (!token || !clientId) {
   console.error('[dean] Missing token or clientId. Set DEAN_BOT_TOKEN and DEAN_CLIENT_ID.');

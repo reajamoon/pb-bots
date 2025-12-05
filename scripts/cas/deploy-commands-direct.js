@@ -3,9 +3,11 @@ import https from 'https';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 
-const token = process.env.CAS_BOT_TOKEN;
-const clientId = process.env.CAS_CLIENT_ID;
-const guildId = process.env.CAS_GUILD_ID;
+const token = (process.env.CAS_BOT_TOKEN || '').trim();
+const clientIdRaw = (process.env.CAS_CLIENT_ID || '').trim();
+const guildIdRaw = (process.env.CAS_GUILD_ID || '').trim();
+const clientId = encodeURIComponent(clientIdRaw);
+const guildId = guildIdRaw ? encodeURIComponent(guildIdRaw) : '';
 
 if (!token || !clientId) {
   console.error('[cas] Missing token or clientId. Set CAS_BOT_TOKEN and CAS_CLIENT_ID.');
