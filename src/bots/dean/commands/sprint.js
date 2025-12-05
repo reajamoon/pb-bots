@@ -364,6 +364,6 @@ export async function execute(interaction) {
       } else {
         await interaction.reply({ content: "Yeah, that's on me. Try that again in a sec.", flags: MessageFlags.SuppressNotifications });
       }
-    } catch {}
+    } catch (e) {}
   }
 }
