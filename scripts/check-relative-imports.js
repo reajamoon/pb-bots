@@ -65,22 +65,23 @@ async function main() {
             }
           }
         }
-        // Case-sensitivity guard: warn when importing a modlock util with wrong casing
-        const baseLower = path.basename(resolved).toLowerCase();
-        if (baseLower.includes('modlockutils')) {
-          // enforce exact module names to reduce confusion across OS
-          const expectedNames = ['modlockUtils.js', 'modLockUtils.js'];
-          if (!expectedNames.includes(path.basename(resolved))) {
-            problems.push({ file, line: i + 1, importPath, expectedImport: '<use exact casing: shared/modlockUtils.js or shared/utils/modLockUtils.js>' });
+        // Case-sensitivity guard: enforce expected helper names for modlock utils
+        const base = path.basename(resolved);
+        if (base.toLowerCase().includes('modlockutils')) {
+          const allowed = new Set(['modlockUtils.js', 'modLockUtils.js', 'globalModlockUtils.js']);
+          if (!allowed.has(base)) {
+            problems.push({ file, line: i + 1, importPath, expectedImport: '<use exact casing: shared/utils/globalModlockUtils.js or shared/utils/modLockUtils.js>' });
           }
         }
       }
-      // Special case: models should import from the consolidated index: '../../models/index.js' or equivalent
-      const mModels = line.match(/from\s+['\"](\.{1,2}\/[^'\"]*models\/[A-Za-z0-9_\-]+\.js)['\"]/);
+      // Models rule: allow models/index.js via any relative path; warn on direct model file imports
+      const mModels = line.match(/from\s+['\"](\.{1,2}\/[^'\"]*models\/(.+?))['\"]/);
       if (mModels) {
         const importPath = mModels[1];
-        // Recommend using models/index.js instead of direct file imports to avoid duplication
-        problems.push({ file, line: i + 1, importPath, expectedImport: '<use models/index.js>' });
+        const tail = mModels[2];
+        if (!tail.endsWith('index.js')) {
+          problems.push({ file, line: i + 1, importPath, expectedImport: '<use models/index.js>' });
+        }
       }
     }
   }
