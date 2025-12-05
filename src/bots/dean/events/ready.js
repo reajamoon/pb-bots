@@ -3,7 +3,7 @@ import { DeanSprints } from '../../../models/index.js';
 import { scheduleSprintNotifications, startSprintWatchdog } from '../sprintScheduler.js';
 
 export default function onReady(client) {
-  client.once('ready', async () => {
+  client.once('clientReady', async () => {
     console.log(`[dean] Logged in as ${client.user.tag}`);
 
     // Initialize shared emoji store
