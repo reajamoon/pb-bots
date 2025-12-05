@@ -22,7 +22,7 @@ export default async function registerSamCommands(client) {
     commands.push(cmd.data.toJSON());
   }
 
-  const rest = new REST({ version: '10' }).setToken(token);
+  const rest = new REST({ version: '10' }).setToken(token, 'Bot');
   try {
     if (guildId) {
       await rest.put(Routes.applicationGuildCommands(appId, guildId), { body: commands });
