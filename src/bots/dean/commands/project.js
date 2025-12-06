@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
+import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount, sequelize } from '../../../models/index.js';
 
 export const data = new SlashCommandBuilder()
   .setName('project')
@@ -10,7 +10,7 @@ export const data = new SlashCommandBuilder()
     .addStringOption(opt => opt.setName('name').setDescription('Project name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('info')
-    .setDescription('Show details about a project')
+    .setDescription('Show details and recent totals for a project')
     .addStringOption(opt => opt.setName('name').setDescription('Project name (optional)').setRequired(false)))
   .addSubcommand(sub => sub
     .setName('list')
@@ -39,7 +39,25 @@ export const data = new SlashCommandBuilder()
     .addStringOption(opt => opt.setName('project_id').setDescription('Project ID').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('members')
-    .setDescription('List project members'));
+    .setDescription('List project members'))
+  .addSubcommandGroup(group => group
+    .setName('wc')
+    .setDescription('Manage a project wordcount directly')
+    .addSubcommand(sub => sub
+      .setName('add')
+      .setDescription('Add words directly to a project (outside a sprint)')
+      .addIntegerOption(opt => opt.setName('new-words').setDescription('Words added (positive)').setRequired(true))
+      .addStringOption(opt => opt.setName('project_id').setDescription('Project ID (optional if sprint is linked)').setRequired(false)))
+    .addSubcommand(sub => sub
+      .setName('set')
+      .setDescription('Set your current wordcount for a project (outside a sprint)')
+      .addIntegerOption(opt => opt.setName('count').setDescription('Current wordcount').setRequired(true))
+      .addStringOption(opt => opt.setName('project_id').setDescription('Project ID (optional if sprint is linked)').setRequired(false)))
+    .addSubcommand(sub => sub
+      .setName('show')
+      .setDescription('Show your current project wordcount (outside a sprint)')
+      .addStringOption(opt => opt.setName('project_id').setDescription('Project ID (optional if sprint is linked)').setRequired(false)))
+  );
 
 export async function execute(interaction) {
   try {
@@ -87,15 +105,90 @@ export async function execute(interaction) {
       const activeSprint = await DeanSprints.findOne({ where: { projectId: project.id, status: 'processing' } }).catch(() => null);
       const channelMention = activeSprint?.channelId ? `<#${activeSprint.channelId}>` : '—';
       const mods = members.filter(m => m.role === 'mod').length;
+      // Recent totals: last sprint totals + last 7 days aggregate
+      let lastSprintTotal = 0;
+      const lastSprint = await DeanSprints.findOne({ where: { projectId: project.id }, order: [['updatedAt', 'DESC']] }).catch(() => null);
+      if (lastSprint) {
+        const rows = await Wordcount.findAll({ where: { sprintId: lastSprint.id }, order: [['recordedAt', 'ASC']] });
+        lastSprintTotal = rows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
+      }
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const recentRows = await Wordcount.findAll({ where: { projectId: project.id, recordedAt: { [sequelize.Op.gte]: since } } }).catch(() => []);
+      // All-time total across all members for this project
+      const allRows = await Wordcount.findAll({ where: { projectId: project.id } }).catch(() => []);
+      const allTotal = allRows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
+      const weekTotal = recentRows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
       const lines = [
         `Project: ${project.name}`,
         `Owner: ${ownerTag}`,
         `Members: ${members.length} (mods: ${mods})`,
         `Active sprint: ${activeSprint ? `yes in ${channelMention}` : 'no'}`,
+        `Last sprint total: ${lastSprintTotal} words`,
+        `Project total (all-time): ${allTotal} words`,
+        `7-day total: ${weekTotal} words`,
         `Created: ${new Date(project.createdAt).toLocaleString()}`,
         `ID: ${project.id}`,
       ];
       return interaction.editReply({ content: lines.join('\n') });
+    }
+
+    if (subGroup === 'wc') {
+      // Resolve projectId: prefer explicit, else linked active sprint
+      let projectId = interaction.options.getString('project_id');
+      if (!projectId) {
+        const active = await DeanSprints.findOne({ where: { userId: discordId, status: 'processing' }, order: [['createdAt', 'DESC']] });
+        if (active && active.projectId) projectId = active.projectId;
+      }
+      if (!projectId) {
+        return interaction.editReply({ content: 'Tell me which project. Add `project_id:` or link a sprint with `/sprint project use`.' });
+      }
+      // Validate membership
+      const membership = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
+      if (!membership) {
+        return interaction.editReply({ content: 'You’re not on that project, buddy.' });
+      }
+      const leaf = interaction.options.getSubcommand();
+      if (leaf === 'add') {
+        const words = interaction.options.getInteger('new-words');
+        if (words <= 0) return interaction.editReply({ content: 'Words must be a positive number.' });
+        await Wordcount.create({
+          userId: discordId,
+          projectId,
+          sprintId: null,
+          countStart: null,
+          countEnd: null,
+          delta: words,
+          recordedAt: new Date(),
+        });
+        return interaction.editReply({ content: `Logged **+${words}** to that project. Keep it moving.` });
+      } else if (leaf === 'set') {
+        const count = interaction.options.getInteger('count');
+        if (count < 0) return interaction.editReply({ content: 'Wordcount must be zero or greater.' });
+        const rows = await Wordcount.findAll({ where: { projectId, userId: discordId }, order: [['recordedAt', 'ASC']] });
+        const current = rows.reduce((acc, r) => {
+          const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
+          return acc + (d > 0 ? d : 0);
+        }, 0);
+        const delta = Math.max(0, count - current);
+        if (delta === 0) return interaction.editReply({ content: `You’re already sitting at **${count}** for this project.` });
+        await Wordcount.create({
+          userId: discordId,
+          projectId,
+          sprintId: null,
+          countStart: current,
+          countEnd: count,
+          delta,
+          recordedAt: new Date(),
+        });
+        return interaction.editReply({ content: `Locked **${count}** as your project count (added **+${delta}**).` });
+      } else if (leaf === 'show') {
+        const rows = await Wordcount.findAll({ where: { projectId, userId: discordId }, order: [['recordedAt', 'ASC']] });
+        const current = rows.reduce((acc, r) => {
+          const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
+          return acc + (d > 0 ? d : 0);
+        }, 0);
+        return interaction.editReply({ content: `You’re at **${current}** on this project.` });
+      }
     }
 
     if (subName === 'list') {

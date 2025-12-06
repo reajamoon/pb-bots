@@ -219,11 +219,25 @@ export default async function handleSearchRecommendations(interaction) {
         
         // Create series embed and return
         const seriesEmbed = createSeriesEmbed(series);
-        await interaction.editReply({
-            content: `Found series S${seriesId}.`,
-            embeds: [seriesEmbed],
-            components: []
-        });
+        // Post to fic_queue_channel
+        try {
+            const { Config } = await import('../../../../models/index.js');
+            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            let targetChannel = null;
+            if (queueCfg && queueCfg.value) {
+                targetChannel = interaction.client.channels.cache.get(queueCfg.value) || await interaction.client.channels.fetch(queueCfg.value).catch(() => null);
+            }
+            if (!targetChannel) targetChannel = interaction.channel;
+            if (targetChannel) {
+                await targetChannel.send({ embeds: [seriesEmbed] });
+                try { await interaction.deleteReply(); } catch {}
+            } else {
+                await interaction.editReply({ content: `Found series S${seriesId}.`, embeds: [seriesEmbed], components: [] });
+            }
+        } catch (e) {
+            console.warn('[rec search] Failed to post series embed to fic_queue_channel, falling back to interaction:', e);
+            await interaction.editReply({ content: `Found series S${seriesId}.`, embeds: [seriesEmbed], components: [] });
+        }
         return;
     }
     
@@ -258,11 +272,24 @@ export default async function handleSearchRecommendations(interaction) {
             // The rec embed will include series information if the work belongs to a series
             searchEmbed = createRecEmbed(recWithSeries);
         }
-        await interaction.editReply({
-            content: `Found 1 fic matching your search.`,
-            embeds: [searchEmbed],
-            components: []
-        });
+        try {
+            const { Config } = await import('../../../../models/index.js');
+            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            let targetChannel = null;
+            if (queueCfg && queueCfg.value) {
+                targetChannel = interaction.client.channels.cache.get(queueCfg.value) || await interaction.client.channels.fetch(queueCfg.value).catch(() => null);
+            }
+            if (!targetChannel) targetChannel = interaction.channel;
+            if (targetChannel) {
+                await targetChannel.send({ embeds: [searchEmbed] });
+                try { await interaction.deleteReply(); } catch {}
+            } else {
+                await interaction.editReply({ content: `Found 1 fic matching your search.`, embeds: [searchEmbed], components: [] });
+            }
+        } catch (e) {
+            console.warn('[rec search] Failed to post single-result to fic_queue_channel, falling back to interaction:', e);
+            await interaction.editReply({ content: `Found 1 fic matching your search.`, embeds: [searchEmbed], components: [] });
+        }
         return;
     }
     // Pagination: 3 results per page

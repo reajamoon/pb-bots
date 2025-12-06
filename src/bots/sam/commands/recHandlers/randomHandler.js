@@ -189,7 +189,29 @@ async function handleRandomRecommendation(interaction) {
         if (!embed) {
             return await interaction.editReply({ content: 'Sorry, there was a problem displaying this recommendation.' });
         }
-        await interaction.editReply({ embeds: [embed] });
+        // Post to fic_queue_channel (team-free-bots) and keep interaction clean
+        try {
+            const { Config } = await import('../../../../models/index.js');
+            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            let targetChannel = null;
+            if (queueCfg && queueCfg.value) {
+                targetChannel = interaction.client.channels.cache.get(queueCfg.value) || await interaction.client.channels.fetch(queueCfg.value).catch(() => null);
+            }
+            if (!targetChannel) {
+                // Fallback to current channel if config missing
+                targetChannel = interaction.channel;
+            }
+            if (targetChannel) {
+                await targetChannel.send({ embeds: [embed] });
+                try { await interaction.deleteReply(); } catch {}
+            } else {
+                // As last resort, show embed in the interaction
+                await interaction.editReply({ embeds: [embed] });
+            }
+        } catch (e) {
+            console.warn('[rec random] Failed to post to fic_queue_channel, falling back to interaction reply:', e);
+            await interaction.editReply({ embeds: [embed] });
+        }
     } catch (err) {
         console.error('Unexpected error in handleRandomRecommendation:', err);
         if (interaction.deferred || interaction.replied) {

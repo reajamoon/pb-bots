@@ -25,12 +25,18 @@ export async function scheduleSprintNotifications(sprint, client) {
   const targetChannel = getChannelFromIds(client, sprint.guildId, sprint.channelId, sprint.threadId);
   if (!targetChannel) return;
 
-  // Midpoint notification
-  if (!sprint.midpointNotified) {
+  // Midpoint notification (dedupe: only host for team; Set guard)
+  const firedKeySet = scheduleSprintNotifications._midKeys || (scheduleSprintNotifications._midKeys = new Set());
+  const isTeamHost = sprint.type === 'team' && sprint.role === 'host' && sprint.groupId;
+  const midKey = isTeamHost ? `${sprint.guildId}:${sprint.groupId}` : `${sprint.guildId}:${sprint.id}`;
+  if (!sprint.midpointNotified && !firedKeySet.has(midKey)) {
+    firedKeySet.add(midKey);
     setTimeout(async () => {
       try {
         const fresh = await DeanSprints.findByPk(sprint.id);
         if (!fresh || fresh.status !== 'processing') return;
+        // For team sprints, only host posts midpoint to avoid duplicates
+        if (fresh.type === 'team' && fresh.role !== 'host') return;
         const embed = midpointEmbed(fresh.label);
         await targetChannel.send({ embeds: [embed] });
         await fresh.update({ midpointNotified: true });

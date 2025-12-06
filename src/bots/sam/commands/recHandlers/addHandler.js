@@ -2,7 +2,7 @@ import updateMessages from '../../../../shared/text/updateMessages.js';
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import { saveUserMetadata } from '../../../../shared/recUtils/processUserMetadata.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
-import { Recommendation, Config } from '../../../../models/index.js';
+import { Recommendation, Config, ParseQueueSubscriber } from '../../../../models/index.js';
 import { User } from '../../../../models/index.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import { createRecEmbed } from '../../../../shared/recUtils/createRecEmbed.js';
@@ -53,7 +53,9 @@ export default async function handleAddRecommendation(interaction) {
       if (!noteText || noteText.length < minLen) {
         const { MessageFlags } = await import('discord.js');
         await interaction.reply({
-          content: `Please include a recommendation note (${minLen}+ characters) explaining why you’re recommending this fic or series.`,
+          content: `Every rec needs a recommender’s note. Make sure it's at least ${minLen} characters.
+
+Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.`,
           flags: MessageFlags.Ephemeral
         });
         return;
@@ -65,7 +67,9 @@ export default async function handleAddRecommendation(interaction) {
       if (!noteText || noteText.length < minLen) {
         const { MessageFlags } = await import('discord.js');
         await interaction.reply({
-          content: `Please include a recommendation note (${minLen}+ characters) explaining why you’re recommending this fic or series.`,
+          content: `Every rec needs a recommender’s note. Make sure it's at least ${minLen} characters.
+
+Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.`,
           flags: MessageFlags.Ephemeral
         });
         return;
@@ -194,26 +198,70 @@ export default async function handleAddRecommendation(interaction) {
             notes: notes || '',
             additional_tags: additionalTagsString || null
           });
-          // Do not send embed now; poller will send one when refresh completes
-          await interaction.editReply({ content: null });
-          try { await interaction.deleteReply(); } catch {}
-          await interaction.followUp({
-            content: 'Saved your note and tags; refreshing the series now and will post the updated embed shortly.',
-            ephemeral: true
-          });
-          return;
-        } else {
-          // No refresh needed; send a single embed now with the user’s note override
-          const embed = await createSeriesEmbed({
-            series: existingSeries,
-            userId: interaction.user.id,
+          // Post a clean embed now and record it for poller to edit later
+          const embedNow = createSeriesEmbed(existingSeries, {
+            preferredUserId: interaction.user.id,
             overrideNotes: notes || '',
             includeAdditionalTags: additionalTags || []
           });
-          return await interaction.editReply({
-            content: 'Saved your note and tags.',
-            embeds: [embed]
+          let postedMsg = null;
+          try {
+            const { Config } = await import('../../../../models/index.js');
+            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            let targetChannel = null;
+            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+            if (channelIdPref) {
+              targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+            }
+            if (!targetChannel) targetChannel = interaction.channel;
+            if (targetChannel) {
+              postedMsg = await targetChannel.send({ embeds: [embedNow] });
+            }
+          } catch (postErr) {
+            console.warn('[rec add] Failed to post immediate series embed before refresh:', postErr);
+          }
+          if (postedMsg) {
+            try {
+              await ParseQueueSubscriber.update(
+                { channel_id: postedMsg.channelId, message_id: postedMsg.id },
+                { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+              );
+            } catch (e) {
+              console.warn('[rec add] Failed to record posted embed for series refresh:', e);
+            }
+          }
+          try { await interaction.deleteReply(); } catch {}
+          const { MessageFlags } = await import('discord.js');
+          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+          return;
+        } else {
+          // No refresh needed; send a single embed now with the user’s note override
+          const embed = createSeriesEmbed(existingSeries, {
+            preferredUserId: interaction.user.id,
+            overrideNotes: notes || '',
+            includeAdditionalTags: additionalTags || []
           });
+          try {
+            const { Config } = await import('../../../../models/index.js');
+            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            let targetChannel = null;
+            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+            if (channelIdPref) {
+              targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+            }
+            if (!targetChannel) targetChannel = interaction.channel;
+            if (targetChannel) {
+              await targetChannel.send({ embeds: [embed] });
+            }
+          } catch (postErr) {
+            console.warn('[rec add] Failed to post public series embed:', postErr);
+          }
+          try { await interaction.deleteReply(); } catch {}
+          const { MessageFlags } = await import('discord.js');
+          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+          return;
         }
       }
       // Add the series to the processing queue (never fetch AO3 directly)
@@ -274,26 +322,72 @@ export default async function handleAddRecommendation(interaction) {
           notes: notes || '',
           additional_tags: additionalTagsString || null
         });
-        // Do not send embed now; poller will send one when refresh completes
-        await interaction.editReply({ content: null });
-        try { await interaction.deleteReply(); } catch {}
-        await interaction.followUp({
-          content: 'Saved your note and tags; refreshing the fic now and will post the updated embed shortly.',
-          ephemeral: true
+        // Post a clean embed now and record it for poller to edit later
+        const recWithSeries = await fetchRecWithSeries(existingRec.id, true);
+        const embedNow = createRecEmbed(recWithSeries, {
+          overrideNotes: notes || '',
+          preferredUserId: interaction.user.id,
+          includeAdditionalTags: additionalTags || []
         });
+        let postedMsg = null;
+        try {
+          const { Config } = await import('../../../../models/index.js');
+          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+          const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+          let targetChannel = null;
+          const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+          if (channelIdPref) {
+            targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+          }
+          if (!targetChannel) targetChannel = interaction.channel;
+          if (targetChannel) {
+            postedMsg = await targetChannel.send({ embeds: [embedNow] });
+          }
+        } catch (postErr) {
+          console.warn('[rec add] Failed to post immediate rec embed before refresh:', postErr);
+        }
+        if (postedMsg) {
+          try {
+            await ParseQueueSubscriber.update(
+              { channel_id: postedMsg.channelId, message_id: postedMsg.id },
+              { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+            );
+          } catch (e) {
+            console.warn('[rec add] Failed to record posted embed for fic refresh:', e);
+          }
+        }
+        try { await interaction.deleteReply(); } catch {}
+        const { MessageFlags } = await import('discord.js');
+        await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
         return;
       } else {
         // No refresh needed; send a single embed now with the user’s note override
         const recWithSeries = await fetchRecWithSeries(existingRec.id, true);
         const embed = createRecEmbed(recWithSeries, {
           overrideNotes: notes || '',
-          userId: interaction.user.id,
+          preferredUserId: interaction.user.id,
           includeAdditionalTags: additionalTags || []
         });
-        return await interaction.editReply({
-          content: 'Saved your note and tags.',
-          embeds: [embed]
-        });
+        try {
+          const { Config } = await import('../../../../models/index.js');
+          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+          const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+          let targetChannel = null;
+          const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+          if (channelIdPref) {
+            targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+          }
+          if (!targetChannel) targetChannel = interaction.channel;
+          if (targetChannel) {
+            await targetChannel.send({ embeds: [embed] });
+          }
+        } catch (postErr) {
+          console.warn('[rec add] Failed to post public rec embed:', postErr);
+        }
+        try { await interaction.deleteReply(); } catch {}
+        const { MessageFlags } = await import('discord.js');
+        await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+        return;
       }
     }
     // Step 1: Save user metadata immediately using new architecture
@@ -380,19 +474,36 @@ export default async function handleAddRecommendation(interaction) {
         if (!modLocksByField['updatedDate'] && validString(interaction.options.getString('updatedDate'), rec.updatedDate)) recFields.updatedDate = interaction.options.getString('updatedDate');
         // Never update notes (deprecated)
         // Update Recommendation if any fields are valid
+        let embed;
         if (Object.keys(recFields).length > 0) {
           await rec.update(recFields);
           // Refresh recWithSeries after update
           const updatedRecWithSeries = await fetchRecWithSeries(rec.id, true);
-          const embed = createRecEmbed(updatedRecWithSeries);
+          embed = createRecEmbed(updatedRecWithSeries, { preferredUserId: interaction.user.id });
         } else {
           // Use existing recWithSeries
-          const embed = createRecEmbed(recWithSeries);
+          embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id });
         }
-        await interaction.editReply({
-            content: null,
-            embeds: [embed]
-          });
+        try {
+          const { Config } = await import('../../../../models/index.js');
+          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+          const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+          let targetChannel = null;
+          const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+          if (channelIdPref) {
+            targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+          }
+          if (!targetChannel) targetChannel = interaction.channel;
+          if (targetChannel) {
+            await targetChannel.send({ embeds: [embed] });
+          }
+        } catch (postErr) {
+          console.warn('[rec add] Failed to post public cached-result embed:', postErr);
+        }
+        try { await interaction.deleteReply(); } catch {}
+        const { MessageFlags } = await import('discord.js');
+        await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+        return;
       } else {
             await interaction.editReply({
             content: 'Recommendation found in queue but not in database. Please try again or contact an admin.'

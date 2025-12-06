@@ -13,10 +13,11 @@ This guide shows how to use sprints and projects day-to-day, with quick flows an
 - `/sprint setchannel channel:<#channel> allow_threads:<bool?>` — Mods/Admins: set the default sprint channel.
 
 ### Quick Start
+
 - Start a solo sprint: `/sprint start minutes:25`
 - Host a team sprint: `/sprint host minutes:25` (share the code)
 - Join a team: `/sprint join` (or pass a `code`)
-- Track words: `/sprint wc add delta:250` (repeat as you write)
+- Track words: `/sprint wc add new-words:250` (repeat as you write)
 - See totals: `/sprint wc summary`
 - End your sprint: `/sprint end`
 
@@ -44,7 +45,13 @@ All project management is under `/project`.
 - `/project use project_id:<uuid>` — Link your active sprint to a project you’re on.
 - `/project members` — List members for your current sprint-linked project.
 	- Tip: After linking with `/project use`, summaries will show the project name.
+## Project Wordcount Outside Sprints
+Sometimes you write outside a sprint - in a cafe, on the bus, wherever. You can still keep your project total accurate:
 
+- `/project wc add new-words:<number> [project_id:<id>]`: Adds words directly to a project without a sprint. If you’ve linked a sprint to a project with `/sprint project use`, you can omit `project_id`.
+- `/project wc set count:<number> [project_id:<id>]`: Sets your current count for the project. The bot records the positive difference as new words.
+- `/project wc show [project_id:<id>]`: Shows your personal total on that project.
+Totals in `/project info` include everything - sprint logs and manual adds/sets - across all project members.
 ## Tips
 - Use `/project` for management, `/sprint` for sprinting.
 - Wrong-channel warnings are ephemeral to avoid noise.

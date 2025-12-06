@@ -1,6 +1,6 @@
 
 // Utility to fetch a Recommendation with its Series info (and optionally all works in the series)
-import { Recommendation, Series, UserFicMetadata } from './index.js';
+import { Recommendation, Series, UserFicMetadata, User } from './index.js';
 import { Op } from 'sequelize';
 
 /**
@@ -27,6 +27,13 @@ export async function fetchRecWithSeries(recId, includeSeriesWorks = false) {
     {
       model: UserFicMetadata,
       as: 'userMetadata',
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['discordId', 'username']
+        }
+      ],
       where: {
         [Op.or]: [
           { rec_note: { [Op.not]: null } },

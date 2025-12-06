@@ -15,6 +15,16 @@ export default (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false,
     },
+    channel_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Channel ID of the original command reply to edit when job completes'
+    },
+    message_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Message ID of the original command reply to edit when job completes'
+    },
   }, {
     timestamps: true,
     tableName: 'ParseQueueSubscribers',

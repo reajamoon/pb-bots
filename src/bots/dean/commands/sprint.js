@@ -255,8 +255,21 @@ export async function execute(interaction) {
     await interaction.editReply({ embeds: [embed] });
   } else if (interaction.options.getSubcommandGroup() === 'wc') {
     const discordId = interaction.user.id;
-    const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-    if (!active) {
+    // Resolve target sprint: active, else most recent within grace window
+    const GRACE_MINUTES = 15;
+    const now = Date.now();
+    let target = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
+    if (!target) {
+      const recent = await DeanSprints.findOne({ where: { userId: discordId, guildId }, order: [['updatedAt', 'DESC']] });
+      if (recent) {
+        const endedAt = recent.startedAt ? (new Date(recent.startedAt.getTime() + (recent.durationMinutes || 0) * 60000)) : recent.updatedAt;
+        const withinGrace = endedAt && (now - endedAt.getTime()) <= GRACE_MINUTES * 60000;
+        if (withinGrace) {
+          target = recent;
+        }
+      }
+    }
+    if (!target) {
       return interaction.editReply({ content: noActiveSprintText() });
     }
     const subName = interaction.options.getSubcommand();
@@ -265,11 +278,11 @@ export async function execute(interaction) {
       if (count < 0) {
         return interaction.editReply({ content: 'Wordcount must be zero or greater.' });
       }
-      await active.update({ wordcountEnd: count });
+      await target.update({ wordcountEnd: count });
       await Wordcount.create({
         userId: discordId,
-        projectId: active.projectId || null,
-        sprintId: active.id,
+        projectId: target.projectId || null,
+        sprintId: target.id,
         countStart: null,
         countEnd: count,
         delta: null,
@@ -281,25 +294,25 @@ export async function execute(interaction) {
       if (words <= 0) {
         return interaction.editReply({ content: 'Words must be a positive number.' });
       }
-      const next = (active.wordcountEnd || 0) + words;
-      await active.update({ wordcountEnd: next });
+      const next = (target.wordcountEnd || 0) + words;
+      await target.update({ wordcountEnd: next });
       await Wordcount.create({
         userId: discordId,
-        projectId: active.projectId || null,
-        sprintId: active.id,
-        countStart: active.wordcountEnd || 0,
+        projectId: target.projectId || null,
+        sprintId: target.id,
+        countStart: target.wordcountEnd || 0,
         countEnd: next,
         delta: words,
         recordedAt: new Date(),
       });
       return interaction.editReply({ content: `Nice. **+${words}**. Sitting at **${next}**.` });
     } else if (subName === 'show') {
-      const wc = active.wordcountEnd ?? 0;
+      const wc = target.wordcountEnd ?? 0;
       return interaction.editReply({ content: `You’re at **${wc}**. Take a breath, then hit it again.` });
     } else if (subName === 'summary') {
-      const participants = active.type === 'team' && active.groupId
-        ? await DeanSprints.findAll({ where: { guildId, groupId: active.groupId }, order: [['createdAt', 'ASC']] })
-        : [active];
+      const participants = target.type === 'team' && target.groupId
+        ? await DeanSprints.findAll({ where: { guildId, groupId: target.groupId }, order: [['createdAt', 'ASC']] })
+        : [target];
       const linesSum = [];
       for (const p of participants) {
         const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });

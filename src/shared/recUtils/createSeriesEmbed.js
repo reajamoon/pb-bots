@@ -202,10 +202,13 @@ function getRandomUserNotes(series) {
  * @param {Object} series - Series object from database
  * @returns {EmbedBuilder}
  */
-export function createSeriesEmbed(series) {
+export function createSeriesEmbed(series, options = {}) {
     if (!series) {
         throw new Error('Series data is required');
     }
+
+    const { preferredUserId, userId, overrideNotes, includeAdditionalTags } = options;
+    const targetUserId = preferredUserId || userId || null;
 
     // Build author description line with fallback to primary work
     let author = Array.isArray(series.authors) ? series.authors.join(', ') : series.author;
@@ -372,8 +375,14 @@ export function createSeriesEmbed(series) {
         embed.addFields({ name: `Works in Series (${series.workCount || series.works.length})`, value: worksList.trim(), inline: false });
     }
 
-    // Tags
-    const tagText = processTagsForEmbed(series);
+    // Tags (optionally include extra tags passed in)
+    const seriesForTags = { ...series };
+    if (includeAdditionalTags && Array.isArray(includeAdditionalTags) && includeAdditionalTags.length) {
+        const extra = Array.isArray(includeAdditionalTags) ? includeAdditionalTags : [];
+        seriesForTags.userMetadata = Array.isArray(series.userMetadata) ? series.userMetadata.map(m => ({ ...m })) : [];
+        seriesForTags.userMetadata.push({ additional_tags: extra });
+    }
+    const tagText = processTagsForEmbed(seriesForTags);
     if (tagText) {
         embed.addFields({ name: 'Tags', value: tagText, inline: false });
     }
@@ -399,14 +408,40 @@ export function createSeriesEmbed(series) {
         }
     }
 
-    // Recommender Notes
-    const userNotes = getRandomUserNotes(series);
-    if (userNotes) {
-        embed.addFields({ name: 'Recommender Notes:', value: userNotes, inline: false });
+    // Recommender Notes and footer attribution
+    let chosenNote = null;
+    let chosenUserName = null;
+    if (overrideNotes && typeof overrideNotes === 'string' && overrideNotes.trim()) {
+        chosenNote = overrideNotes.trim();
+        if (targetUserId && Array.isArray(series.userMetadata)) {
+            const meta = series.userMetadata.find(m => String(m.userID) === String(targetUserId));
+            if (meta && meta.user && meta.user.username) {
+                chosenUserName = meta.user.username;
+            }
+        }
+    } else if (targetUserId && Array.isArray(series.userMetadata)) {
+        const meta = series.userMetadata.find(m => String(m.userID) === String(targetUserId) && m.rec_note);
+        if (meta) {
+            chosenNote = meta.rec_note;
+            chosenUserName = (meta.user && meta.user.username) || null;
+        }
+    }
+    if (!chosenNote) {
+        if (Array.isArray(series.userMetadata)) {
+            const usersWithNotes = series.userMetadata.filter(m => m && m.rec_note);
+            if (usersWithNotes.length > 0) {
+                const meta = usersWithNotes[Math.floor(Math.random() * usersWithNotes.length)];
+                chosenNote = meta.rec_note;
+                chosenUserName = (meta.user && meta.user.username) || null;
+            }
+        }
+    }
+    if (chosenNote) {
+        embed.addFields({ name: 'Recommender Notes:', value: chosenNote, inline: false });
     }
 
-    // Footer with proper recommender info - use first work's recommender if series doesn't have one
-    let recommenderName = series.recommendedByUsername;
+    // Footer attribution prefers note owner; fallback to series/work recommender
+    let recommenderName = chosenUserName || series.recommendedByUsername;
     if (!recommenderName && series.works && series.works.length > 0) {
         const firstWork = series.works[0];
         recommenderName = firstWork.recommendedByUsername;

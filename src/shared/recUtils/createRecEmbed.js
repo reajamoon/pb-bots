@@ -153,10 +153,13 @@ function getRandomUserNotes(rec) {
  * @param {Object} rec - Recommendation object from database
  * @returns {EmbedBuilder}
  */
-export function createRecEmbed(rec) {
+export function createRecEmbed(rec, options = {}) {
     if (!rec) {
         throw new Error('Recommendation data is required');
     }
+
+    const { preferredUserId, userId, overrideNotes, includeAdditionalTags } = options;
+    const targetUserId = preferredUserId || userId || null;
 
     // Build author description line
     const author = Array.isArray(rec.authors) ? rec.authors.join(', ') : (rec.author || 'Unknown Author');
@@ -216,8 +219,15 @@ export function createRecEmbed(rec) {
         embed.addFields({ name: '📚 Series', value: seriesText, inline: false });
     }
 
-    // Tags
-    const tagText = processTagsForEmbed(rec);
+    // Tags (optionally include extra tags passed in)
+    const recForTags = { ...rec };
+    if (includeAdditionalTags && Array.isArray(includeAdditionalTags) && includeAdditionalTags.length) {
+        const extra = Array.isArray(includeAdditionalTags) ? includeAdditionalTags : [];
+        recForTags.userMetadata = Array.isArray(rec.userMetadata) ? rec.userMetadata.map(m => ({ ...m })) : [];
+        // Attach a synthetic metadata entry to ensure extra tags are considered
+        recForTags.userMetadata.push({ additional_tags: extra });
+    }
+    const tagText = processTagsForEmbed(recForTags);
     if (tagText) {
         embed.addFields({ name: 'Tags', value: tagText, inline: false });
     }
@@ -229,14 +239,43 @@ export function createRecEmbed(rec) {
         embed.addFields({ name: 'Bookmarks', value: formatNumber(rec.bookmarks) || 'N/A', inline: true });
     }
 
-    // Recommender Notes
-    const userNotes = getRandomUserNotes(rec);
-    if (userNotes) {
-        embed.addFields({ name: 'Recommender Notes:', value: userNotes, inline: false });
+    // Recommender Notes and footer attribution
+    let chosenNote = null;
+    let chosenUserName = null;
+    // If overrideNotes is supplied, use it, and prefer the target user's username if available
+    if (overrideNotes && typeof overrideNotes === 'string' && overrideNotes.trim()) {
+        chosenNote = overrideNotes.trim();
+        if (targetUserId && Array.isArray(rec.userMetadata)) {
+            const meta = rec.userMetadata.find(m => String(m.userID) === String(targetUserId));
+            if (meta && meta.user && meta.user.username) {
+                chosenUserName = meta.user.username;
+            }
+        }
+    } else if (targetUserId && Array.isArray(rec.userMetadata)) {
+        // Prefer the specified user's actual saved note if present
+        const meta = rec.userMetadata.find(m => String(m.userID) === String(targetUserId) && m.rec_note);
+        if (meta) {
+            chosenNote = meta.rec_note;
+            chosenUserName = (meta.user && meta.user.username) || null;
+        }
+    }
+    // If still no note chosen, randomize from available notes
+    if (!chosenNote) {
+        if (Array.isArray(rec.userMetadata)) {
+            const usersWithNotes = rec.userMetadata.filter(m => m && m.rec_note);
+            if (usersWithNotes.length > 0) {
+                const meta = usersWithNotes[Math.floor(Math.random() * usersWithNotes.length)];
+                chosenNote = meta.rec_note;
+                chosenUserName = (meta.user && meta.user.username) || null;
+            }
+        }
+    }
+    if (chosenNote) {
+        embed.addFields({ name: 'Recommender Notes:', value: chosenNote, inline: false });
     }
 
-    // Footer with recommender info
-    const recommenderName = rec.recommendedByUsername || 'unknown';
+    // Footer with recommender info: tie to note owner when available
+    const recommenderName = (chosenUserName || rec.recommendedByUsername || 'unknown');
     embed.setFooter({ text: `From the Profound Bond Library • Recommended by ${recommenderName} • ID: ${rec.id}` });
 
     return embed;

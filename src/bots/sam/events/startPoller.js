@@ -285,10 +285,12 @@ async function notifyQueueSubscribers(client) {
                     continue;
                 }
             }
-            const configEntry = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-            const channelId = configEntry ? configEntry.value : null;
+            // Prefer fic_rec_channel (public embeds), fallback to fic_queue_channel for legacy setups
+            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            const channelId = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
             if (!channelId) {
-                console.warn(`[Poller] No fic_queue_channel configured; skipping queue notifications for job id: ${job.id}, url: ${job.fic_url}`);
+                console.warn(`[Poller] No fic_rec_channel/fic_queue_channel configured; skipping notifications for job id: ${job.id}, url: ${job.fic_url}`);
                 continue;
             }
             const channel = client.channels.cache.get(channelId);
@@ -297,11 +299,7 @@ async function notifyQueueSubscribers(client) {
                 continue;
             }
             // For instant_candidate jobs, do not @mention users, but still send embed
-            let contentMsg = `Your fic parsing job is done!\n` + (job.fic_url ? `\n<${job.fic_url}>` : '');
-            if (!job.instant_candidate && users.length) {
-                const mentionList = users.filter(u => u.queueNotifyTag !== false).map(u => `<@${u.discordId}>`).join(' ');
-                if (mentionList) contentMsg = `>>> ${mentionList} ` + contentMsg;
-            }
+            let contentMsg = `Your fic parsing job is done!` + (job.fic_url ? `\n<${job.fic_url}>` : '');
             // Always log when a done job is being processed for notification
             console.log(`[Poller] Processing done job: job id ${job.id}, url: ${job.fic_url}, subscribers: [${subscribers.map(s => s.user_id).join(', ')}]`);
             try {
@@ -316,7 +314,38 @@ async function notifyQueueSubscribers(client) {
                     contentMsg,
                     embedExists: !!embed
                 });
-                await channel.send({ content: contentMsg });
+
+                // First, update any tracked original command replies for subscribers
+                for (const sub of subscribers) {
+                    if (sub.channel_id && sub.message_id && embed) {
+                        try {
+                            const targetChannel = await client.channels.fetch(sub.channel_id).catch(() => null);
+                            if (targetChannel && targetChannel.isTextBased()) {
+                                const targetMsg = await targetChannel.messages.fetch(sub.message_id).catch(() => null);
+                                if (targetMsg && targetMsg.edit) {
+                                    await targetMsg.edit({ content: null, embeds: [embed] });
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[Poller] Failed to edit subscriber original reply:', { sub: sub.user_id, channel: sub.channel_id, message: sub.message_id }, e);
+                        }
+                    }
+                }
+
+                // DM subscribers instead of @mentioning in the channel
+                for (const u of users.filter(u => u.queueNotifyTag !== false)) {
+                    try {
+                        const dmUser = await client.users.fetch(u.discordId);
+                        if (dmUser) {
+                            await dmUser.send({ content: contentMsg });
+                            if (embed) await dmUser.send({ embeds: [embed] });
+                        }
+                    } catch (e) {
+                        console.warn('[Poller] Failed to DM subscriber:', u.discordId, e);
+                    }
+                }
+
+                // Send only the embed to the configured rec/queue channel
                 if (embed) {
                     await channel.send({ embeds: [embed] });
                 } else {
@@ -366,14 +395,21 @@ async function notifyQueueSubscribers(client) {
 
             try {
                 let contentMsg = `Your series parsing job is done!\n` + (job.fic_url ? `\n<${job.fic_url}>` : '');
-                if (!job.instant_candidate && users.length) {
-                    const mentionList = users.filter(u => u.queueNotifyTag !== false).map(u => `<@${u.discordId}>`).join(' ');
-                    if (mentionList) contentMsg = `>>> ${mentionList} ` + contentMsg;
+                // DM subscribers instead of @mentioning in the channel
+                for (const u of users.filter(u => u.queueNotifyTag !== false)) {
+                    try {
+                        const dmUser = await client.users.fetch(u.discordId);
+                        if (dmUser) {
+                            await dmUser.send({ content: contentMsg });
+                            if (embed) await dmUser.send({ embeds: [embed] });
+                        }
+                    } catch (e) {
+                        console.warn('[Poller] Failed to DM subscriber:', u.discordId, e);
+                    }
                 }
                 
                 console.log(`[Poller] Processing series-done job: job id ${job.id}, url: ${job.fic_url}, subscribers: [${subscribers.map(s => s.user_id).join(', ')}]`);
                 
-                await channel.send({ content: contentMsg });
                 if (embed) {
                     await channel.send({ embeds: [embed] });
                 } else {

@@ -1,5 +1,5 @@
 // Utility to fetch a Series with its works and user metadata
-import { Series, Recommendation, UserFicMetadata } from './index.js';
+import { Series, Recommendation, UserFicMetadata, User } from './index.js';
 import { Op } from 'sequelize';
 
 /**
@@ -17,6 +17,13 @@ export async function fetchSeriesWithUserMetadata(seriesId) {
     {
       model: UserFicMetadata,
       as: 'userMetadata',
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['discordId', 'username']
+        }
+      ],
       where: {
         [Op.or]: [
           { rec_note: { [Op.not]: null } },

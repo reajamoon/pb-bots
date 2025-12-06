@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionsBitField } from 'discord.js';
+import { SlashCommandBuilder, PermissionsBitField, InteractionFlags } from 'discord.js';
 
 // Map subcommands to fixed role IDs to avoid name mismatches
 const ROLE_MAP = {
@@ -22,12 +22,14 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   if (!interaction.inGuild()) {
-    return interaction.reply({ content: 'Use this in a server so I can manage roles.', ephemeral: true });
+    const EPHEMERAL_FLAG = (InteractionFlags && InteractionFlags.Ephemeral) ? InteractionFlags.Ephemeral : 64;
+    return interaction.reply({ content: 'Use this in a server so I can manage roles.', flags: EPHEMERAL_FLAG });
   }
 
   // Defer ephemerally to avoid clutter
   if (!interaction.deferred && !interaction.replied) {
-    await interaction.deferReply({ ephemeral: true });
+    const EPHEMERAL_FLAG = (InteractionFlags && InteractionFlags.Ephemeral) ? InteractionFlags.Ephemeral : 64;
+    await interaction.deferReply({ flags: EPHEMERAL_FLAG });
   }
 
   try {
@@ -97,7 +99,8 @@ export async function execute(interaction) {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content: 'Something went sideways while adding the role. Try again or ping a mod.' });
       } else {
-        await interaction.reply({ content: 'Something went sideways while adding the role. Try again or ping a mod.', ephemeral: true });
+        const EPHEMERAL_FLAG = (InteractionFlags && InteractionFlags.Ephemeral) ? InteractionFlags.Ephemeral : 64;
+        await interaction.reply({ content: 'Something went sideways while adding the role. Try again or ping a mod.', flags: EPHEMERAL_FLAG });
       }
     } catch {}
   }

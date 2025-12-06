@@ -3,7 +3,7 @@ import Discord from 'discord.js';
 const { MessageFlags } = Discord;
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import { saveUserMetadata, detectSiteAndExtractIDs } from '../../../../shared/recUtils/processUserMetadata.js';
-import { Recommendation } from '../../../../models/index.js';
+import { Recommendation, ParseQueueSubscriber, Config } from '../../../../models/index.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import { createRecEmbed } from '../../../../shared/recUtils/createRecEmbed.js';
@@ -46,6 +46,32 @@ export default async function handleUpdateRecommendation(interaction) {
 
     // Extract identifier from interaction options
     const identifier = interaction.options.getString('identifier');
+    
+    // Channel policy: in fic_rec_channel, require a note (keep embeds clean in rec channel)
+    try {
+        const recChannelCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+        const recChannelId = recChannelCfg && recChannelCfg.value ? recChannelCfg.value : null;
+        if (recChannelId && interaction.channelId === recChannelId) {
+            const newNotes = interaction.options.getString('notes');
+            // Enforce minimum length using config fallback 50
+            let minLen = 50;
+            try {
+                const minCfg = await Config.findOne({ where: { key: 'min_rec_note_length' } });
+                if (minCfg && Number(minCfg.value) > 0) minLen = Number(minCfg.value);
+            } catch {}
+            if (!newNotes || !newNotes.trim() || newNotes.trim().length < minLen) {
+                const line = `Every rec in here needs a recommender’s note. Make sure it's at least ${minLen} characters.
+
+Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.
+
+For raw refreshes without a note, hop over to the team-free-bots channel.`;
+                return await interaction.editReply({ content: line, flags: MessageFlags.Ephemeral });
+            }
+        }
+    } catch (policyErr) {
+        // Non-fatal; continue with update flow
+        console.warn('[rec update] Note policy check failed:', policyErr);
+    }
     
     // Check if this is a series identifier and route accordingly
     if (/^S\d+$/i.test(identifier) || /^https?:\/\/.*archiveofourown\.org\/series\/\d+/.test(identifier)) {
@@ -166,6 +192,43 @@ export default async function handleUpdateRecommendation(interaction) {
             // Normal mode: use queue system for metadata fetching
             const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
 
+            // In fic_rec_channel with a note, mirror add-handler immediate embed behavior for recent entries
+            try {
+                const recChannelCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+                const recChannelId = recChannelCfg && recChannelCfg.value ? recChannelCfg.value : null;
+                const inRecChannel = recChannelId && interaction.channelId === recChannelId;
+                if (inRecChannel && newNotes && newNotes.trim()) {
+                    // If recommendation exists and is fresh (<= 1 day), post embed now and confirm ephemerally
+                    const oneDayMs = 24 * 60 * 60 * 1000;
+                    const lastUpdated = recommendation.updatedAt || recommendation.createdAt;
+                    const ageMs = Date.now() - new Date(lastUpdated).getTime();
+                    if (ageMs <= oneDayMs) {
+                        const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                        const embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotes });
+                        try {
+                            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+                            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+                            let targetChannel = null;
+                            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+                            if (channelIdPref) {
+                                targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+                            }
+                            if (!targetChannel) targetChannel = interaction.channel;
+                            if (targetChannel) {
+                                await targetChannel.send({ embeds: [embed] });
+                            }
+                        } catch (postErr) {
+                            console.warn('[rec update] Failed to post public embed (immediate fic-recs):', postErr);
+                        }
+                        try { await interaction.deleteReply(); } catch {}
+                        await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('[rec update] Fic-recs immediate embed path failed, falling back to queue:', e);
+            }
+
             // Persist allowed manual fields to Recommendation immediately so embeds reflect changes
             try {
                 const immediateUpdateFields = {};
@@ -239,9 +302,40 @@ export default async function handleUpdateRecommendation(interaction) {
                             console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
                         }
                     }
-                    await interaction.editReply({
-                        content: "That fic is already being processed! You'll get a notification when it's ready."
-                    });
+                    // In fic_rec_channel, post a clean embed now and record it for later edit
+                    try {
+                        const recChannelCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+                        const inRecChannel = recChannelCfg && recChannelCfg.value && interaction.channelId === recChannelCfg.value;
+                        if (inRecChannel) {
+                            const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                            const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotes });
+                            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+                            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+                            let targetChannel = null;
+                            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+                            if (channelIdPref) {
+                                targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+                            }
+                            if (!targetChannel) targetChannel = interaction.channel;
+                            const postedMsg = await targetChannel.send({ embeds: [embedNow] });
+                            await ParseQueueSubscriber.update(
+                                { channel_id: postedMsg.channelId, message_id: postedMsg.id },
+                                { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                            );
+                            try { await interaction.deleteReply(); } catch {}
+                            await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+                            return;
+                        } else {
+                            await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
+                            const msg = await interaction.fetchReply();
+                            await ParseQueueSubscriber.update(
+                                { channel_id: msg.channelId, message_id: msg.id },
+                                { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                            );
+                        }
+                    } catch (e) {
+                        console.warn('[rec update] Failed to record message tracking for existing processing:', e);
+                    }
                     return;
                 }
             }
@@ -271,8 +365,17 @@ export default async function handleUpdateRecommendation(interaction) {
                     // If already pending/processing, just subscribe and inform the user
                     if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
                         await interaction.editReply({
-                            content: "That fic is already being processed! You'll get a notification when it's ready."
+                            content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready."
                         });
+                        try {
+                            const msg = await interaction.fetchReply();
+                            await ParseQueueSubscriber.update(
+                                { channel_id: msg.channelId, message_id: msg.id },
+                                { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                            );
+                        } catch (e) {
+                            console.warn('[rec update] Failed to record message tracking during requeue existing processing:', e);
+                        }
                         return;
                     }
 
@@ -313,9 +416,39 @@ export default async function handleUpdateRecommendation(interaction) {
                 console.error('[RecHandler] Error adding ParseQueueSubscriber:', err, { queue_id: queueEntry.id, user_id: interaction.user.id });
             }
 
-            await interaction.editReply({
-                content: "Your fic update has been queued! I'll notify you when it's ready."
-            });
+            // In fic_rec_channel, post a clean embed now and record it for poller edit
+            try {
+                const recChannelCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+                const inRecChannel = recChannelCfg && recChannelCfg.value && interaction.channelId === recChannelCfg.value;
+                if (inRecChannel) {
+                    const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                    const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotes });
+                    const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+                    const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+                    let targetChannel = null;
+                    const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+                    if (channelIdPref) {
+                        targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+                    }
+                    if (!targetChannel) targetChannel = interaction.channel;
+                    const postedMsg = await targetChannel.send({ embeds: [embedNow] });
+                    await ParseQueueSubscriber.update(
+                        { channel_id: postedMsg.channelId, message_id: postedMsg.id },
+                        { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                    );
+                    try { await interaction.deleteReply(); } catch {}
+                    await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+                } else {
+                    await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
+                    const msg = await interaction.fetchReply();
+                    await ParseQueueSubscriber.update(
+                        { channel_id: msg.channelId, message_id: msg.id },
+                        { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                    );
+                }
+            } catch (e) {
+                console.warn('[rec update] Failed to record message tracking on new queue:', e);
+            }
         } else {
             // Manual-only mode: apply only the provided fields directly, no queue
             // Respect both per-rec locks and global locks
@@ -440,12 +573,28 @@ export default async function handleUpdateRecommendation(interaction) {
             if (hasUpdates) {
                 // Return updated recommendation with embed
                 const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
-                const embed = createRecEmbed(recWithSeries);
-
-                await interaction.editReply({
-                    content: responseMessage,
-                    embeds: [embed]
+                const embed = createRecEmbed(recWithSeries, {
+                    // Tie footer to owner if a new note was supplied
+                    preferredUserId: newNotes ? interaction.user.id : undefined
                 });
+                // Post publicly and ephemeral-confirm
+                try {
+                    const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+                    const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+                    let targetChannel = null;
+                    const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+                    if (channelIdPref) {
+                        targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+                    }
+                    if (!targetChannel) targetChannel = interaction.channel;
+                    if (targetChannel) {
+                        await targetChannel.send({ embeds: [embed] });
+                    }
+                } catch (postErr) {
+                    console.warn('[rec update] Failed to post public embed (manual-only):', postErr);
+                }
+                try { await interaction.deleteReply(); } catch {}
+                await interaction.followUp({ content: responseMessage, flags: MessageFlags.Ephemeral });
             } else {
                 await interaction.editReply({
                     content: responseMessage
