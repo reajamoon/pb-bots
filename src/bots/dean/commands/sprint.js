@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
+import { Op } from 'sequelize';
 import { startSoloEmbed, hostTeamEmbed, joinTeamEmbed, endSoloEmbed, endTeamEmbed, statusSoloEmbed, statusTeamEmbed, leaveTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText } from '../text/sprintText.js';
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
 
@@ -300,7 +301,7 @@ export async function execute(interaction) {
       // Daily stats
       const startOfDay = new Date();
       startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [sequelize.Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
+      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
       const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
       // Feedback
       let msg = `Locked in at **${count}**.`;
@@ -335,7 +336,7 @@ export async function execute(interaction) {
       // Daily stats
       const startOfDay = new Date();
       startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [sequelize.Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
+      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
       const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
       // Feedback
       let msg = `Nice. **+${words}**. Sitting at **${next}**.`;
@@ -355,7 +356,7 @@ export async function execute(interaction) {
       // Daily stats
       const startOfDay = new Date();
       startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [sequelize.Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
+      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
       const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
       let msg = `Current wordcount: **${wc}**`;
       msg += `\nStarted at: **${first}**`;
