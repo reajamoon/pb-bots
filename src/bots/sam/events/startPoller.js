@@ -268,7 +268,16 @@ async function notifyQueueSubscribers(client) {
                 const { fetchSeriesWithUserMetadata } = await import('../../../models/fetchSeriesWithUserMetadata.js');
                 const series = await fetchSeriesWithUserMetadata(job.result.seriesId);
                 if (series) {
-                    embed = createSeriesEmbed(series);
+                    const firstSub = subscribers && subscribers.length ? subscribers[0] : null;
+                    const overrideNotes = (job.notes || '').trim() ? job.notes : undefined;
+                    const includeAdditionalTags = (job.additional_tags || '')
+                        ? (job.additional_tags.split(',').map(t => t.trim()).filter(Boolean))
+                        : undefined;
+                    embed = createSeriesEmbed(series, {
+                        preferredUserId: firstSub ? firstSub.user_id : undefined,
+                        overrideNotes,
+                        includeAdditionalTags
+                    });
                 } else {
                     console.warn(`[Poller] No Series found for series ID: ${job.result.seriesId}`);
                     continue;
@@ -285,7 +294,7 @@ async function notifyQueueSubscribers(client) {
                     continue;
                 }
             }
-            // Prefer fic_rec_channel (public embeds), fallback to fic_queue_channel for legacy setups
+            // Prefer editing tracked messages; only post publicly if no tracked message exists
             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
             const channelId = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
@@ -345,11 +354,14 @@ async function notifyQueueSubscribers(client) {
                     }
                 }
 
-                // Send only the embed to the configured rec/queue channel
-                if (embed) {
-                    await channel.send({ embeds: [embed] });
-                } else {
-                    console.warn(`[Poller] No embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                // If no tracked subscriber message exists, send the embed publicly; otherwise skip to avoid duplicates
+                const hasTracked = subscribers.some(s => !!s.channel_id && !!s.message_id);
+                if (!hasTracked) {
+                    if (embed) {
+                        await channel.send({ embeds: [embed] });
+                    } else {
+                        console.warn(`[Poller] No embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                    }
                 }
             } catch (err) {
                 console.error('[Poller] Failed to send fic queue notification:', err, `job id: ${job.id}, url: ${job.fic_url}`);
@@ -373,7 +385,17 @@ async function notifyQueueSubscribers(client) {
                 const { fetchSeriesWithUserMetadata } = await import('../../../models/fetchSeriesWithUserMetadata.js');
                 const series = await fetchSeriesWithUserMetadata(job.result.seriesId);
                 if (series) {
-                    embed = createSeriesEmbed(series);
+                    // Tie footer to the first subscriber (note-owner preference) and include notes/tags if provided
+                    const firstSub = subscribers && subscribers.length ? subscribers[0] : null;
+                    const overrideNotes = (job.notes || '').trim() ? job.notes : undefined;
+                    const includeAdditionalTags = (job.additional_tags || '')
+                        ? (job.additional_tags.split(',').map(t => t.trim()).filter(Boolean))
+                        : undefined;
+                    embed = createSeriesEmbed(series, {
+                        preferredUserId: firstSub ? firstSub.user_id : undefined,
+                        overrideNotes,
+                        includeAdditionalTags
+                    });
                 } else {
                     console.warn(`[Poller] No Series found for series ID: ${job.result.seriesId}`);
                     continue;
@@ -410,10 +432,30 @@ async function notifyQueueSubscribers(client) {
                 
                 console.log(`[Poller] Processing series-done job: job id ${job.id}, url: ${job.fic_url}, subscribers: [${subscribers.map(s => s.user_id).join(', ')}]`);
                 
-                if (embed) {
-                    await channel.send({ embeds: [embed] });
+                // Prefer editing tracked subscriber messages; only post publicly if none exist
+                const hasTracked = subscribers.some(s => !!s.channel_id && !!s.message_id);
+                if (hasTracked && embed) {
+                    for (const sub of subscribers) {
+                        if (sub.channel_id && sub.message_id) {
+                            try {
+                                const targetChannel = await client.channels.fetch(sub.channel_id).catch(() => null);
+                                if (targetChannel && targetChannel.isTextBased()) {
+                                    const targetMsg = await targetChannel.messages.fetch(sub.message_id).catch(() => null);
+                                    if (targetMsg && targetMsg.edit) {
+                                        await targetMsg.edit({ content: null, embeds: [embed] });
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('[Poller] Failed to edit subscriber message for series job:', { sub: sub.user_id, channel: sub.channel_id, message: sub.message_id }, e);
+                            }
+                        }
+                    }
                 } else {
-                    console.warn(`[Poller] No series embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                    if (embed) {
+                        await channel.send({ embeds: [embed] });
+                    } else {
+                        console.warn(`[Poller] No series embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                    }
                 }
             } catch (err) {
                 console.error('[Poller] Failed to send series queue notification:', err, `job id: ${job.id}, url: ${job.fic_url}`);

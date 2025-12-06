@@ -356,6 +356,8 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
 
     // Create or join queue entry for background processing
     const queueEntry = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
+    // Ensure series batch type so Jack marks series-done
+    try { await queueEntry.update({ batch_type: 'series' }); } catch {}
     // If notes or additional tags were provided, persist into ParseQueue with proper serialization
     if (newNotes || (newAdditionalTags && newAdditionalTags.length > 0)) {
         const additionalTagsString = Array.isArray(newAdditionalTags)
@@ -365,6 +367,57 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
             notes: newNotes || '',
             additional_tags: additionalTagsString || null
         });
+    }
+
+    // If we're in fic-recs and a note was provided, post a clean embed now with note attribution
+    try {
+        const { Config } = await import('../../../../models/index.js');
+        const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+        const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+        const inRecChannel = recCfg && recCfg.value && interaction.channelId === recCfg.value;
+        if (inRecChannel && newNotes && newNotes.trim()) {
+            const { fetchSeriesWithUserMetadata } = await import('../../../../models/fetchSeriesWithUserMetadata.js');
+            const { createSeriesEmbed } = await import('../../../../shared/recUtils/createSeriesEmbed.js');
+            const seriesWithMeta = await fetchSeriesWithUserMetadata(series.id, true);
+            const embedNow = createSeriesEmbed(seriesWithMeta, {
+                preferredUserId: interaction.user.id,
+                overrideNotes: newNotes || '',
+                includeAdditionalTags: newAdditionalTags || []
+            });
+            let targetChannel = null;
+            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+            if (channelIdPref) {
+                targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+            }
+            if (!targetChannel) targetChannel = interaction.channel;
+            let postedMsg = null;
+            try {
+                postedMsg = await targetChannel.send({ embeds: [embedNow] });
+            } catch (postErr) {
+                if (postErr && (postErr.code === 50013 || postErr.status === 403)) {
+                    // Fallback: deliver embed via reply
+                    await interaction.editReply({ embeds: [embedNow] });
+                } else {
+                    console.warn('[series update] Failed to post immediate series embed:', postErr);
+                }
+            }
+            if (postedMsg) {
+                try {
+                    const { ParseQueueSubscriber } = await import('../../../../models/index.js');
+                    await ParseQueueSubscriber.update(
+                        { channel_id: postedMsg.channelId, message_id: postedMsg.id },
+                        { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                    );
+                } catch (e) {
+                    console.warn('[series update] Failed to record posted embed for poller edit:', e);
+                }
+                try { await interaction.deleteReply(); } catch {}
+                await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+        }
+    } catch (immediateErr) {
+        console.warn('[series update] Immediate fic-recs embed path failed; continuing with queue reply:', immediateErr);
     }
 
     const responseMessage = `🔄 Series "${series.name}" has been queued for update. You'll be notified when processing is complete.`;

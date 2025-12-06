@@ -199,6 +199,8 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             notes: notes || '',
             additional_tags: additionalTagsString || null
           });
+          // Ensure series jobs are marked for batch processing
+          try { await queueEntry.update({ batch_type: 'series' }); } catch {}
           // Post a clean embed now and record it for poller to edit later
           const seriesWithMeta = await fetchSeriesWithUserMetadata(existingSeries.id, true);
           const embedNow = createSeriesEmbed(seriesWithMeta, {
@@ -311,6 +313,8 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             additional_tags: additionalTagsString || null
           });
         }
+        // Mark as series batch job so Jack returns series-done
+        try { await queueEntry.update({ batch_type: 'series' }); } catch {}
         try {
           const { Config } = await import('../../../../models/index.js');
           const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
