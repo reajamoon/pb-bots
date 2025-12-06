@@ -213,6 +213,14 @@ export default {
                         .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
+                .setName('pull')
+                .setDescription('Post a ready rec or series to fic-recs')
+                .addStringOption(option =>
+                    option.setName('id')
+                        .setDescription('Recommendation ID (e.g., 123) or Series ID (e.g., S456)')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
                 .setName('add_ao3share')
                 .setDescription('Add a new fanfiction recommendation by pasting AO3 share HTML'))
         .addSubcommand(subcommand =>
@@ -272,6 +280,11 @@ export default {
                 case 'queue':
                     await handleQueue(interaction);
                     break;
+                case 'pull': {
+                    const handlePull = (await import('./recHandlers/pullHandler.js')).default;
+                    await handlePull(interaction);
+                    break;
+                }
                     case 'resetqueue':
                         await handleResetQueue(interaction);
                         break;

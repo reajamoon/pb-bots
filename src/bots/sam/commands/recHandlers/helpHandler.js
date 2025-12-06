@@ -144,15 +144,17 @@ function createHelpPages() {
                 name: 'Finding Your Recommendations',
                 value: '**Option 1 - Rec ID:** Every recommendation shows its ID number at the bottom\n' +
                        '`/rec update id:5` or `/rec remove id:5`\n\n' +
-                       '**Option 2 - Full URL:** Use the complete web address\n' +
+                       '**Option 2 - Series ID:** Series IDs are shown as `S123` to avoid overlap with rec IDs.\n' +
+                       '`/rec update id:S123` or `/rec pull id:S123`\n\n' +
+                       '**Option 3 - Full URL:** Use the complete web address\n' +
                        '`/rec update find_url:https://archiveofourown.org/works/12345`\n\n' +
-                       '**Option 3 - AO3 Work ID:** Just the number (it\'s the number after works in every Ao3 URL)\n' +
+                       '**Option 4 - AO3 Work ID:** Just the number (it\'s the number after works in every Ao3 URL)\n' +
                        '`/rec update find_ao3_id:12345` or `/rec remove ao3_id:12345`\n' +
                        '*Seriously, use the work ID. It\'s so much easier.*',
                 inline: false
             },
             {
-                name: 'Updating Stuff',
+                name: 'Updating & Pulling Stuff',
                 value: '**Refresh metadata:** `/rec update find_ao3_id:12345`\n' +
                        'Gets the latest word count, chapters, status - useful when a fic updates.\n\n' +
                        '**Manual edits:** Update any field manually:\n' +
@@ -161,7 +163,9 @@ function createHelpPages() {
                        '**Mark as deleted:** `/rec update id:5 deleted:True`\n' +
                        'Keeps the rec in the library but marks it as deleted.\n\n' +
                        '**Change URL or tags:** Same as always:\n' +
-                       '`/rec update id:5 new_url:<link> tags:new, tags notes:Updated thoughts`',
+                       '`/rec update id:5 new_url:<link> tags:new, tags notes:Updated thoughts`\n\n' +
+                       '**Pull a ready rec or series into fic-recs:**\n' +
+                       '`/rec pull id:5` for a rec, `/rec pull id:S123` for a series. Posts the embed in the channel you use it in.',
                 inline: false
             },
             {
