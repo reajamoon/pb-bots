@@ -110,6 +110,7 @@ export async function execute(interaction) {
             }))
           );
         return interaction.editReply({ embeds: [embed] });
+      }
 
     if (subGroup === 'wc') {
       // Resolve project: required, can be ID or Name
