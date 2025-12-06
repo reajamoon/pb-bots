@@ -1,3 +1,4 @@
+import { fetchSeriesWithUserMetadata } from '../../../models/index.js';
 import updateMessages from '../../../../shared/text/updateMessages.js';
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import { saveUserMetadata } from '../../../../shared/recUtils/processUserMetadata.js';
