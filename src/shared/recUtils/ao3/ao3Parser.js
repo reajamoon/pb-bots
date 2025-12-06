@@ -192,6 +192,11 @@ async function parseAO3Metadata(html, url, includeRawHtml = false) {
                 if (childrenSection.length > 0) {
                     return; // Skip this author - it's from an inspired work
                 }
+                // Skip authors listed under association translations (e.g., Translation into ... available)
+                const assocSection = $el.closest('ul.associations');
+                if (assocSection.length > 0) {
+                    return; // Skip translation association authors
+                }
                 authorMatches.push($(el).text().trim());
             });
         }

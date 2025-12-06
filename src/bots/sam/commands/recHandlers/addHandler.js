@@ -7,7 +7,7 @@ import { User } from '../../../../models/index.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import { createRecEmbed } from '../../../../shared/recUtils/createRecEmbed.js';
 import { createSeriesEmbed } from '../../../../shared/recUtils/createSeriesEmbed.js';
-import { fetchRecWithSeries } from '../../../../models/index.js';
+import { fetchRecWithSeries, fetchSeriesWithUserMetadata } from '../../../../models/index.js';
 import normalizeRating from '../../../../shared/recUtils/normalizeRating.js';
 import { getLockedFieldsForRec } from '../../../../shared/getLockedFieldsForRec.js';
 import { isFieldGloballyModlockedFor } from '../../../../shared/utils/globalModlockUtils.js';
@@ -199,7 +199,8 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             additional_tags: additionalTagsString || null
           });
           // Post a clean embed now and record it for poller to edit later
-          const embedNow = createSeriesEmbed(existingSeries, {
+          const seriesWithMeta = await fetchSeriesWithUserMetadata(existingSeries.id, true);
+          const embedNow = createSeriesEmbed(seriesWithMeta, {
             preferredUserId: interaction.user.id,
             overrideNotes: notes || '',
             includeAdditionalTags: additionalTags || []
@@ -246,7 +247,8 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           return;
         } else {
           // No refresh needed; send a single embed now with the user’s note override
-          const embed = createSeriesEmbed(existingSeries, {
+          const seriesWithMetaNoRefresh = await fetchSeriesWithUserMetadata(existingSeries.id, true);
+          const embed = createSeriesEmbed(seriesWithMetaNoRefresh, {
             preferredUserId: interaction.user.id,
             overrideNotes: notes || '',
             includeAdditionalTags: additionalTags || []
@@ -308,6 +310,19 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             additional_tags: additionalTagsString || null
           });
         }
+        try {
+          const { Config } = await import('../../../../models/index.js');
+          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+          const inRecChannel = recCfg && recCfg.value && interaction.channelId === recCfg.value;
+          const { MessageFlags } = await import('discord.js');
+          if (inRecChannel) {
+            // Keep fic-recs clean: send confirmation ephemerally
+            return await interaction.editReply({
+              content: updateMessages.addedToQueue + ' No works have been imported. Use `/rec add <work url>` to import works if they require their own recs.',
+              flags: MessageFlags.Ephemeral
+            });
+          }
+        } catch {}
         return await interaction.editReply({
           content: updateMessages.addedToQueue + ' No works have been imported. Use `/rec add <work url>` to import works if they require their own recs.'
         });
