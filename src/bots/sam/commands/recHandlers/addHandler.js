@@ -231,9 +231,14 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
               console.warn('[rec add] Failed to record posted embed for series refresh:', e);
             }
           }
-          try { await interaction.deleteReply(); } catch {}
-          const { MessageFlags } = await import('discord.js');
-          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+          if (postedMsg) {
+            try { await interaction.deleteReply(); } catch {}
+            const { MessageFlags } = await import('discord.js');
+            await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+          } else {
+            // Fallback: deliver embed in the deferred reply if posting failed
+            await interaction.editReply({ embeds: [embedNow] });
+          }
           return;
         } else {
           // No refresh needed; send a single embed now with the user’s note override
@@ -242,6 +247,7 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             overrideNotes: notes || '',
             includeAdditionalTags: additionalTags || []
           });
+          let postedMsg = null;
           try {
             const { Config } = await import('../../../../models/index.js');
             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
@@ -253,14 +259,18 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             }
             if (!targetChannel) targetChannel = interaction.channel;
             if (targetChannel) {
-              await targetChannel.send({ embeds: [embed] });
+              postedMsg = await targetChannel.send({ embeds: [embed] });
             }
           } catch (postErr) {
             console.warn('[rec add] Failed to post public series embed:', postErr);
           }
-          try { await interaction.deleteReply(); } catch {}
-          const { MessageFlags } = await import('discord.js');
-          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+          if (postedMsg) {
+            try { await interaction.deleteReply(); } catch {}
+            const { MessageFlags } = await import('discord.js');
+            await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+          } else {
+            await interaction.editReply({ embeds: [embed] });
+          }
           return;
         }
       }
@@ -356,9 +366,13 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             console.warn('[rec add] Failed to record posted embed for fic refresh:', e);
           }
         }
-        try { await interaction.deleteReply(); } catch {}
-        const { MessageFlags } = await import('discord.js');
-        await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+        if (postedMsg) {
+          try { await interaction.deleteReply(); } catch {}
+          const { MessageFlags } = await import('discord.js');
+          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+        } else {
+          await interaction.editReply({ embeds: [embedNow] });
+        }
         return;
       } else {
         // No refresh needed; send a single embed now with the user’s note override
@@ -368,6 +382,7 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           preferredUserId: interaction.user.id,
           includeAdditionalTags: additionalTags || []
         });
+        let postedMsg = null;
         try {
           const { Config } = await import('../../../../models/index.js');
           const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
@@ -379,14 +394,18 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           }
           if (!targetChannel) targetChannel = interaction.channel;
           if (targetChannel) {
-            await targetChannel.send({ embeds: [embed] });
+            postedMsg = await targetChannel.send({ embeds: [embed] });
           }
         } catch (postErr) {
           console.warn('[rec add] Failed to post public rec embed:', postErr);
         }
-        try { await interaction.deleteReply(); } catch {}
-        const { MessageFlags } = await import('discord.js');
-        await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+        if (postedMsg) {
+          try { await interaction.deleteReply(); } catch {}
+          const { MessageFlags } = await import('discord.js');
+          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+        } else {
+          await interaction.editReply({ embeds: [embed] });
+        }
         return;
       }
     }

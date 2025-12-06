@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount, sequelize } from '../../../models/index.js';
+import { Op } from 'sequelize';
+import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
 
 export const data = new SlashCommandBuilder()
   .setName('project')
@@ -63,6 +64,7 @@ export async function execute(interaction) {
   try {
     const guildId = interaction.guildId;
     const subName = interaction.options.getSubcommand();
+    const subGroup = interaction.options.getSubcommandGroup(false);
     const discordId = interaction.user.id;
 
     // Ensure user row exists
@@ -113,7 +115,7 @@ export async function execute(interaction) {
         lastSprintTotal = rows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
       }
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const recentRows = await Wordcount.findAll({ where: { projectId: project.id, recordedAt: { [sequelize.Op.gte]: since } } }).catch(() => []);
+      const recentRows = await Wordcount.findAll({ where: { projectId: project.id, recordedAt: { [Op.gte]: since } } }).catch(() => []);
       // All-time total across all members for this project
       const allRows = await Wordcount.findAll({ where: { projectId: project.id } }).catch(() => []);
       const allTotal = allRows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
