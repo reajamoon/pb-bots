@@ -120,7 +120,7 @@ client.on('error', (error) => {
 startBot();
 
 // Initialize emoji store when ready
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     const ok = await initEmojiStore(client).catch(() => false);
     if (!ok) {
         logger.warn('[sam] Emoji store did not initialize. Check guild ID env (SAM_GUILD_ID or GUILD_ID).');

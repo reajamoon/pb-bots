@@ -43,7 +43,7 @@ try {
   console.warn('[cas] Failed loading commands:', e && e.message ? e.message : e);
 }
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`[cas] Logged in as ${client.user.tag}`);
   // Initialize shared emoji store for user-facing messages
   const ok = await initEmojiStore(client).catch(() => false);
