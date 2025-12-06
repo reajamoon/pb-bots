@@ -1,5 +1,5 @@
 /** @type {import('sequelize').QueryInterface} */
-export async function up(queryInterface, Sequelize) {
+async function up(queryInterface, Sequelize) {
   await queryInterface.createTable('hunts', {
     key: { type: Sequelize.STRING, allowNull: false, primaryKey: true },
     name: { type: Sequelize.STRING, allowNull: false },
@@ -24,8 +24,10 @@ export async function up(queryInterface, Sequelize) {
   await queryInterface.addIndex('hunt_progress', ['user_id', 'hunt_key'], { unique: true, name: 'hunt_progress_user_key_unique' });
 }
 
-export async function down(queryInterface) {
+async function down(queryInterface) {
   await queryInterface.removeIndex('hunt_progress', 'hunt_progress_user_key_unique');
   await queryInterface.dropTable('hunt_progress');
   await queryInterface.dropTable('hunts');
 }
+
+module.exports = { up, down };
