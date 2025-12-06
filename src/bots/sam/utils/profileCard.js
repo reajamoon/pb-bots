@@ -163,6 +163,21 @@ async function generateProfileCard(discordUser, dbUser, client = null, interacti
     if (serverStats.row4Fields) {
         fields.push(...serverStats.row4Fields);
     }
+    // Sprints stats (Dean)
+    try {
+        const { DeanSprints, Wordcount, sequelize } = await import('../../../models/index.js');
+        // Only show if user has at least one sprint
+        const totalSprints = await DeanSprints.count({ where: { userId: discordUser.id } });
+        if (totalSprints > 0) {
+            const teamSprints = await DeanSprints.count({ where: { userId: discordUser.id, type: 'team', role: 'host' } });
+            // Total words sprinted: sum of all positive deltas for this user
+            const totalWords = await Wordcount.sum('delta', { where: { userId: discordUser.id, delta: { [sequelize.Op.gt]: 0 } } });
+            let sprintsField = `Sprints ran: **${totalSprints}**\nTeam sprints ran: **${teamSprints}**\nWords sprinted: **${totalWords || 0}**`;
+            fields.push({ name: 'Sprints:', value: sprintsField, inline: false });
+        }
+    } catch (e) {
+        // ignore errors, don't block profile
+    }
     // Row 5: Bio (full width)
     if (dbUser.bio) {
         fields.push({ name: 'Bio', value: dbUser.bio, inline: false });

@@ -12,7 +12,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub
     .setName('info')
     .setDescription('Show details and recent totals for a project')
-    .addStringOption(opt => opt.setName('name').setDescription('Project name (optional)').setRequired(false)))
+    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('list')
     .setDescription('List your projects'))
@@ -37,7 +37,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub
     .setName('use')
     .setDescription('Use a project for your active sprint')
-    .addStringOption(opt => opt.setName('project_id').setDescription('Project ID').setRequired(true)))
+    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('members')
     .setDescription('List project members'))
@@ -48,17 +48,17 @@ export const data = new SlashCommandBuilder()
       .setName('add')
       .setDescription('Add words directly to a project (outside a sprint)')
       .addIntegerOption(opt => opt.setName('new-words').setDescription('Words added (positive)').setRequired(true))
-      .addStringOption(opt => opt.setName('project_id').setDescription('Project ID (optional if sprint is linked)').setRequired(false)))
+      .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
     .addSubcommand(sub => sub
       .setName('set')
       .setDescription('Set your current wordcount for a project (outside a sprint)')
       .addIntegerOption(opt => opt.setName('count').setDescription('Current wordcount').setRequired(true))
-      .addStringOption(opt => opt.setName('project_id').setDescription('Project ID (optional if sprint is linked)').setRequired(false)))
+      .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
     .addSubcommand(sub => sub
       .setName('show')
       .setDescription('Show your current project wordcount (outside a sprint)')
-      .addStringOption(opt => opt.setName('project_id').setDescription('Project ID (optional if sprint is linked)').setRequired(false)))
-  );
+      .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
+  )
 
 export async function execute(interaction) {
   try {
@@ -84,19 +84,14 @@ export async function execute(interaction) {
     }
 
     if (subName === 'info') {
-      const name = interaction.options.getString('name');
-      let project = null;
-      if (name) {
-        project = await Project.findOne({ where: { ownerId: discordId, name } });
+      const projectInput = interaction.options.getString('project');
+      let project = await Project.findByPk(projectInput);
+      if (!project) {
+        // Try by name (owned or member)
+        project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
         if (!project) {
           const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'Project' }] });
-          project = memberships.map(m => m.Project).find(p => p?.name === name) || null;
-        }
-      } else {
-        project = await Project.findOne({ where: { ownerId: discordId }, order: [["updatedAt", "DESC"]] });
-        if (!project) {
-          const membership = await ProjectMember.findOne({ where: { userId: discordId }, include: [{ model: Project, as: 'Project' }], order: [["updatedAt", "DESC"]] });
-          project = membership?.Project || null;
+          project = memberships.map(m => m.Project).find(p => p?.name === projectInput) || null;
         }
       }
       if (!project) {
@@ -135,15 +130,23 @@ export async function execute(interaction) {
     }
 
     if (subGroup === 'wc') {
-      // Resolve projectId: prefer explicit, else linked active sprint
-      let projectId = interaction.options.getString('project_id');
-      if (!projectId) {
-        const active = await DeanSprints.findOne({ where: { userId: discordId, status: 'processing' }, order: [['createdAt', 'DESC']] });
-        if (active && active.projectId) projectId = active.projectId;
+      // Resolve project: required, can be ID or Name
+      let projectInput = interaction.options.getString('project');
+      let project = null;
+      // Try by ID first
+      project = await Project.findByPk(projectInput);
+      if (!project) {
+        // Try by name (owned or member)
+        project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
+        if (!project) {
+          const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'Project' }] });
+          project = memberships.map(m => m.Project).find(p => p?.name === projectInput) || null;
+        }
       }
-      if (!projectId) {
-        return interaction.editReply({ content: 'Tell me which project. Add `project_id:` or link a sprint with `/sprint project use`.' });
+      if (!project) {
+        return interaction.editReply({ content: 'I can’t find that project. Use the project ID or exact name.' });
       }
+      const projectId = project.id;
       // Validate membership
       const membership = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
       if (!membership) {
@@ -264,7 +267,20 @@ export async function execute(interaction) {
     }
 
     if (subName === 'use') {
-      const projectId = interaction.options.getString('project_id');
+      const projectInput = interaction.options.getString('project');
+      let project = await Project.findByPk(projectInput);
+      if (!project) {
+        // Try by name (owned or member)
+        project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
+        if (!project) {
+          const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'Project' }] });
+          project = memberships.map(m => m.Project).find(p => p?.name === projectInput) || null;
+        }
+      }
+      if (!project) {
+        return interaction.editReply({ content: "I can't find that project. Try `/project list`." });
+      }
+      const projectId = project.id;
       const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
       if (!active) {
         return interaction.editReply({ content: 'No active sprint right now.' });

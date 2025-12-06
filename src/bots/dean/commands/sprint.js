@@ -278,37 +278,92 @@ export async function execute(interaction) {
       if (count < 0) {
         return interaction.editReply({ content: 'Wordcount must be zero or greater.' });
       }
+      // Find last wordcount for this sprint/user
+      const last = await Wordcount.findOne({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
+      const prev = last ? (last.countEnd ?? 0) : 0;
+      const delta = count - prev;
       await target.update({ wordcountEnd: count });
       await Wordcount.create({
         userId: discordId,
         projectId: target.projectId || null,
         sprintId: target.id,
-        countStart: null,
+        countStart: prev,
         countEnd: count,
-        delta: null,
+        delta,
         recordedAt: new Date(),
       });
-      return interaction.editReply({ content: `Alright, locked in at **${count}**. Keep it rolling.` });
+      // Sprint stats
+      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
+      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      const updates = allRows.length;
+      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+      // Daily stats
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [sequelize.Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
+      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      // Feedback
+      let msg = `Locked in at **${count}**.`;
+      msg += `\nWords gained since last update: **${delta >= 0 ? '+' : ''}${delta}**`;
+      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
+      msg += `\nTotal gained today: **${dayTotal}**`;
+      msg += `\nUpdates this sprint: **${updates}**`;
+      msg += `\nBest single update this sprint: **${maxGain}**`;
+      return interaction.editReply({ content: msg });
     } else if (subName === 'add') {
       const words = interaction.options.getInteger('new-words');
       if (words <= 0) {
         return interaction.editReply({ content: 'Words must be a positive number.' });
       }
-      const next = (target.wordcountEnd || 0) + words;
+      const prev = target.wordcountEnd || 0;
+      const next = prev + words;
       await target.update({ wordcountEnd: next });
       await Wordcount.create({
         userId: discordId,
         projectId: target.projectId || null,
         sprintId: target.id,
-        countStart: target.wordcountEnd || 0,
+        countStart: prev,
         countEnd: next,
         delta: words,
         recordedAt: new Date(),
       });
-      return interaction.editReply({ content: `Nice. **+${words}**. Sitting at **${next}**.` });
+      // Sprint stats
+      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
+      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      const updates = allRows.length;
+      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+      // Daily stats
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [sequelize.Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
+      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      // Feedback
+      let msg = `Nice. **+${words}**. Sitting at **${next}**.`;
+      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
+      msg += `\nTotal gained today: **${dayTotal}**`;
+      msg += `\nUpdates this sprint: **${updates}**`;
+      msg += `\nBest single update this sprint: **${maxGain}**`;
+      return interaction.editReply({ content: msg });
     } else if (subName === 'show') {
       const wc = target.wordcountEnd ?? 0;
-      return interaction.editReply({ content: `You’re at **${wc}**. Take a breath, then hit it again.` });
+      // Sprint stats
+      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
+      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      const updates = allRows.length;
+      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+      const first = allRows.length ? allRows[0].countEnd ?? allRows[0].countStart ?? 0 : 0;
+      // Daily stats
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [sequelize.Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
+      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      let msg = `Current wordcount: **${wc}**`;
+      msg += `\nStarted at: **${first}**`;
+      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
+      msg += `\nTotal gained today: **${dayTotal}**`;
+      msg += `\nUpdates this sprint: **${updates}**`;
+      msg += `\nBest single update this sprint: **${maxGain}**`;
+      return interaction.editReply({ content: msg });
     } else if (subName === 'summary') {
       const participants = target.type === 'team' && target.groupId
         ? await DeanSprints.findAll({ where: { guildId, groupId: target.groupId }, order: [['createdAt', 'ASC']] })
@@ -316,11 +371,11 @@ export async function execute(interaction) {
       const linesSum = [];
       for (const p of participants) {
         const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-        const totalRaw = rows.reduce((acc, r) => {
-          const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
-          return acc + (d > 0 ? d : 0);
-        }, 0);
-        const total = Math.max(0, totalRaw);
+        const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+        const updates = rows.length;
+        const maxGain = rows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+        const first = rows.length ? rows[0].countEnd ?? rows[0].countStart ?? 0 : 0;
+        const last = rows.length ? rows[rows.length - 1].countEnd ?? rows[rows.length - 1].countStart ?? 0 : 0;
         let extra = '';
         if (p.projectId) {
           let proj = null;
@@ -331,7 +386,7 @@ export async function execute(interaction) {
           }
           if (proj && proj.name) extra = ` (${proj.name})`;
         }
-        linesSum.push(`• <@${p.userId}>: ${total} words${extra}`);
+        linesSum.push(`• <@${p.userId}>: **${total}** words${extra} (updates: ${updates}, best: ${maxGain}, start: ${first}, end: ${last})`);
       }
       const content = linesSum.join('\n') || 'Nobody dropped numbers yet. Wanna be first?';
       return interaction.editReply({ content: `Here’s the tally so far:\n${content}` });
