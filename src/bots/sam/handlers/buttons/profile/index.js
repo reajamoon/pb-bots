@@ -45,5 +45,8 @@ export async function handleProfileButtons(interaction) {
         const { handleTimezone } = await import('../handleTimezone.js');
         return handleTimezone(interaction);
     }
-    // ...other handlers will be added here as modularization continues...
+    if (interaction.customId.includes('clear_bio') || interaction.customId.includes('clear_timezone') || interaction.customId.includes('clear_region') || interaction.customId.includes('clear_birthday')) {
+        const { handleClearers } = await import('../handleClearers.js');
+        return handleClearers(interaction);
+    }
 }

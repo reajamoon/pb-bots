@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags, InteractionFlags } from 'discord.js';
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
 import { Op } from 'sequelize';
 import { startSoloEmbed, hostTeamEmbed, joinTeamEmbed, endSoloEmbed, endTeamEmbed, statusSoloEmbed, statusTeamEmbed, leaveTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText } from '../text/sprintText.js';
@@ -94,7 +94,7 @@ export async function execute(interaction) {
       const blocked = Array.isArray(settings.blockedChannelIds) && settings.blockedChannelIds.includes(channelId);
       wrongChannel = blocked || !allowed;
     }
-    await interaction.deferReply({ ephemeral: wrongChannel });
+    await interaction.deferReply({ flags: wrongChannel ? InteractionFlags.Ephemeral : undefined });
 
     if (settings) {
       const allowed = Array.isArray(settings.allowedChannelIds) ? settings.allowedChannelIds.includes(channelId) : true;
@@ -203,26 +203,52 @@ export async function execute(interaction) {
       status: 'processing',
       label: host.label,
     });
+    // Fire Hunt trigger: team joined awards host and joiner
+    try {
+      const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
+      const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
+      const announce = makeDeanAnnouncer(interaction);
+      await fireTrigger('dean.team.joined', { userId: discordId, hostId: host.hostId || host.userId, announce });
+    } catch (huntErr) {
+      console.warn('[hunts] dean.team.joined trigger failed:', huntErr);
+    }
     await interaction.editReply({ embeds: [joinTeamEmbed()] });
   } else if (sub === 'end') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (!active) {
-      return interaction.editReply({ content: noActiveSprintText(), ephemeral: true });
+      return interaction.editReply({ content: noActiveSprintText(), flags: InteractionFlags.Ephemeral });
     }
     if (active.type === 'team' && active.role === 'host' && active.groupId) {
       // End the team (host + all participants)
       await DeanSprints.update({ status: 'done', endNotified: true }, { where: { guildId, groupId: active.groupId, status: 'processing' } });
+      try {
+        const { fireTrigger } = await import('../../../shared/hunts/triggerEngine.js');
+        const { getDeanAnnouncer } = await import('../utils/huntsAnnouncer.js');
+        const announce = getDeanAnnouncer(interaction);
+        await fireTrigger('dean.sprint.completed', { userId: discordId, announce });
+      } catch (huntErr) {
+        console.warn('[hunts] dean.sprint.completed trigger failed:', huntErr);
+      }
       await interaction.editReply({ embeds: [endTeamEmbed()] });
     } else {
       await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null });
+      // Fire Hunt trigger on solo sprint completion
+      try {
+        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
+        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
+        const announce = makeDeanAnnouncer(interaction);
+        await fireTrigger('dean.sprint.completed', { userId: discordId, announce });
+      } catch (huntErr) {
+        console.warn('[hunts] dean.sprint.completed trigger failed (solo):', huntErr);
+      }
       await interaction.editReply({ embeds: [endSoloEmbed()] });
     }
   } else if (sub === 'status') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (!active) {
-      return interaction.editReply({ content: noActiveSprintText(), ephemeral: true });
+      return interaction.editReply({ content: noActiveSprintText(), flags: InteractionFlags.Ephemeral });
     }
     const endsAt = new Date(active.startedAt.getTime() + active.durationMinutes * 60000);
     const remainingMs = endsAt.getTime() - Date.now();
@@ -237,7 +263,7 @@ export async function execute(interaction) {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing', type: 'team' } });
     if (!active) {
-      return interaction.editReply({ content: notInTeamSprintText(), ephemeral: true });
+      return interaction.editReply({ content: notInTeamSprintText(), flags: InteractionFlags.Ephemeral });
     }
     if (active.role === 'host') {
       return interaction.editReply({ content: hostsUseEndText() });
@@ -310,6 +336,13 @@ export async function execute(interaction) {
       msg += `\nTotal gained today: **${dayTotal}**`;
       msg += `\nUpdates this sprint: **${updates}**`;
       msg += `\nBest single update this sprint: **${maxGain}**`;
+      // Hunt: check 5k single-sprint total
+      try {
+        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
+        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
+        const announce = makeDeanAnnouncer(interaction);
+        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce });
+      } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
       return interaction.editReply({ content: msg });
     } else if (subName === 'add') {
       const words = interaction.options.getInteger('new-words');
@@ -344,6 +377,13 @@ export async function execute(interaction) {
       msg += `\nTotal gained today: **${dayTotal}**`;
       msg += `\nUpdates this sprint: **${updates}**`;
       msg += `\nBest single update this sprint: **${maxGain}**`;
+      // Hunt: check 5k single-sprint total
+      try {
+        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
+        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
+        const announce = makeDeanAnnouncer(interaction);
+        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce });
+      } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
       return interaction.editReply({ content: msg });
     } else if (subName === 'show') {
       const wc = target.wordcountEnd ?? 0;

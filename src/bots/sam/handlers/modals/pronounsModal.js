@@ -3,6 +3,7 @@ const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { updateOriginalProfile } from '../../utils/updateOriginalProfile.js';
+import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
 
 /**
  * Handle pronouns modal submission
@@ -93,6 +94,9 @@ export async function handlePronounsModal(interaction, originalMessageId = null)
         if (originalMessageId) {
             await updateOriginalProfile(interaction, originalMessageId, 'pronouns change');
         }
+
+        // Check if profile setup completion criteria are met and trigger Hunt
+        await maybeTriggerProfileSetupComplete(interaction.user.id, { interaction });
 
         logger.info(`User ${interaction.user.tag} ${pronounsInput ? `set pronouns to "${pronounsInput}"` : 'removed pronouns'}${originalMessageId ? ' (with profile update)' : ''}`);
     } catch (error) {

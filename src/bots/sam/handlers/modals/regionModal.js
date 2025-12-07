@@ -4,6 +4,7 @@ import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { validateRegion } from '../../../../shared/utils/regionValidator.js';
 import { updateOriginalProfile } from '../../utils/updateOriginalProfile.js';
+import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
 
 /**
  * Handle region modal submission
@@ -138,6 +139,8 @@ export async function handleRegionModal(interaction, originalMessageId = null) {
         }
 
         logger.info(`User ${interaction.user.tag} set region to ${validation.normalizedRegion}${originalMessageId ? ' (with profile update)' : ''}`);
+        // Check and trigger profile setup completion if criteria met
+        await maybeTriggerProfileSetupComplete(interaction.user.id, { interaction });
     } catch (error) {
         logger.error(`Error setting region for ${interaction.user.tag}:`, error);
         

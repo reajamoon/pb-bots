@@ -158,7 +158,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
             if (attachmentError) {
                 await interaction.editReply({
                     content: attachmentError,
-                    ephemeral: true
+                    flags: InteractionFlags.Ephemeral
                 });
                 return;
             }

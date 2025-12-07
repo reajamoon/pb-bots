@@ -111,7 +111,27 @@ export async function handleSettingsMenu(interaction) {
                 .setCustomId(buildProfileSettingsButtonId('timezone_display', interaction.user.id, validatedMessageId || originalMessageId))
                 .setLabel('Timezone Display')
                 .setStyle(ButtonStyle.Secondary)
-                .setEmoji('⚙️')
+                .setEmoji('⚙️'),
+            new ButtonBuilder()
+                .setCustomId(buildProfileSettingsButtonId('clear_bio', interaction.user.id, validatedMessageId || originalMessageId))
+                .setLabel('Clear Bio')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🗑️'),
+            new ButtonBuilder()
+                .setCustomId(buildProfileSettingsButtonId('clear_timezone', interaction.user.id, validatedMessageId || originalMessageId))
+                .setLabel('Clear Timezone')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🗑️'),
+            new ButtonBuilder()
+                .setCustomId(buildProfileSettingsButtonId('clear_region', interaction.user.id, validatedMessageId || originalMessageId))
+                .setLabel('Clear Region')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🗑️'),
+            new ButtonBuilder()
+                .setCustomId(buildProfileSettingsButtonId('clear_birthday', interaction.user.id, validatedMessageId || originalMessageId))
+                .setLabel('Clear Birthday')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🗑️')
         );
 
     const doneButton = new ButtonBuilder()
@@ -130,7 +150,8 @@ export async function handleSettingsMenu(interaction) {
            '🌍 **Timezone** - Set your current timezone\n' +
            '🗺️ **Region** - Set your country, region, or timezone area\n' +
            '👤 **Pronouns** - Set your preferred pronouns\n' +
-           '⚙️ **Timezone Display** - Choose how your timezone appears\n\n' +
+           '⚙️ **Timezone Display** - Choose how your timezone appears\n' +
+           '🗑️ **Clearers** - Clear Bio / Timezone / Region / Birthday\n\n' +
            'Click any button to edit that setting!' +
            (validatedMessageId ? '\n\n✨ *Changes will update your profile automatically*' : '\n\n⚠️ *Profile auto-update unavailable - message tracking lost*');
 

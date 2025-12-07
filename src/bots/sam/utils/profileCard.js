@@ -167,12 +167,13 @@ async function generateProfileCard(discordUser, dbUser, client = null, interacti
     // Sprints stats (Dean)
     try {
         const { DeanSprints, Wordcount, sequelize } = await import('../../../models/index.js');
+        const OpLocal = Op ?? (await import('sequelize')).Op;
         // Only show if user has at least one sprint
         const totalSprints = await DeanSprints.count({ where: { userId: discordUser.id } });
         if (totalSprints > 0) {
             const teamSprints = await DeanSprints.count({ where: { userId: discordUser.id, type: 'team', role: 'host' } });
             // Total words sprinted: sum of all positive deltas for this user
-            const totalWords = await Wordcount.sum('delta', { where: { userId: discordUser.id, delta: { [Op.gt]: 0 } } });
+            const totalWords = await Wordcount.sum('delta', { where: { userId: discordUser.id, delta: { [OpLocal.gt]: 0 } } });
             let sprintsField = `Sprints ran: **${totalSprints}**\nTeam sprints: **${teamSprints}**\nWords sprinted: **${totalWords || 0}**`;
             fields.push({ name: 'Sprints:', value: sprintsField, inline: false });
         }

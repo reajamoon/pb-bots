@@ -3,6 +3,7 @@ const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
+import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
 
 /**
  * Handle bio modal submission
@@ -102,6 +103,8 @@ export async function handleBioModal(interaction, originalMessageId = null) {
         }
 
         logger.info(`User ${interaction.user.tag} updated their bio${originalMessageId ? ' (with profile update)' : ''}`);
+        // Check and trigger profile setup completion if criteria met
+        await maybeTriggerProfileSetupComplete(interaction.user.id, { interaction });
     } catch (error) {
         logger.error(`Error setting bio for ${interaction.user.tag}:`, error);
         await interaction.reply({

@@ -204,6 +204,16 @@ export default async function handleSearchRecommendations(interaction) {
     }
     const where = whereClauses.length > 0 ? { [Op.and]: whereClauses } : {};
     
+    // Before returning results, fire Hunt trigger for search usage (once per invocation)
+    try {
+        const fireTrigger = (await import('../../../../shared/hunts/triggerEngine.js')).default;
+        const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
+        const announce = makeSamAnnouncer({ interaction });
+        await fireTrigger('sam.rec.search.used', { userId: interaction.user.id, announce });
+    } catch (huntErr) {
+        // Non-fatal; continue search flow
+    }
+
     // Handle series search if searching by series ID
     if (searchingSeries) {
         const { Series } = await import('../../../../models/index.js');

@@ -73,7 +73,8 @@ export async function execute(interaction) {
     // Default defer to avoid timeouts; make sensitive prompts ephemeral
     const wantsConfirmEphemeral = ['remove', 'transfer', 'leave'].includes(subName) && !(interaction.options.getBoolean('confirm') ?? false);
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: wantsConfirmEphemeral });
+      const { InteractionFlags } = await import('discord.js');
+      await interaction.deferReply({ flags: wantsConfirmEphemeral ? InteractionFlags.Ephemeral : undefined });
     }
 
     if (subName === 'create') {
@@ -91,7 +92,7 @@ export async function execute(interaction) {
         const ownedProjects = await Project.findAll({ where: { ownerId: discordId } });
         // Get all joined projects (excluding owned)
         const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-        const joinedProjects = memberships.map(m => m.Project).filter(p => p && p.ownerId !== discordId);
+        const joinedProjects = memberships.map(m => m.project).filter(p => p && p.ownerId !== discordId);
         const allProjects = [...ownedProjects, ...joinedProjects];
         if (allProjects.length === 0) {
           return interaction.editReply({ content: "You don't have any projects yet. Try `/project create`." });
@@ -122,7 +123,7 @@ export async function execute(interaction) {
         project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
         if (!project) {
           const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-          project = memberships.map(m => m.Project).find(p => p?.name === projectInput) || null;
+          project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
         }
       }
       if (!project) {
@@ -191,7 +192,7 @@ export async function execute(interaction) {
         project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
         if (!project) {
           const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-          project = memberships.map(m => m.Project).find(p => p?.name === projectInput) || null;
+          project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
         }
       }
       if (!project) {
@@ -269,7 +270,8 @@ export async function execute(interaction) {
       const isOwner = project && project.ownerId === discordId;
       const isPrivileged = level !== 'member';
       if (!isOwner && !isPrivileged) {
-        return interaction.editReply({ content: 'Only the owner or a mod can invite folks.', ephemeral: true });
+        const { InteractionFlags } = await import('discord.js');
+        return interaction.editReply({ content: 'Only the owner or a mod can invite folks.', flags: InteractionFlags.Ephemeral });
       }
       const member = interaction.options.getUser('member');
       await ProjectMember.findOrCreate({ where: { projectId: active.projectId, userId: member.id }, defaults: { role: 'member' } });
@@ -292,7 +294,8 @@ export async function execute(interaction) {
       const isOwner = project && project.ownerId === discordId;
       const isPrivileged = level !== 'member';
       if (!isOwner && !isPrivileged) {
-        return interaction.editReply({ content: 'Heads up: only the owner or a mod can boot folks.', ephemeral: true });
+        const { InteractionFlags } = await import('discord.js');
+        return interaction.editReply({ content: 'Heads up: only the owner or a mod can boot folks.', flags: InteractionFlags.Ephemeral });
       }
       await ProjectMember.destroy({ where: { projectId: active.projectId, userId: member.id } });
       return interaction.editReply({ content: `Alright, <@${member.id}> is off the roster.` });

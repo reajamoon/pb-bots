@@ -3,6 +3,7 @@ const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
+import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
 
 /**
  * Handle birthday modal submission
@@ -191,6 +192,8 @@ export async function handleBirthdayModal(interaction, originalMessageId = null)
         }
 
         logger.info(`User ${interaction.user.tag} set birthday to ${birthdayToStore} (privacy mode: ${isPrivacyMode})${originalMessageId ? ' (with profile update)' : ''}`);
+        // Check and trigger profile setup completion if criteria met
+        await maybeTriggerProfileSetupComplete(interaction.user.id, { interaction });
     } catch (error) {
         logger.error(`Error setting birthday for ${interaction.user.tag}:`, error);
         await interaction.reply({

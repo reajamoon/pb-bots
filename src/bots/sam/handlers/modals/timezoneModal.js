@@ -6,6 +6,7 @@ import logger from '../../../../shared/utils/logger.js';
 import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
 import { validateTimezone } from '../../../../shared/utils/timezoneValidator.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
+import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
 
 /**
  * Handle timezone modal submission
@@ -195,6 +196,8 @@ export async function handleTimezoneModal(interaction, originalMessageId = null)
                 }
             } catch {}
         }
+        // Check and trigger profile setup completion if criteria met
+        await maybeTriggerProfileSetupComplete(interaction.user.id, { interaction });
     } catch {
         if (isEphemeralContext) {
             await interaction.update({

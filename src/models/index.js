@@ -18,6 +18,8 @@ import GuildSprintSettingsModel from './GuildSprintSettings.js';
 import ProjectModel from './Project.js';
 import ProjectMemberModel from './ProjectMember.js';
 import WordcountModel from './Wordcount.js';
+import HuntModel from './Hunt.js';
+import HuntProgressModel from './HuntProgress.js';
 
 // Determine connection settings
 const rawDatabaseUrl = process.env.DATABASE_URL || '';
@@ -61,6 +63,8 @@ const GuildSprintSettings = GuildSprintSettingsModel(sequelize);
 const Project = ProjectModel(sequelize);
 const ProjectMember = ProjectMemberModel(sequelize);
 const Wordcount = WordcountModel(sequelize);
+const Hunt = HuntModel(sequelize);
+const HuntProgress = HuntProgressModel(sequelize);
 
 // ModmailRelay associations
 ModmailRelay.belongsTo(User, { foreignKey: 'user_id', targetKey: 'discordId', as: 'user', constraints: false });
@@ -102,6 +106,12 @@ Wordcount.belongsTo(User, { foreignKey: 'userId', targetKey: 'discordId', as: 'u
 Wordcount.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
 Wordcount.belongsTo(DeanSprints, { foreignKey: 'sprintId', as: 'sprint' });
 
+// Hunts associations
+HuntProgress.belongsTo(User, { foreignKey: 'userId', targetKey: 'discordId', as: 'user', constraints: false });
+User.hasMany(HuntProgress, { foreignKey: 'userId', sourceKey: 'discordId', as: 'hunts' });
+HuntProgress.belongsTo(Hunt, { foreignKey: 'huntKey', targetKey: 'key', as: 'hunt', constraints: false });
+Hunt.hasMany(HuntProgress, { foreignKey: 'huntKey', sourceKey: 'key', as: 'progress' });
+
 export {
     sequelize,
     Sequelize,
@@ -121,6 +131,8 @@ export {
     Project,
     ProjectMember,
     Wordcount
+    , Hunt
+    , HuntProgress
 };
 
 // Convenience re-exports for model helpers
