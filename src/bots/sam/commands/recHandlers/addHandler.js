@@ -238,10 +238,9 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
               console.warn('[rec add] Failed to record posted embed for series refresh:', e);
             }
           }
+          // Keep fic-recs clean: if public embed posted, remove deferred reply
           if (postedMsg) {
             try { await interaction.deleteReply(); } catch {}
-            const { MessageFlags } = await import('discord.js');
-            await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
           } else {
             // Fallback: deliver embed in the deferred reply if posting failed
             await interaction.editReply({ embeds: [embedNow] });
@@ -278,8 +277,6 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           }
           if (postedMsg) {
             try { await interaction.deleteReply(); } catch {}
-            const { MessageFlags } = await import('discord.js');
-            await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
           } else {
             await interaction.editReply({ embeds: [embed] });
           }
@@ -399,8 +396,6 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
         }
         if (postedMsg) {
           try { await interaction.deleteReply(); } catch {}
-          const { MessageFlags } = await import('discord.js');
-          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
         } else {
           await interaction.editReply({ embeds: [embedNow] });
         }
@@ -436,8 +431,6 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
         }
         if (postedMsg) {
           try { await interaction.deleteReply(); } catch {}
-          const { MessageFlags } = await import('discord.js');
-          await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
         } else {
           await interaction.editReply({ embeds: [embed] });
         }
