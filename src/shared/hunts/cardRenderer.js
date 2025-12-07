@@ -87,24 +87,18 @@ export async function renderHunterCardPNG({ user, points, completed, narratives 
       </linearGradient>
       <clipPath id="ongoingClip"><rect x="0" y="-12" width="620" height="120"/></clipPath>
     </defs>
-
     <rect x="0" y="0" width="1000" height="660" rx="26" fill="#ffffff"/>
     <rect x="16" y="16" width="968" height="628" rx="22" fill="#e8eef7" stroke="#243b6b" stroke-width="3"/>
-
     <!-- Slot -->
     <rect x="460" y="24" width="88" height="18" rx="9" fill="#2f2f2f" filter="url(#shadow)"/>
     <!-- Scalloped border motif -->
     ${scallops}
     <rect x="70" y="52" width="860" height="80" rx="8" fill="url(#blueGrad)"/>
     <text x="500" y="104" font-family="Impact, 'Segoe UI', Arial" font-size="46" font-weight="700" fill="#ffffff" text-anchor="middle">DEPARTMENT OF INVESTIGATION</text>
-
-
-    <!-- Photo: minimal crop via preserveAspectRatio slice into 200x240 -->
+    <!-- Photo -->
     <image href="${avatarHref}" x="740" y="360" width="200" height="240" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatarClip)"/>
     <rect x="740" y="360" width="200" height="240" rx="8" fill="none" stroke="#2f51b6" stroke-width="4"/>
-
-
-    <!-- Big FBI letters larger and centered -->
+    <!-- Big FBI -->
     <text x="500" y="320" text-anchor="middle" font-family="Impact, 'Segoe UI', Arial" font-size="200" font-weight="900" fill="#0b1a2b">FBI</text>
     <!-- Certification text centered below FBI -->
     <text x="500" y="350" text-anchor="middle" font-family="'Segoe UI', Arial" font-size="20" fill="#0b1a2b">
@@ -120,7 +114,7 @@ export async function renderHunterCardPNG({ user, points, completed, narratives 
       <text x="130" y="82" text-anchor="middle" font-family="Impact, 'Segoe UI', Arial" font-size="56" font-weight="800" fill="#202236ff" filter="url(#innerShadow)">${points}</text>
     </g>
 
-    <!-- Completed block: styled label + multi-line list with red-checked boxes; raised further to clear signature -->
+    <!-- Completed block: styled label + multi-line list with red-checked boxes;  -->
     <g transform="translate(50,180)">
       <rect x="0" y="-24" width="150" height="32" rx="16" fill="#8a6a14" opacity="0.9"/>
       <text x="75" y="-2" text-anchor="middle" font-family="Impact, 'Segoe UI', Arial" font-size="16" fill="#0f0f0d">COMPLETED</text>

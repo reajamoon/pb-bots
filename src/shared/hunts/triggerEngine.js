@@ -197,15 +197,15 @@ export const TRIGGERS = {
           const meta = getHuntMeta('letters_from_heaven_5k');
           const ephemeral = meta?.visibility === 'ephemeral';
           if (meta?.visibility !== 'silent') {
-            const ann2 = await resolveAnnouncer(meta2?.announcer || 'dean', { interaction, channel, announce });
+            const ann = await resolveAnnouncer(meta?.announcer || 'dean', { interaction, channel, announce });
             try {
               console.log('[hunts DEBUG] dean streak announcer resolved:', {
-                hasAnnouncer: typeof ann2 === 'function',
-                bot: meta2?.announcer || 'dean',
+                hasAnnouncer: typeof ann === 'function',
+                bot: meta?.announcer || 'dean',
                 channelId: interaction?.channel?.id || channel?.id || null,
               });
-              if (typeof ann2 === 'function') {
-                await ann2(meta2?.announcer || 'dean', userId, res2.hunt, { ephemeral: ephemeral2 });
+              if (typeof ann === 'function') {
+                await ann(meta?.announcer || 'dean', userId, res.hunt, { ephemeral });
                 console.log('[hunts DEBUG] dean streak announcement attempted');
               } else {
                 console.warn('[hunts DEBUG] No announcer function resolved for dean streak');
