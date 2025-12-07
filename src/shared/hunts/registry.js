@@ -90,7 +90,7 @@ export const HUNTS = [
   {
     key: 'library_card_guidelines',
     name: 'Library Card',
-    description: 'Reacted to the Rec Guidelines message & got your <@1446947028172148847>!\nYou can use the `/rec add` and `/rec update` commands in #fic-recs with this!',
+    description: 'Reacted to the Rec Guidelines message & got your <@&1446947028172148847>!\nYou can use the `/rec add` and `/rec update` commands in #fic-recs with this!',
     category: 'library',
     points: 15,
     rarity: 'rare',
