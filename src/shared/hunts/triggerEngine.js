@@ -91,7 +91,21 @@ export const TRIGGERS = {
         const ephemeral = meta?.visibility === 'ephemeral';
         if (meta?.visibility !== 'silent') {
           const ann = await resolveAnnouncer(meta?.announcer || 'dean', { interaction, channel, announce });
-          await ann(meta?.announcer || 'dean', userId, res.hunt, { ephemeral });
+          try {
+            console.log('[hunts DEBUG] dean.sprint.completed announcer resolved:', {
+              hasAnnouncer: typeof ann === 'function',
+              bot: meta?.announcer || 'dean',
+              channelId: interaction?.channel?.id || channel?.id || null,
+            });
+            if (typeof ann === 'function') {
+              await ann(meta?.announcer || 'dean', userId, res.hunt, { ephemeral });
+              console.log('[hunts DEBUG] dean.sprint.completed announcement attempted');
+            } else {
+              console.warn('[hunts DEBUG] No announcer function resolved for dean.sprint.completed');
+            }
+          } catch (e) {
+            console.error('[hunts DEBUG] Announcer call failed for dean.sprint.completed:', e && e.message ? e.message : e);
+          }
         }
       }
       // Streak check: 3 consecutive days with at least one sprint
@@ -183,8 +197,22 @@ export const TRIGGERS = {
           const meta = getHuntMeta('letters_from_heaven_5k');
           const ephemeral = meta?.visibility === 'ephemeral';
           if (meta?.visibility !== 'silent') {
-            const ann = await resolveAnnouncer(meta?.announcer || 'dean', { interaction, channel, announce });
-            await ann(meta?.announcer || 'dean', userId, res.hunt, { ephemeral });
+            const ann2 = await resolveAnnouncer(meta2?.announcer || 'dean', { interaction, channel, announce });
+            try {
+              console.log('[hunts DEBUG] dean streak announcer resolved:', {
+                hasAnnouncer: typeof ann2 === 'function',
+                bot: meta2?.announcer || 'dean',
+                channelId: interaction?.channel?.id || channel?.id || null,
+              });
+              if (typeof ann2 === 'function') {
+                await ann2(meta2?.announcer || 'dean', userId, res2.hunt, { ephemeral: ephemeral2 });
+                console.log('[hunts DEBUG] dean streak announcement attempted');
+              } else {
+                console.warn('[hunts DEBUG] No announcer function resolved for dean streak');
+              }
+            } catch (e) {
+              console.error('[hunts DEBUG] Announcer call failed for dean streak:', e && e.message ? e.message : e);
+            }
           }
         }
       }
