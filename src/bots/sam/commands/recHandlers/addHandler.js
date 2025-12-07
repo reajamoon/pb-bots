@@ -583,9 +583,9 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
       });
       try {
         const { fireTrigger } = await import('../../../../shared/hunts/triggerEngine.js');
-        const { getSamAnnouncer } = await import('../../utils/huntsAnnouncer.js');
-        const announce = getSamAnnouncer(interaction);
-        await fireTrigger('sam.rec.sent', { userId: interaction.user.id, announce });
+        const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
+        const announce = makeSamAnnouncer({ interaction });
+        await fireTrigger('sam.rec.sent', { userId: interaction.user.id, announce, interaction });
       } catch (huntErr) {
         console.warn('[hunts] sam.rec.sent trigger failed:', huntErr);
       }
