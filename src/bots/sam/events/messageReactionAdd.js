@@ -15,14 +15,19 @@ export default {
       const roleIdCfg = await Config.findOne({ where: { key: 'rec_guidelines_role_id' } });
       const targetMessageId = messageIdCfg?.value;
       const targetRoleId = roleIdCfg?.value;
+      try { console.log(`[hunts] reaction config: targetMessageId=${targetMessageId} targetRoleId=${targetRoleId}`); } catch {}
       if (!targetMessageId || !targetRoleId) return;
-      if (reaction.message.id !== targetMessageId) return;
+      if (reaction.message.id !== targetMessageId) {
+        try { console.log(`[hunts] reaction: messageId mismatch (got ${reaction.message.id} expected ${targetMessageId})`); } catch {}
+        return;
+      }
 
       const guild = reaction.message.guild;
       if (!guild) return;
-      const member = await guild.members.fetch(user.id).catch(() => null);
+      const member = await guild.members.fetch(user.id).catch((e) => { try { console.warn('[hunts] reaction: failed to fetch member:', e?.message || e); } catch {} return null; });
       if (!member) return;
-      const role = guild.roles.cache.get(targetRoleId) || await guild.roles.fetch(targetRoleId).catch(() => null);
+      const role = guild.roles.cache.get(targetRoleId) || await guild.roles.fetch(targetRoleId).catch((e) => { try { console.warn('[hunts] reaction: failed to fetch role:', e?.message || e); } catch {} return null; });
+      try { console.log(`[hunts] reaction: resolved guild=${guild?.id} member=${member?.id} role=${role?.id}`); } catch {}
       if (!role) return;
 
       const announce = makeSamAnnouncer({ interaction: {
@@ -40,7 +45,10 @@ export default {
 
       const grantRole = async (uid) => {
         if (uid !== user.id) return;
-        await member.roles.add(role.id).catch(() => {});
+        try { console.log(`[hunts] reaction: granting role ${role.id} to user ${user.id}`); } catch {}
+        await member.roles.add(role.id).then(() => {
+          try { console.log('[hunts] reaction: role granted successfully'); } catch {}
+        }).catch((e) => { try { console.warn('[hunts] reaction: role grant failed:', e?.message || e); } catch {} });
       };
 
       try { console.log('[hunts] messageReactionAdd: firing system.reaction.special'); } catch {}
