@@ -14,8 +14,22 @@ export function getCasAnnouncer(interactionOrChannel) {
     }
   };
   const sendPublic = async (_botName, _userId, content) => {
-    const channel = interactionOrChannel?.channel || interactionOrChannel;
-    if (channel?.send) await channel.send({ content });
+    try {
+      const { Config } = await import('../../../models/index.js');
+      const cfg = await Config.findOne({ where: { key: 'fic_queue_channel_id' } });
+      const targetId = cfg?.value;
+      let channel = null;
+      const client = (interactionOrChannel?.client) || (interactionOrChannel?.channel?.client);
+      if (targetId && client) {
+        channel = await client.channels.fetch(targetId).catch(() => null);
+      }
+      // Restrict to queue channel: prefer configured; fallback to current only if not set/fetchable
+      channel = channel || interactionOrChannel?.channel || interactionOrChannel;
+      if (channel?.send) await channel.send({ content });
+    } catch {
+      const channel = interactionOrChannel?.channel || interactionOrChannel;
+      if (channel?.send) await channel.send({ content });
+    }
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });
 }
