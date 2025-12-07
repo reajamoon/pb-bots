@@ -4,7 +4,7 @@ export const HUNTS = [
   {
     key: 'first_rec_sent',
     name: 'Baby In A Trench Coat',
-    description: 'Send your first recommendation.',
+    description: 'Sent your first recommendation.',
     category: 'community',
     points: 10,
     rarity: 'common',
@@ -14,7 +14,7 @@ export const HUNTS = [
   {
     key: 'ten_recs_sent',
     name: 'Carry On',
-    description: 'Send ten recommendations.',
+    description: 'Sent ten recommendations.',
     category: 'community',
     points: 25,
     rarity: 'rare',
@@ -29,7 +29,7 @@ export const HUNTS = [
   {
     key: 'first_sprint',
     name: "Hunter's Kit",
-    description: 'Complete your first Dean sprint.',
+    description: 'Completed your first sprint.',
     category: 'writing',
     points: 10,
     rarity: 'common',
@@ -39,7 +39,7 @@ export const HUNTS = [
   {
     key: 'research_trip_uses',
     name: 'Research Trip',
-    description: 'Search recommendations ten times.',
+    description: 'Searched recommendations ten times.',
     category: 'reading',
     points: 15,
     rarity: 'common',
@@ -53,7 +53,7 @@ export const HUNTS = [
   {
     key: 'letters_from_heaven_5k',
     name: 'Letters From Heaven',
-    description: 'Write 5k words in a sprint.',
+    description: 'Wrote 5k words in sprints.',
     category: 'writing',
     points: 30,
     rarity: 'rare',
@@ -64,7 +64,7 @@ export const HUNTS = [
   {
     key: 'heat_of_the_moment_streak3',
     name: 'Heat Of The Moment',
-    description: 'Log 3 consecutive sprint days.',
+    description: 'Logged 3 consecutive sprint days.',
     category: 'writing',
     points: 25,
     rarity: 'rare',
@@ -76,7 +76,7 @@ export const HUNTS = [
   {
     key: 'dads_on_a_hunting_trip_narrative',
     name: "Dad's on a Hunting Trip...",
-    description: 'Complete a multi-step lore hunt across reading and writing.',
+    description: 'Completed a multi-step lore hunt Reading, writing, and research.',
     category: 'lore',
     points: 50,
     rarity: 'legendary',
@@ -90,7 +90,7 @@ export const HUNTS = [
   {
     key: 'library_card_guidelines',
     name: 'Library Card',
-    description: 'React to the Rec Guidelines message to get your library card.',
+    description: 'Reacted to the Rec Guidelines message & got your <@1446947028172148847>!\nYou can use the `/rec add` and `/rec update` commands in #fic-recs with this!',
     category: 'library',
     points: 15,
     rarity: 'rare',
@@ -100,7 +100,7 @@ export const HUNTS = [
   {
     key: 'first_profile_use',
     name: 'Hunter Profile',
-    description: 'Open or use your profile for the first time.',
+    description: "Opened your Profile for the first time.",
     category: 'profile',
     points: 10,
     rarity: 'common',
@@ -110,7 +110,7 @@ export const HUNTS = [
   {
     key: 'profile_setup_complete',
     name: "Hunter's Journal Setup",
-    description: 'Fill out your profile essentials to complete setup.',
+    description: 'Filled out your profile essentials.',
     category: 'profile',
     points: 20,
     rarity: 'rare',
@@ -120,7 +120,7 @@ export const HUNTS = [
   {
     key: 'hunters_network_join',
     name: "Hunter's Network",
-    description: 'Connect to the Hunter’s Network (join a team sprint).',
+    description: 'Connected to the Hunter’s Network (join a team sprint).',
     category: 'community',
     points: 20,
     rarity: 'rare',
