@@ -21,13 +21,15 @@ function buildCasAnnouncer(interactionOrChannel) {
       let channel = null;
       const client = (interactionOrChannel?.client) || (interactionOrChannel?.channel?.client);
       if (targetId && client) {
-        channel = await client.channels.fetch(targetId).catch(() => null);
+        channel = await client.channels.fetch(targetId).catch((e) => { try { console.warn(`[hunts] Cas announcer failed to fetch queue channel ${targetId}:`, e?.message || e); } catch {} return null; });
       }
       // Restrict to queue channel: prefer configured; fallback to current only if not set/fetchable
       channel = channel || interactionOrChannel?.channel || interactionOrChannel;
+      try { console.log(`[hunts] Cas announcer sending public to channelId=${channel?.id || 'unknown'} (queueId=${targetId || 'none'})`); } catch {}
       if (channel?.send) await channel.send({ content });
     } catch {
       const channel = interactionOrChannel?.channel || interactionOrChannel;
+      try { console.warn('[hunts] Cas announcer fell back to interactionOrChannel'); } catch {}
       if (channel?.send) await channel.send({ content });
     }
   };

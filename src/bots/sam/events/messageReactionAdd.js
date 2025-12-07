@@ -25,13 +25,14 @@ export default {
       const role = guild.roles.cache.get(targetRoleId) || await guild.roles.fetch(targetRoleId).catch(() => null);
       if (!role) return;
 
-      const announce = makeSamAnnouncer({
+      const announce = makeSamAnnouncer({ interaction: {
         replied: false,
         deferred: false,
         reply: async ({ content, flags }) => reaction.message.channel?.send({ content, flags }),
         followUp: async ({ content, flags }) => reaction.message.channel?.send({ content, flags }),
         channel: reaction.message.channel,
-      });
+        client: reaction.message.client,
+      }});
 
       // Skip if already unlocked to avoid duplicate announce/grant
       const already = await HuntProgress.findOne({ where: { userId: user.id, huntKey: 'library_card_guidelines', unlockedAt: { [Op.not]: null } } }).catch(() => null);
