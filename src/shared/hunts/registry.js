@@ -139,8 +139,20 @@ export async function ensureHuntsSeeded() {
 }
 
 export async function awardHunt(userId, key) {
-  const hunt = await Hunt.findByPk(key);
-  if (!hunt) throw new Error(`Unknown hunt: ${key}`);
+  let hunt = await Hunt.findByPk(key);
+  if (!hunt) {
+    const meta = HUNTS.find(h => h.key === key);
+    if (!meta) throw new Error(`Unknown hunt: ${key}`);
+    // Lazily seed missing hunt row based on meta
+    hunt = await Hunt.create({
+      key: meta.key,
+      name: meta.name,
+      description: meta.description,
+      category: meta.category,
+      points: meta.points ?? 0,
+      hidden: !!meta.hidden,
+    });
+  }
   const [prog] = await HuntProgress.findOrCreate({
     where: { userId, huntKey: key },
     defaults: { userId, huntKey: key, progress: 0 },
