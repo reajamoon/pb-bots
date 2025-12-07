@@ -1,4 +1,5 @@
-import { InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags } = Discord;
 import { makeAnnouncer } from '../../../shared/hunts/announce.js';
 
 export function getSamAnnouncer(interaction) {
