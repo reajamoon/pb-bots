@@ -239,7 +239,7 @@ export async function execute(interaction) {
         const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
         const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
         const announce = makeDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.completed', { userId: discordId, announce });
+        await fireTrigger('dean.sprint.completed', { userId: discordId, announce, interaction });
       } catch (huntErr) {
         console.warn('[hunts] dean.sprint.completed trigger failed (solo):', huntErr);
       }
