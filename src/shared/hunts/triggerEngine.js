@@ -280,13 +280,14 @@ export async function fireTrigger(triggerId, context) {
       try {
         if (meta.baseline === 'recommendations_count') {
           const { Recommendation, Config } = await import('../../models/index.js');
-          let where = { recommenderId: userId };
+          const { Op } = await import('sequelize');
+          let where = { recommendedBy: userId };
           if (meta.baselineMode === 'event' && meta.windowConfigKey) {
             try {
               const cfg = await Config.findOne({ where: { key: meta.windowConfigKey } });
               const startIso = cfg && cfg.value ? new Date(cfg.value) : null;
               if (startIso && !isNaN(startIso.getTime())) {
-                where = { ...where, createdAt: { $gte: startIso } };
+                where = { ...where, createdAt: { [Op.gte]: startIso } };
               }
             } catch {}
           }
