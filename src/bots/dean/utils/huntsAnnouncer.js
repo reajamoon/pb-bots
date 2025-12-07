@@ -14,7 +14,22 @@ function buildDeanAnnouncer(interactionOrChannel) {
     }
   };
   const sendPublic = async (_botName, _userId, contentOrOpts) => {
-    const channel = interactionOrChannel?.channel || interactionOrChannel;
+    let channel = interactionOrChannel?.channel || interactionOrChannel;
+    // Fallback: if we were given an Interaction but no channel object, attempt fetch
+    if ((!channel || !channel.send) && interactionOrChannel?.channelId && interactionOrChannel?.client) {
+      try {
+        const fetched = await interactionOrChannel.client.channels.fetch(interactionOrChannel.channelId).catch(() => null);
+        if (fetched && fetched.isTextBased()) channel = fetched;
+      } catch {}
+    }
+    // Hard fallback: use configured channel ID when no context available
+    if ((!channel || !channel.send) && interactionOrChannel?.client) {
+      try {
+        const hardId = '1446674019242869010';
+        const fetchedHard = await interactionOrChannel.client.channels.fetch(hardId).catch(() => null);
+        if (fetchedHard && fetchedHard.isTextBased()) channel = fetchedHard;
+      } catch {}
+    }
     if (channel?.send) {
       const payload = typeof contentOrOpts === 'string'
         ? { content: contentOrOpts }
