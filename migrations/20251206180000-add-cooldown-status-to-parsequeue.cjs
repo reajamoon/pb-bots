@@ -4,7 +4,7 @@
  * - For SQLite (dev): enums are emulated; no-op
  */
 
-export async function up(queryInterface, Sequelize) {
+async function up(queryInterface, Sequelize) {
   const dialect = queryInterface.sequelize.getDialect();
   if (dialect === 'postgres') {
     // Add new enum value 'cooldown' to the existing type
@@ -15,7 +15,7 @@ export async function up(queryInterface, Sequelize) {
   }
 }
 
-export async function down(queryInterface, Sequelize) {
+async function down(queryInterface, Sequelize) {
   const dialect = queryInterface.sequelize.getDialect();
   if (dialect === 'postgres') {
     // Cannot easily remove an enum value in Postgres without recreating the type.
@@ -26,3 +26,5 @@ export async function down(queryInterface, Sequelize) {
     console.log('[Migration] Skipping down migration for dialect:', dialect);
   }
 }
+
+module.exports = { up, down };
