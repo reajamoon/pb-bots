@@ -13,7 +13,7 @@ function buildCasAnnouncer(interactionOrChannel) {
       }
     }
   };
-  const sendPublic = async (_botName, _userId, content) => {
+  const sendPublic = async (_botName, _userId, contentOrOpts) => {
     try {
       const { Config } = await import('../../../models/index.js');
       const cfg = await Config.findOne({ where: { key: 'fic_queue_channel_id' } });
@@ -26,11 +26,17 @@ function buildCasAnnouncer(interactionOrChannel) {
       // Restrict to queue channel: prefer configured; fallback to current only if not set/fetchable
       channel = channel || interactionOrChannel?.channel || interactionOrChannel;
       try { console.log(`[hunts] Cas announcer sending public to channelId=${channel?.id || 'unknown'} (queueId=${targetId || 'none'})`); } catch {}
-      if (channel?.send) await channel.send({ content });
+      if (channel?.send) {
+        const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
+        await channel.send(payload);
+      }
     } catch {
       const channel = interactionOrChannel?.channel || interactionOrChannel;
       try { console.warn('[hunts] Cas announcer fell back to interactionOrChannel'); } catch {}
-      if (channel?.send) await channel.send({ content });
+      if (channel?.send) {
+        const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
+        await channel.send(payload);
+      }
     }
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });

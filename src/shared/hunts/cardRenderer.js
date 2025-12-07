@@ -142,7 +142,7 @@ export async function renderHunterCardPNG({ user, points, completed, narratives 
     <g>
       <text x="70" y="610" font-family="Impact, 'Segoe UI', Arial" font-size="24" fill="#2f51b6">SPECIAL AGENT</text>
       <line x1="220" y1="610" x2="960" y2="610" stroke="#0b1a2b" stroke-width="2"/>
-      <text x="300" y="610" font-family="'Brush Script MT', 'Segoe Script', 'Comic Sans MS', cursive" font-size="40" fill="#243b6b" opacity="0.85" transform="skewX(-8)" dominant-baseline="alphabetic">${username}</text>
+      <text x="300" y="610" font-family="'Cedarville Cursive', 'Brush Script MT', 'Segoe Script', 'Comic Sans MS', cursive" font-size="40" fill="#243b6b" opacity="0.85" transform="skewX(-8)" dominant-baseline="alphabetic">${username}</text>
     </g>
 
     <!-- Footer agency line under Special Agent & signature; centered to the span from label start (x=70) to signature end (x=960) -->

@@ -10,7 +10,7 @@ function buildSamAnnouncer(interaction) {
       await interaction.reply({ content, flags: flags ?? InteractionFlags.Ephemeral });
     }
   };
-  const sendPublic = async (_botName, _userId, content) => {
+  const sendPublic = async (_botName, _userId, contentOrOpts) => {
     try {
       const { Config } = await import('../../../models/index.js');
       const cfg = await Config.findOne({ where: { key: 'fic_queue_channel_id' } });
@@ -26,7 +26,8 @@ function buildSamAnnouncer(interaction) {
           return;
         }
         try { console.log(`[hunts] Sam announcer sending public to QUEUE channelId=${channel.id} (queueId=${targetId})`); } catch {}
-        await channel.send({ content }).catch((e) => { try { console.warn('[hunts] Sam announcer: send to queue failed:', e?.message || e); } catch {} });
+        const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
+        await channel.send(payload).catch((e) => { try { console.warn('[hunts] Sam announcer: send to queue failed:', e?.message || e); } catch {} });
         return;
       }
       // No configured queue channel; fallback to hardcoded channel, then current
@@ -37,11 +38,17 @@ function buildSamAnnouncer(interaction) {
       }
       fallback = fallback || interaction.channel;
       try { console.log(`[hunts] Sam announcer sending public to fallback channelId=${fallback?.id || 'unknown'} (queueId=none; hardFallbackId=${HARD_FALLBACK_ID})`); } catch {}
-      if (fallback?.send) await fallback.send({ content });
+      if (fallback?.send) {
+        const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
+        await fallback.send(payload);
+      }
     } catch {
       const channel = interaction.channel;
       try { console.warn('[hunts] Sam announcer fell back to interaction.channel in catch'); } catch {}
-      if (channel?.send) await channel.send({ content });
+      if (channel?.send) {
+        const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
+        await channel.send(payload);
+      }
     }
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });

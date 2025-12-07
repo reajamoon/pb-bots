@@ -52,39 +52,9 @@ export default {
     const { points, completed } = computeTotals(progressRows);
     const narratives = await getNarrativeProgress(targetUser.id);
 
-    const badgeColor = 0x1f2937; // dark slate, FBI badge vibe
-    const accent = '#d4af37'; // gold accent
+    // Removed embed; only send generated hunter card PNG
 
-    const embed = new EmbedBuilder()
-      .setColor(badgeColor)
-      .setAuthor({ name: 'PB Hunters Bureau', iconURL: interaction.client.user.displayAvatarURL() })
-      .setTitle('Hunter Identification Card')
-      .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
-      .setDescription('Counterfeit FBI badge issued by PB Hunters. Handle with care.')
-      .addFields(
-        { name: 'Agent', value: `<@${targetUser.id}>`, inline: true },
-        { name: 'Clearance', value: 'Level 3', inline: true },
-        { name: 'Badge No.', value: `${targetUser.id.slice(-6)}`, inline: true },
-      )
-      .addFields(
-        { name: 'Hunt Points', value: `${points}`, inline: true },
-        { name: 'Completed Hunts', value: completed.length ? completed.slice(0, 10).join(', ') + (completed.length > 10 ? `, +${completed.length - 10} more` : '') : 'None yet', inline: false },
-      )
-      .setFooter({ text: 'Issued by Sam • Tampering voids warranty', iconURL: interaction.client.user.displayAvatarURL() })
-      .setTimestamp();
-
-    if (narratives.length) {
-      const lines = narratives.map(n => {
-        if (n.status === 'completed') return `✔️ ${n.name}`;
-        const total = n.total ?? 0;
-        const done = n.done ?? 0;
-        const barLen = 10;
-        const filled = Math.min(barLen, Math.round((done / Math.max(1, total)) * barLen));
-        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
-        return `🜁 ${n.name} — ${done}/${total}\n${bar}`;
-      });
-      embed.addFields({ name: 'Ongoing Hunts', value: lines.join('\n'), inline: false });
-    }
+    // Narrative info is rendered inside the PNG via cardRenderer
 
     // Try to render PNG badge; fallback to embed if renderer fails
     try {
@@ -95,9 +65,10 @@ export default {
         narratives,
       });
       const attachment = new AttachmentBuilder(buffer, { name: 'hunter-card.png' });
-      await interaction.editReply({ embeds: [embed], files: [attachment] });
+      await interaction.editReply({ files: [attachment] });
     } catch (e) {
-      await interaction.editReply({ embeds: [embed] });
+      // Fallback: minimal text if renderer fails
+      await interaction.editReply({ content: `Here is your Hunter Card, <@${targetUser.id}>. (PNG renderer failed)` });
     }
   }
 };

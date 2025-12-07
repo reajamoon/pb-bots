@@ -13,9 +13,12 @@ function buildDeanAnnouncer(interactionOrChannel) {
       }
     }
   };
-  const sendPublic = async (_botName, _userId, content) => {
+  const sendPublic = async (_botName, _userId, contentOrOpts) => {
     const channel = interactionOrChannel?.channel || interactionOrChannel;
-    if (channel?.send) await channel.send({ content });
+    if (channel?.send) {
+      const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
+      await channel.send(payload);
+    }
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });
 }
