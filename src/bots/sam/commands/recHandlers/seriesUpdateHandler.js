@@ -1,6 +1,6 @@
 import Discord from 'discord.js';
 const { MessageFlags } = Discord;
-import { saveUserMetadata, detectSiteAndExtractIDs } from '../../../../shared/recUtils/processUserMetadata.js';
+import { saveUserMetadata, detectSiteAndExtractIDs, updateUserMetadata } from '../../../../shared/recUtils/processUserMetadata.js';
 import { Series } from '../../../../models/index.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
@@ -312,6 +312,21 @@ async function handleManualOnlyUpdate(interaction, series, updates) {
 
     // Persist user metadata overrides
     await saveUserMetadata(userMetadataOptions);
+
+    // Ensure notes and additional tags are upserted on UFM keyed by seriesId
+    try {
+        if (series.ao3SeriesId) {
+            await updateUserMetadata({
+                identifier: series.ao3SeriesId,
+                userID: interaction.user.id,
+                type: 'seriesId',
+                notes: newNotes,
+                additionalTags: newAdditionalTags && newAdditionalTags.length ? newAdditionalTags : undefined,
+            });
+        }
+    } catch (ufmErr) {
+        console.warn('[series update] Failed to upsert UFM notes/tags (manual-only series):', ufmErr);
+    }
 
     const responseMessage = `✅ Manual overrides saved for series "${series.name}": ${updates_made.join(', ')}. These will be applied when the series is next updated.`;
     await interaction.editReply({

@@ -2,7 +2,7 @@ import findRecommendationByIdOrUrl from '../../../../shared/recUtils/findRecomme
 import Discord from 'discord.js';
 const { MessageFlags } = Discord;
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
-import { saveUserMetadata, detectSiteAndExtractIDs } from '../../../../shared/recUtils/processUserMetadata.js';
+import { saveUserMetadata, detectSiteAndExtractIDs, updateUserMetadata } from '../../../../shared/recUtils/processUserMetadata.js';
 import { Recommendation, ParseQueueSubscriber, Config } from '../../../../models/index.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
@@ -165,18 +165,18 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
         }
 
         // Save user metadata immediately (before any queue processing)
-        // Build manual fields object
+        // Build manual fields object mapped to UserFicMetadata column names
         const manualFields = {};
-        if (newTitle) manualFields.title = newTitle;
-        if (newAuthor) manualFields.author = newAuthor;
-        if (newSummary) manualFields.summary = newSummary;
-        if (newRating !== null) manualFields.rating = newRating;
-        if (newWordCount) manualFields.wordCount = newWordCount;
-        if (newStatus) manualFields.status = newStatus;
-        if (deleted !== null) manualFields.deleted = deleted;
-        if (newAttachment) manualFields.attachment = newAttachment;
-        if (newNotes) manualFields.notes = newNotes;
-        if (newTags.length > 0) manualFields.tags = newTags;
+        if (newTitle) manualFields.manual_title = newTitle;
+        if (newAuthor) manualFields.manual_authors = newAuthor;
+        if (newSummary) manualFields.manual_summary = newSummary;
+        if (newRating !== null) manualFields.manual_rating = newRating;
+        if (newWordCount) manualFields.manual_wordcount = newWordCount;
+        // chapters not part of this handler; skip manual_chapters
+        if (newStatus) manualFields.manual_status = newStatus;
+        if (deleted !== null) manualFields.manual_deleted = deleted;
+        if (newAttachment) manualFields.manual_attachmentUrl = newAttachment.url;
+        // notes/tags are stored as rec_note/additional_tags, not manual_fields
 
         await saveUserMetadata({
             url: urlToUse,
@@ -586,6 +586,21 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                     // Tie footer to owner if a new note was supplied
                     preferredUserId: newNotes ? interaction.user.id : undefined
                 });
+
+                // Ensure UserFicMetadata reflects manual-only notes/tags immediately
+                try {
+                    const { ao3ID } = detectSiteAndExtractIDs(urlToUse);
+                    await updateUserMetadata({
+                        identifier: ao3ID,
+                        userID: interaction.user.id,
+                        type: 'ao3ID',
+                        notes: newNotes,
+                        additionalTags: newTags && newTags.length ? newTags : undefined,
+                        // manualFields mapping handled by saveUserMetadata above; skip here
+                    });
+                } catch (ufmErr) {
+                    console.warn('[rec update] Failed to upsert UFM notes/tags (manual-only):', ufmErr);
+                }
                 // Post publicly and ephemeral-confirm
                 try {
                     const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
