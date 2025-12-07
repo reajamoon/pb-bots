@@ -19,14 +19,25 @@ function buildSamAnnouncer(interaction) {
       if (targetId && interaction.client) {
         channel = await interaction.client.channels.fetch(targetId).catch((e) => { try { console.warn(`[hunts] Sam announcer failed to fetch queue channel ${targetId}:`, e?.message || e); } catch {} return null; });
       }
-      // Fallback to current channel if no configured queue channel
-      channel = channel || interaction.channel;
-      try { console.log(`[hunts] Sam announcer sending public to channelId=${channel?.id || 'unknown'} (queueId=${targetId || 'none'})`); } catch {}
-      if (channel?.send) {
-        await channel.send({ content });
-      } else {
-        try { console.warn('[hunts] Sam announcer: no send() on resolved channel'); } catch {}
+      if (targetId) {
+        // Queue channel required when configured; do NOT fallback
+        if (!channel) {
+          try { console.warn(`[hunts] Sam announcer: queue channel ${targetId} not available; aborting public send`); } catch {}
+          return;
+        }
+        try { console.log(`[hunts] Sam announcer sending public to QUEUE channelId=${channel.id} (queueId=${targetId})`); } catch {}
+        await channel.send({ content }).catch((e) => { try { console.warn('[hunts] Sam announcer: send to queue failed:', e?.message || e); } catch {} });
+        return;
       }
+      // No configured queue channel; fallback to hardcoded channel, then current
+      let fallback = null;
+      const HARD_FALLBACK_ID = '1446674019242869010';
+      if (interaction.client) {
+        fallback = await interaction.client.channels.fetch(HARD_FALLBACK_ID).catch(() => null);
+      }
+      fallback = fallback || interaction.channel;
+      try { console.log(`[hunts] Sam announcer sending public to fallback channelId=${fallback?.id || 'unknown'} (queueId=none; hardFallbackId=${HARD_FALLBACK_ID})`); } catch {}
+      if (fallback?.send) await fallback.send({ content });
     } catch {
       const channel = interaction.channel;
       try { console.warn('[hunts] Sam announcer fell back to interaction.channel in catch'); } catch {}
