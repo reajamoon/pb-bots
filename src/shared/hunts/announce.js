@@ -1,4 +1,5 @@
-import { InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { InteractionFlags } = Discord;
 
 // Bots should provide bot-specific voice wrappers; this is a shared shape.
 // announce(botName, userId, hunt, options?) -> performs a member-facing pop.
