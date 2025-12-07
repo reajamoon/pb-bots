@@ -214,6 +214,39 @@ async function notifyQueueSubscribers(client) {
         });
         heartbeat_series_done = seriesDoneJobs.length;
 
+        // Announce AO3 cooldown start/end
+        const cooldownJobs = await ParseQueue.findAll({
+            where: { status: 'cooldown' }
+        });
+        for (const job of cooldownJobs) {
+            try {
+                const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+                const channelId = queueCfg && queueCfg.value ? queueCfg.value : null;
+                if (!channelId) {
+                    console.warn(`[Poller] No fic_queue_channel configured; skipping cooldown announcement.`);
+                    await ParseQueue.destroy({ where: { id: job.id } });
+                    continue;
+                }
+                const channel = client.channels.cache.get(channelId);
+                if (!channel) {
+                    console.warn(`[Poller] Fic queue channel ${channelId} not found; skipping cooldown announcement.`);
+                    await ParseQueue.destroy({ where: { id: job.id } });
+                    continue;
+                }
+                const action = (job.result && job.result.action) || 'start';
+                if (action === 'start') {
+                    await channel.send({ content: `Heads up — I’m pausing AO3 parsing for a bit due to site issues. I’ll resume automatically once things look stable.` });
+                } else if (action === 'end') {
+                    await channel.send({ content: `All clear — AO3 parsing is back. If anything looks off, ping a mod and I’ll take another look.` });
+                }
+            } catch (err) {
+                console.error('[Poller] Failed to announce cooldown:', err);
+            }
+            try {
+                await ParseQueue.destroy({ where: { id: job.id } });
+            } catch {}
+        }
+
         // Optional: notify mods of error jobs to improve visibility
         const errorJobs = await ParseQueue.findAll({
             where: { status: 'error' },

@@ -1,7 +1,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getSharedBrowser, logBrowserEvent, getCurrentUserAgent } from './ao3BrowserManager.js';
+import { getSharedBrowser, logBrowserEvent, getCurrentUserAgent, acquireLoginLock } from './ao3BrowserManager.js';
 import { getNextAvailableAO3Time, markAO3Requests } from './ao3QueueRateHelper.js';
 
 const COOKIES_PATH = 'ao3_cookies.json';
@@ -79,6 +79,8 @@ async function debugLoginAndFetchWork(workUrl) {
  * @returns {Promise<{ browser: import('puppeteer').Browser, page: import('puppeteer').Page }>}
  */
 async function getLoggedInAO3Page(ficUrl) {
+    // Serialize login attempts across jobs
+    const releaseLoginLock = await acquireLoginLock();
     // AO3 rate limit: wait until next available slot before any browser activity
     const nextAvailable = getNextAvailableAO3Time(1);
     const now = Date.now();
@@ -479,31 +481,14 @@ async function getLoggedInAO3Page(ficUrl) {
         }
         throw new Error('AO3 login failed.' + (err && err.message ? ' ' + err.message : ''));
     } finally {
-        if (page && !page.isClosed()) {
-            try { await page.close(); logBrowserEvent('[AO3] Closed page after login attempt.'); } catch (e) { logBrowserEvent('Error closing page after login attempt: ' + e.message); }
-        }
+        // Keep the logged-in page alive for reuse; do not close here.
+        // Release login lock regardless of outcome.
+        try { releaseLoginLock && releaseLoginLock(); } catch {}
     }
 
-    page = await browser.newPage();
+    // At this point, page is logged in; reuse the same page
     await preparePage(page);
-    let cookiesToSet = null;
-    if (fs.existsSync(COOKIES_PATH)) {
-        try {
-            cookiesToSet = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
-        } catch {}
-    }
-    if (!cookiesToSet && global.__samInMemoryCookies) {
-        cookiesToSet = global.__samInMemoryCookies;
-    }
-    if (cookiesToSet && Array.isArray(cookiesToSet) && cookiesToSet.length > 0) {
-        try {
-            await page.setCookie(...cookiesToSet);
-        } catch (e) {
-            logBrowserEvent('[AO3] Failed to set cookies on new page after login: ' + e.message);
-        }
-    }
-
-    // AO3 rate limit before goto
+    // Navigate to home or target fic url
     {
         const nextAvailable = getNextAvailableAO3Time(1);
         const now = Date.now();
@@ -512,7 +497,8 @@ async function getLoggedInAO3Page(ficUrl) {
         }
         markAO3Requests(1);
     }
-    await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
+    const dest = ficUrl || 'https://archiveofourown.org/';
+    await page.goto(dest, { waitUntil: 'domcontentloaded' });
     if (ficUrl) await bypassStayLoggedInInterstitial(page, ficUrl);
     return { browser, page };
 }

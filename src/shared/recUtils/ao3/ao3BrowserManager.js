@@ -5,6 +5,16 @@ import puppeteer from 'puppeteer';
 let sharedBrowser = null;
 let sharedBrowserUseCount = 0;
 let resetMutex = Promise.resolve();
+// Global login semaphore to serialize AO3 logins
+let loginSemaphore = Promise.resolve();
+export async function acquireLoginLock() {
+    let release;
+    const lock = new Promise(res => { release = res; });
+    const prev = loginSemaphore;
+    loginSemaphore = prev.then(() => lock);
+    await prev;
+    return release;
+}
 
 // Pre-warm browser on startup
 let prewarmPromise = null;
@@ -33,7 +43,7 @@ export async function resetSharedBrowser() {
         release();
     }
 }
-export const SHARED_BROWSER_MAX_USES = 25;
+export const SHARED_BROWSER_MAX_USES = 100;
 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:118.0) Gecko/20100101 Firefox/118.0';
 let currentUserAgent = userAgent;
 

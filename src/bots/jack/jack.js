@@ -243,7 +243,13 @@ async function pollQueue() {
 				await new Promise(res => setTimeout(res, thinkTime));
 
 				console.log(`[QueueWorker] Starting job ${job.id} at ${new Date().toISOString()}`);
-				await processQueueJob(job);
+				let jobErrored = false;
+				try {
+					await processQueueJob(job);
+				} catch (e) {
+					jobErrored = true;
+					throw e;
+				}
 				// Mark AO3 slot as used for this job
 				markAO3Requests(numRequests);
 				console.log(`[QueueWorker] Finished job ${job.id} at ${new Date().toISOString()}`);
@@ -271,6 +277,45 @@ async function pollQueue() {
 					await new Promise(res => setTimeout(res, delayMs));
 					console.log(`[QueueWorker] Finished delay after job ${job.id} at ${new Date().toISOString()}`);
 				}
+
+				// Handle AO3 cooldown after consecutive AO3-related errors
+				try {
+					pollQueue.consecutiveAO3Errors = pollQueue.consecutiveAO3Errors || 0;
+					if (jobErrored && /archiveofourown\.org|AO3/i.test(job.fic_url || '') ) {
+						pollQueue.consecutiveAO3Errors += 1;
+					} else {
+						pollQueue.consecutiveAO3Errors = 0;
+					}
+					const threshold = 3;
+					if (pollQueue.consecutiveAO3Errors >= threshold) {
+						console.warn('[QueueWorker] Entering AO3 cooldown due to repeated errors.');
+						// Emit cooldown start sentinel
+						await ParseQueue.create({
+							fic_url: 'ao3://cooldown',
+							status: 'cooldown',
+							requested_by: 'queue',
+							result: { action: 'start' },
+							notes: 'Automatic AO3 cooldown after repeated errors.'
+						});
+						// Pause for cooldown window (default 60s)
+						let cooldownMs = 60000;
+						const cfg = await Config.findOne({ where: { key: 'ao3_queue_cooldown_ms' } });
+						if (cfg && !isNaN(Number(cfg.value))) cooldownMs = Number(cfg.value);
+						await new Promise(res => setTimeout(res, cooldownMs));
+						// Emit cooldown end sentinel
+						await ParseQueue.create({
+							fic_url: 'ao3://cooldown',
+							status: 'cooldown',
+							requested_by: 'queue',
+							result: { action: 'end' },
+							notes: 'AO3 cooldown ended.'
+						});
+						pollQueue.consecutiveAO3Errors = 0;
+					}
+				} catch (coolErr) {
+					console.error('[QueueWorker] Failed during cooldown handling:', coolErr);
+				}
+
 			} else {
 				// No pending jobs, wait before polling again (randomize 4–7s)
 				const idleDelay = 4000 + Math.floor(Math.random() * 3000);
