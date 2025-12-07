@@ -16,7 +16,7 @@ export default async function handleProfileView(interaction) {
     try {
         if (interaction.user.id === targetUser.id) {
             const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
-            const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
+            const fireTrigger = (await import('../../../../shared/hunts/triggerEngine.js')).default;
             const announce = makeSamAnnouncer({ interaction });
             try {
                 console.log(`[hunts] Attempting first profile use trigger for userId=${interaction.user.id}`);
