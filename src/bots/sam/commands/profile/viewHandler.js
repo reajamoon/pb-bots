@@ -21,7 +21,7 @@ export default async function handleProfileView(interaction) {
             try {
                 console.log(`[hunts] Attempting first profile use trigger for userId=${interaction.user.id}`);
             } catch {}
-            await fireTrigger('sam.profile.firstUse', { userId: interaction.user.id, announce });
+            await fireTrigger('sam.profile.firstUse', { userId: interaction.user.id, announce, interaction });
             try {
                 console.log(`[hunts] fireTrigger(sam.profile.firstUse) called for userId=${interaction.user.id}`);
             } catch {}
