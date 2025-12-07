@@ -224,10 +224,10 @@ export async function execute(interaction) {
       // End the team (host + all participants)
       await DeanSprints.update({ status: 'done', endNotified: true }, { where: { guildId, groupId: active.groupId, status: 'processing' } });
       try {
-        const { fireTrigger } = await import('../../../shared/hunts/triggerEngine.js');
-        const { getDeanAnnouncer } = await import('../utils/huntsAnnouncer.js');
-        const announce = getDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.completed', { userId: discordId, announce });
+        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
+        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
+        const announce = makeDeanAnnouncer(interaction);
+        await fireTrigger('dean.sprint.completed', { userId: discordId, announce, interaction });
       } catch (huntErr) {
         console.warn('[hunts] dean.sprint.completed trigger failed:', huntErr);
       }
