@@ -1,7 +1,7 @@
 import { Config, HuntProgress } from '../../../models/index.js';
 import { Op } from 'sequelize';
 import { fireTrigger } from '../../../shared/hunts/triggerEngine.js';
-import { getSamAnnouncer } from '../utils/huntsAnnouncer.js';
+import makeSamAnnouncer from '../utils/huntsAnnouncer.js';
 
 export default {
   name: 'messageReactionAdd',
@@ -22,7 +22,7 @@ export default {
       const role = guild.roles.cache.get(targetRoleId) || await guild.roles.fetch(targetRoleId).catch(() => null);
       if (!role) return;
 
-      const announce = getSamAnnouncer({
+      const announce = makeSamAnnouncer({
         replied: false,
         deferred: false,
         reply: async ({ content, flags }) => reaction.message.channel?.send({ content, flags }),
