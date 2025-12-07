@@ -16,8 +16,20 @@ function buildDeanAnnouncer(interactionOrChannel) {
   const sendPublic = async (_botName, _userId, contentOrOpts) => {
     const channel = interactionOrChannel?.channel || interactionOrChannel;
     if (channel?.send) {
-      const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
-      await channel.send(payload);
+      const payload = typeof contentOrOpts === 'string'
+        ? { content: contentOrOpts }
+        : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : (contentOrOpts.embeds || []) };
+      try {
+        console.log('[hunts/dean] sendPublic payload', {
+          channelId: channel.id,
+          hasEmbeds: !!payload.embeds && payload.embeds.length > 0,
+          hasContent: !!payload.content
+        });
+        await channel.send(payload);
+        console.log('[hunts/dean] public announcement sent');
+      } catch (e) {
+        console.warn('[hunts/dean] failed to send public announcement:', e && e.message ? e.message : e);
+      }
     }
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });
