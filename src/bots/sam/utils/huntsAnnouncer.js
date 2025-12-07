@@ -17,13 +17,19 @@ export function getSamAnnouncer(interaction) {
       const targetId = cfg?.value;
       let channel = null;
       if (targetId && interaction.client) {
-        channel = await interaction.client.channels.fetch(targetId).catch(() => null);
+        channel = await interaction.client.channels.fetch(targetId).catch((e) => { try { console.warn(`[hunts] Sam announcer failed to fetch queue channel ${targetId}:`, e?.message || e); } catch {} return null; });
       }
       // Fallback to current channel if no configured queue channel
       channel = channel || interaction.channel;
-      if (channel?.send) await channel.send({ content });
+      try { console.log(`[hunts] Sam announcer sending public to channelId=${channel?.id || 'unknown'} (queueId=${targetId || 'none'})`); } catch {}
+      if (channel?.send) {
+        await channel.send({ content });
+      } else {
+        try { console.warn('[hunts] Sam announcer: no send() on resolved channel'); } catch {}
+      }
     } catch {
       const channel = interaction.channel;
+      try { console.warn('[hunts] Sam announcer fell back to interaction.channel in catch'); } catch {}
       if (channel?.send) await channel.send({ content });
     }
   };

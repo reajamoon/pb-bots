@@ -16,7 +16,13 @@ export default async function handleProfileView(interaction) {
             const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
             const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
             const announce = makeSamAnnouncer({ interaction });
+            try {
+                console.log(`[hunts] Attempting first profile use trigger for userId=${interaction.user.id}`);
+            } catch {}
             await fireTrigger('sam.profile.firstUse', { userId: interaction.user.id, announce });
+            try {
+                console.log(`[hunts] fireTrigger(sam.profile.firstUse) called for userId=${interaction.user.id}`);
+            } catch {}
         }
     } catch (err) {
         // Non-fatal: logging is handled by shared logger elsewhere

@@ -164,7 +164,13 @@ export const TRIGGERS = {
   // Sam profile: first use
   'sam.profile.firstUse': [
     async ({ userId, announce, interaction, channel }) => {
+      try {
+        console.log(`[hunts] sam.profile.firstUse fired for userId=${userId}`);
+      } catch {}
       const res = await awardHunt(userId, 'first_profile_use');
+      try {
+        console.log(`[hunts] awardHunt(first_profile_use) result for userId=${userId}: unlocked=${res?.unlocked} progressId=${res?.progress?.id} unlockedAt=${res?.progress?.unlockedAt}`);
+      } catch {}
       if (res.unlocked) {
         const meta = getHuntMeta('first_profile_use');
         const ephemeral = meta?.visibility === 'ephemeral';

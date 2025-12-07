@@ -1,4 +1,5 @@
 import { Config, HuntProgress } from '../../../models/index.js';
+import { Op } from 'sequelize';
 import { fireTrigger } from '../../../shared/hunts/triggerEngine.js';
 import { getSamAnnouncer } from '../utils/huntsAnnouncer.js';
 
@@ -30,7 +31,7 @@ export default {
       });
 
       // Skip if already unlocked to avoid duplicate announce/grant
-      const already = await HuntProgress.findOne({ where: { userId: user.id, huntKey: 'library_card_guidelines', unlockedAt: { not: null } } }).catch(() => null);
+      const already = await HuntProgress.findOne({ where: { userId: user.id, huntKey: 'library_card_guidelines', unlockedAt: { [Op.not]: null } } }).catch(() => null);
       if (already) return;
 
       const grantRole = async (uid) => {
