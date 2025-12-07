@@ -35,7 +35,8 @@
     "lint:imports": "node ./scripts/check-duplicate-imports.js",
     "lint:relative-imports": "node ./scripts/check-relative-imports.js",
     "lint:dotchains": "node ./scripts/check-leading-dot-chains.js",
-    "fix:birthdays": "node ./scripts/normalize-birthdays.js"
+    "fix:birthdays": "node ./scripts/normalize-birthdays.js",
+    "sync:hunt-text": "node ./scripts/syncHuntText.js"
   },
   "keywords": [
     "discord",
