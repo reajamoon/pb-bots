@@ -4,7 +4,7 @@ function svgEscape(text) {
   return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export async function renderHunterCardPNG({ user, points, completed, narratives }) {
+export async function renderHunterCardPNG({ user, member, points, completed, narratives }) {
   const username = svgEscape(user.username);
   const badgeNo = svgEscape(String(user.id).slice(-6));
   // Show latest 12 completed hunts
@@ -26,7 +26,10 @@ export async function renderHunterCardPNG({ user, points, completed, narratives 
   const completedMoreLine = completedItems.length && completedMore
     ? `<text x="24" y="${16 + completedItems.length * 24}" font-family="'Segoe UI', Arial" font-size="16" fill="#2f51b6">+${completedMore} more completed…</text>`
     : '';
-  const avatarUrl = user.displayAvatarURL({ size: 256, extension: 'png', forceStatic: true });
+  // Prefer guild-specific avatar if a GuildMember is provided; fallback to global profile
+  const avatarUrl = (member && typeof member.displayAvatarURL === 'function')
+    ? member.displayAvatarURL({ size: 256, extension: 'png', forceStatic: true })
+    : user.displayAvatarURL({ size: 256, extension: 'png', forceStatic: true });
   const avatarUrlEsc = svgEscape(avatarUrl);
   let avatarHref = avatarUrlEsc;
   try {

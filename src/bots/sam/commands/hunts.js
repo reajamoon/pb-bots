@@ -47,6 +47,14 @@ export default {
     ),
   async execute(interaction) {
     const targetUser = interaction.options.getUser('user') || interaction.user;
+    // Fetch guild-specific member for server avatar preference
+    let member = null;
+    try {
+      const guild = interaction.guild;
+      if (guild) {
+        member = await guild.members.fetch(targetUser.id).catch(() => null);
+      }
+    } catch {}
     await interaction.deferReply();
     const progressRows = await listUserHunts(targetUser.id);
     const { points, completed } = computeTotals(progressRows);
@@ -60,6 +68,7 @@ export default {
     try {
       const buffer = await renderHunterCardPNG({
         user: targetUser,
+        member,
         points,
         completed,
         narratives,

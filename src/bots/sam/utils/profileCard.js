@@ -208,10 +208,15 @@ async function generateProfileCard(discordUser, dbUser, client = null, interacti
         ? member.displayHexColor
         : 0x5865F2;
 
+    // Prefer server-specific avatar if member is available, else global avatar
+    const thumbUrl = (member && typeof member.displayAvatarURL === 'function')
+        ? member.displayAvatarURL({ size: 256, extension: 'png', forceStatic: true })
+        : discordUser.displayAvatarURL({ dynamic: true });
+
     // Create the embed
     const embed = new EmbedBuilder()
         .setTitle(`${displayName}'s Profile`)
-        .setThumbnail(discordUser.displayAvatarURL({ dynamic: true }))
+        .setThumbnail(thumbUrl)
         .setColor(embedColor)
         .setFields(fields)
         .setTimestamp()
