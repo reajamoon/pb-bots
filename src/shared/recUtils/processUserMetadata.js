@@ -119,6 +119,9 @@ async function updateUserMetadata(options) {
   const { identifier, userID, type = 'ao3ID', notes, additionalTags, manualFields } = options;
 
   try {
+    if ((type === 'ao3ID' && !identifier) || (type === 'seriesId' && !identifier)) {
+      throw new Error(`[updateUserMetadata] Missing identifier for type ${type}`);
+    }
     const whereClause = { userID };
 
     if (type === 'ao3ID') {

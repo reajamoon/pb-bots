@@ -4,6 +4,7 @@ import { ActivityType } from 'discord.js';
 import startPoller from './startPoller.js';
 import startBirthdayManager from './startBirthdayManager.js';
 import BirthdayNotificationManager from '../utils/birthdayNotifications.js';
+import { ensureHuntsSeeded } from '../../../shared/hunts/registry.js';
 
 export default {
     name: 'clientReady',
@@ -17,6 +18,13 @@ export default {
             });
         // Start poller and birthday manager
         startPoller(client);
+        // Seed hunts on startup to avoid missing rows
+        try {
+            await ensureHuntsSeeded();
+            console.log('[hunts] ensured hunts seeded on startup');
+        } catch (e) {
+            console.warn('[hunts] ensureHuntsSeeded failed on startup:', e);
+        }
         // Use the already-initialized birthdayManager if available, else create one
         if (client.birthdayManager) {
             startBirthdayManager(client, client.birthdayManager);

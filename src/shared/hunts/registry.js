@@ -21,6 +21,10 @@ export const HUNTS = [
     threshold: 10,
     announcer: 'sam',
     visibility: 'public',
+    baseline: 'recommendations_count',
+    baselineMode: 'event', // apply within event window; fresh = since event start
+    // Optional Config key providing the event window start ISO timestamp
+    windowConfigKey: 'hunts_event_start_rec',
   },
   {
     key: 'first_sprint',
@@ -42,6 +46,9 @@ export const HUNTS = [
     threshold: 10,
     announcer: 'sam',
     visibility: 'public',
+    // baseline could be wired to historical search logs when available
+    baseline: null,
+    baselineMode: null, // default: start fresh; no historical reconciliation
   },
   {
     key: 'letters_from_heaven_5k',
@@ -167,8 +174,20 @@ export async function awardHunt(userId, key) {
 }
 
 export async function incrementHuntProgress(userId, key, amount = 1) {
-  const hunt = await Hunt.findByPk(key);
-  if (!hunt) throw new Error(`Unknown hunt: ${key}`);
+  let hunt = await Hunt.findByPk(key);
+  if (!hunt) {
+    const meta = HUNTS.find(h => h.key === key);
+    if (!meta) throw new Error(`Unknown hunt: ${key}`);
+    // Lazily seed missing hunt row based on meta (align with awardHunt)
+    hunt = await Hunt.create({
+      key: meta.key,
+      name: meta.name,
+      description: meta.description,
+      category: meta.category,
+      points: meta.points ?? 0,
+      hidden: !!meta.hidden,
+    });
+  }
   const [prog] = await HuntProgress.findOrCreate({
     where: { userId, huntKey: key },
     defaults: { userId, huntKey: key, progress: 0 },

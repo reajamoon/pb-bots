@@ -41,6 +41,29 @@ export const TRIGGERS = {
         }
       }
       await incrementHuntProgress(userId, 'ten_recs_sent', 1);
+      // Grace-pop: backfill progress from historical recommendations if behind
+      try {
+        const { Recommendation } = await import('../../models/index.js');
+        const total = await Recommendation.count({ where: { recommenderId: userId } });
+        const prog = await incrementHuntProgress(userId, 'ten_recs_sent', 0);
+        if (prog && typeof prog.progress === 'number' && total > prog.progress) {
+          prog.progress = total;
+          await prog.save();
+          const meta = getHuntMeta('ten_recs_sent');
+          if (meta?.threshold && !prog.unlockedAt && prog.progress >= meta.threshold) {
+            const resT = await awardHunt(userId, 'ten_recs_sent');
+            if (resT.unlocked) {
+              const ephemeralT = meta?.visibility === 'ephemeral';
+              if (meta?.visibility !== 'silent') {
+                const annT = await resolveAnnouncer(meta?.announcer || 'sam', { interaction, channel, announce });
+                await annT(meta?.announcer || 'sam', userId, resT.hunt, { ephemeral: ephemeralT });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[hunts] grace-pop reconciliation failed:', e);
+      }
       // Meta narrative: check Angel Blade requirements and auto-award
       try {
         const narr = getHuntMeta('dads_on_a_hunting_trip_narrative');
@@ -249,10 +272,50 @@ export async function fireTrigger(triggerId, context) {
     const relatedKeys = [];
     if (triggerId === 'sam.rec.sent') relatedKeys.push('ten_recs_sent');
     if (triggerId === 'cas.search.used') relatedKeys.push('research_trip_uses');
+    // Grace-pop baseline reconciliation: if a hunt defines a baseline, set progress to baseline once
+    async function reconcileBaseline(userId, key) {
+      const meta = getHuntMeta(key);
+      if (!meta || !meta.baseline) return;
+      let baselineVal = 0;
+      try {
+        if (meta.baseline === 'recommendations_count') {
+          const { Recommendation, Config } = await import('../../models/index.js');
+          let where = { recommenderId: userId };
+          if (meta.baselineMode === 'event' && meta.windowConfigKey) {
+            try {
+              const cfg = await Config.findOne({ where: { key: meta.windowConfigKey } });
+              const startIso = cfg && cfg.value ? new Date(cfg.value) : null;
+              if (startIso && !isNaN(startIso.getTime())) {
+                where = { ...where, createdAt: { $gte: startIso } };
+              }
+            } catch {}
+          }
+          baselineVal = await Recommendation.count({ where });
+        }
+        // Future baselines can be added here
+      } catch (e) {
+        console.warn(`[hunts] baseline computation failed for ${key}:`, e);
+        return;
+      }
+      try {
+        const prog = await incrementHuntProgress(userId, key, 0);
+        // Only reconcile if explicitly historical or event window provided
+        const allowReconcile = meta.baselineMode === 'historical' || meta.baselineMode === 'event';
+        if (!allowReconcile) return;
+        if (prog && typeof prog.progress === 'number' && baselineVal > prog.progress) {
+          prog.progress = baselineVal;
+          await prog.save();
+        }
+      } catch (e) {
+        console.warn(`[hunts] baseline reconciliation failed for ${key}:`, e);
+      }
+    }
     // Evaluate each related hunt: if progress >= threshold, award
     for (const key of relatedKeys) {
       const meta = HUNTS.find(h => h.key === key);
       if (!meta || !meta.threshold) continue;
+      // Reconcile baseline once before threshold check
+      await reconcileBaseline(userId, key);
       const prog = await incrementHuntProgress(userId, key, 0); // fetch current
       try {
         console.log(`[hunts] threshold check key=${key} userId=${userId} progress=${prog?.progress || 0} threshold=${meta.threshold} unlockedAt=${prog?.unlockedAt || 'null'}`);
