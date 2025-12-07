@@ -216,14 +216,16 @@ export const TRIGGERS = {
   'system.reaction.special': [
     async ({ userId, announce, grantRole }) => {
       const res = await awardHunt(userId, 'library_card_guidelines');
-      if (res.unlocked && announce) {
-        const meta = getHuntMeta('library_card_guidelines');
-        const ephemeral = meta?.visibility === 'ephemeral';
-        if (meta?.visibility !== 'silent') {
-          await announce(meta?.announcer || 'sam', userId, res.hunt, { ephemeral });
+      if (res.unlocked) {
+        if (announce) {
+          const meta = getHuntMeta('library_card_guidelines');
+          const ephemeral = meta?.visibility === 'ephemeral';
+          if (meta?.visibility !== 'silent') {
+            await announce(meta?.announcer || 'sam', userId, res.hunt, { ephemeral });
+          }
         }
+        if (grantRole) await grantRole(userId);
       }
-      if (grantRole) await grantRole(userId);
     },
   ],
 };

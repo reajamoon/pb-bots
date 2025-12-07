@@ -39,9 +39,9 @@ export default {
         client: reaction.message.client,
       }});
 
-      // Skip if already unlocked to avoid duplicate announce/grant
+      // Do not skip on already-unlocked: still grant role; announce logic is handled in triggerEngine
       const already = await HuntProgress.findOne({ where: { userId: user.id, huntKey: 'library_card_guidelines', unlockedAt: { [Op.not]: null } } }).catch(() => null);
-      if (already) return;
+      try { console.log(`[hunts] reaction: alreadyUnlocked=${!!already}`); } catch {}
 
       const grantRole = async (uid) => {
         if (uid !== user.id) return;
