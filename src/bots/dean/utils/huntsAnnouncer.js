@@ -2,7 +2,7 @@ import Discord from 'discord.js';
 const { InteractionFlags } = Discord;
 import { makeAnnouncer } from '../../../shared/hunts/announce.js';
 
-export function getDeanAnnouncer(interactionOrChannel) {
+function buildDeanAnnouncer(interactionOrChannel) {
   const sendEphemeral = async (_botName, _userId, content, { flags } = {}) => {
     const i = interactionOrChannel;
     if (i?.reply) {
@@ -18,4 +18,8 @@ export function getDeanAnnouncer(interactionOrChannel) {
     if (channel?.send) await channel.send({ content });
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });
+}
+
+export default function makeDeanAnnouncer(interactionOrChannel) {
+  return buildDeanAnnouncer(interactionOrChannel);
 }

@@ -2,7 +2,7 @@ import Discord from 'discord.js';
 const { InteractionFlags } = Discord;
 import { makeAnnouncer } from '../../../shared/hunts/announce.js';
 
-export function getCasAnnouncer(interactionOrChannel) {
+function buildCasAnnouncer(interactionOrChannel) {
   const sendEphemeral = async (_botName, _userId, content, { flags } = {}) => {
     const i = interactionOrChannel;
     if (i?.reply) {
@@ -32,4 +32,8 @@ export function getCasAnnouncer(interactionOrChannel) {
     }
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });
+}
+
+export default function makeCasAnnouncer(interactionOrChannel) {
+  return buildCasAnnouncer(interactionOrChannel);
 }

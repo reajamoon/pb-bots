@@ -2,7 +2,7 @@ import Discord from 'discord.js';
 const { InteractionFlags } = Discord;
 import { makeAnnouncer } from '../../../shared/hunts/announce.js';
 
-export function getSamAnnouncer(interaction) {
+function buildSamAnnouncer(interaction) {
   const sendEphemeral = async (_botName, _userId, content, { flags } = {}) => {
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({ content, flags: flags ?? InteractionFlags.Ephemeral });
@@ -34,4 +34,8 @@ export function getSamAnnouncer(interaction) {
     }
   };
   return makeAnnouncer({ sendEphemeral, sendPublic });
+}
+
+export default function makeSamAnnouncer({ interaction }) {
+  return buildSamAnnouncer(interaction);
 }
