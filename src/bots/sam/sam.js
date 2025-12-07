@@ -1,7 +1,7 @@
 console.log('ENTRYPOINT REACHED: sam.js');
 import { ParseQueue, ParseQueueSubscriber, User, Config, sequelize } from '../../models/index.js';
 import Discord from 'discord.js';
-const { Client, Collection, GatewayIntentBits } = Discord;
+const { Client, Collection, GatewayIntentBits, Partials } = Discord;
 import { readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -24,6 +24,14 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildPresences,
         GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildMessageReactions,
+    ],
+    partials: [
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction,
+        Partials.User,
+        Partials.GuildMember,
     ],
 });
 
