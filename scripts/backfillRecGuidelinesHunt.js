@@ -3,7 +3,7 @@ import 'dotenv/config';
 import { Client, GatewayIntentBits } from 'discord.js';
 import { Config, HuntProgress } from '../src/models/index.js';
 import { fireTrigger } from '../src/shared/hunts/triggerEngine.js';
-import { getSamAnnouncer } from '../src/bots/sam/utils/huntsAnnouncer.js';
+import { makeAnnouncer } from '../src/shared/hunts/announce.js';
 
 async function main() {
   const token = process.env.SAM_TOKEN || process.env.DISCORD_TOKEN || process.env.BOT_TOKEN;
@@ -59,12 +59,16 @@ async function main() {
     process.exit(1);
   }
 
-  const announce = getSamAnnouncer({
-    replied: false,
-    deferred: false,
-    reply: async ({ content, flags }) => targetMessage.channel?.send({ content, flags }),
-    followUp: async ({ content, flags }) => targetMessage.channel?.send({ content, flags }),
-    channel: targetMessage.channel,
+  const announce = makeAnnouncer({
+    sendEphemeral: async (_botName, _userId, content, { flags } = {}) => {
+      await targetMessage.channel?.send({ content, flags });
+    },
+    sendPublic: async (_botName, _userId, contentOrOpts) => {
+      const payload = typeof contentOrOpts === 'string'
+        ? { content: contentOrOpts }
+        : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
+      await targetMessage.channel?.send(payload);
+    },
   });
 
   let processed = 0;
