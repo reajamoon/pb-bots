@@ -3,7 +3,7 @@ import 'dotenv/config';
 import { Client, GatewayIntentBits } from 'discord.js';
 import { Config, HuntProgress } from '../src/models/index.js';
 import { fireTrigger } from '../src/shared/hunts/triggerEngine.js';
-import { makeAnnouncer } from '../src/shared/hunts/announce.js';
+import makeSamAnnouncer from '../src/bots/sam/utils/huntsAnnouncer.js';
 
 async function main() {
   const token = process.env.SAM_TOKEN || process.env.DISCORD_TOKEN || process.env.BOT_TOKEN;
@@ -59,17 +59,16 @@ async function main() {
     process.exit(1);
   }
 
-  const announce = makeAnnouncer({
-    sendEphemeral: async (_botName, _userId, content, { flags } = {}) => {
-      await targetMessage.channel?.send({ content, flags });
-    },
-    sendPublic: async (_botName, _userId, contentOrOpts) => {
-      const payload = typeof contentOrOpts === 'string'
-        ? { content: contentOrOpts }
-        : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
-      await targetMessage.channel?.send(payload);
-    },
-  });
+  // Build Sam announcer with a synthetic interaction to reuse queue routing and embed formatting
+  const fakeInteraction = {
+    replied: false,
+    deferred: false,
+    reply: async (opts) => targetMessage.channel?.send(opts),
+    followUp: async (opts) => targetMessage.channel?.send(opts),
+    channel: targetMessage.channel,
+    client,
+  };
+  const announce = makeSamAnnouncer({ interaction: fakeInteraction });
 
   let processed = 0;
   for (const [, reaction] of targetMessage.reactions.cache) {
