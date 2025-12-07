@@ -7,6 +7,9 @@ export default {
   name: 'messageReactionAdd',
   async execute(reaction, user) {
     try {
+      try {
+        console.log(`[hunts] messageReactionAdd: received reaction on messageId=${reaction?.message?.id} by userId=${user?.id} emoji=${reaction?.emoji?.name || reaction?.emoji?.id}`);
+      } catch {}
       if (user.bot) return;
       const messageIdCfg = await Config.findOne({ where: { key: 'rec_guidelines_message_id' } });
       const roleIdCfg = await Config.findOne({ where: { key: 'rec_guidelines_role_id' } });
@@ -39,7 +42,9 @@ export default {
         await member.roles.add(role.id).catch(() => {});
       };
 
+      try { console.log('[hunts] messageReactionAdd: firing system.reaction.special'); } catch {}
       await fireTrigger('system.reaction.special', { userId: user.id, announce, grantRole });
+      try { console.log('[hunts] messageReactionAdd: fired successfully'); } catch {}
     } catch (err) {
       console.warn('[hunts] messageReactionAdd handler error:', err);
     }
