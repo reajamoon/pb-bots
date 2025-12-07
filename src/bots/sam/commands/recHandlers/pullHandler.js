@@ -1,5 +1,5 @@
 import { Config, Recommendation, Series } from '../../../../models/index.js';
-import { fetchRecWithSeries, fetchSeriesWithUserMetadata } from '../../../models/index.js';
+import { fetchRecWithSeries, fetchSeriesWithUserMetadata } from '../../../../models/index.js';
 import { createRecEmbed } from '../../../../shared/recUtils/createRecEmbed.js';
 import { createSeriesEmbed } from '../../../../shared/recUtils/createSeriesEmbed.js';
 import Discord from 'discord.js';

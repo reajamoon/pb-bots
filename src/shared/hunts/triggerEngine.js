@@ -29,6 +29,9 @@ export const TRIGGERS = {
   'sam.rec.sent': [
     async ({ userId, announce, interaction, channel }) => {
       const res = await awardHunt(userId, 'first_rec_sent');
+      try {
+        console.log(`[hunts] sam.rec.sent award first_rec_sent userId=${userId} unlocked=${res?.unlocked} progressId=${res?.progress?.id} unlockedAt=${res?.progress?.unlockedAt}`);
+      } catch {}
       if (res.unlocked) {
         const meta = getHuntMeta('first_rec_sent');
         const ephemeral = meta?.visibility === 'ephemeral';
@@ -57,6 +60,9 @@ export const TRIGGERS = {
   'dean.sprint.completed': [
     async ({ userId, announce, interaction, channel }) => {
       const res = await awardHunt(userId, 'first_sprint');
+      try {
+        console.log(`[hunts] dean.sprint.completed award first_sprint userId=${userId} unlocked=${res?.unlocked} progressId=${res?.progress?.id} unlockedAt=${res?.progress?.unlockedAt}`);
+      } catch {}
       if (res.unlocked) {
         const meta = getHuntMeta('first_sprint');
         const ephemeral = meta?.visibility === 'ephemeral';
@@ -248,13 +254,19 @@ export async function fireTrigger(triggerId, context) {
       const meta = HUNTS.find(h => h.key === key);
       if (!meta || !meta.threshold) continue;
       const prog = await incrementHuntProgress(userId, key, 0); // fetch current
+      try {
+        console.log(`[hunts] threshold check key=${key} userId=${userId} progress=${prog?.progress || 0} threshold=${meta.threshold} unlockedAt=${prog?.unlockedAt || 'null'}`);
+      } catch {}
       if ((prog?.progress || 0) >= meta.threshold && !prog.unlockedAt) {
         const res = await awardHunt(userId, key);
+        try {
+          console.log(`[hunts] threshold award key=${key} userId=${userId} unlocked=${res?.unlocked} progressId=${res?.progress?.id}`);
+        } catch {}
         if (res.unlocked && context.announce) {
-          const meta = getHuntMeta(key);
-          const ephemeral = meta?.visibility === 'ephemeral';
-          if (meta?.visibility !== 'silent') {
-            await context.announce(meta?.announcer || 'sam', userId, res.hunt, { ephemeral });
+          const meta2 = getHuntMeta(key);
+          const ephemeral2 = meta2?.visibility === 'ephemeral';
+          if (meta2?.visibility !== 'silent') {
+            await context.announce(meta2?.announcer || 'sam', userId, res.hunt, { ephemeral: ephemeral2 });
           }
         }
       }
