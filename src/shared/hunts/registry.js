@@ -21,7 +21,7 @@ export const HUNTS = [
     threshold: 10,
     announcer: 'sam',
     visibility: 'public',
-    baseline: 'recommendations_count',
+    baseline: 'ufm_note_count',
     baselineMode: 'event', // apply within event window; fresh = since event start
     // Optional Config key providing the event window start ISO timestamp
     windowConfigKey: 'hunts_event_start_rec',

@@ -194,6 +194,17 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           notes: notes || '',
           additionalTags: additionalTags || []
         });
+        // Fire hunts trigger for user-added rec with note (series)
+        try {
+          if (notes && String(notes).trim()) {
+            const { fireTrigger } = await import('../../../../shared/hunts/triggerEngine.js');
+            const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
+            const announce = makeSamAnnouncer({ interaction });
+            await fireTrigger('sam.rec.sent', { userId: interaction.user.id, announce, interaction });
+          }
+        } catch (huntErr) {
+          console.warn('[hunts] sam.rec.sent trigger (series duplicate) failed:', huntErr);
+        }
         // If record is older than 3 days, queue for refresh with serialized notes/tags
         const oneDayMs = 24 * 60 * 60 * 1000;
         const ageMs = Date.now() - new Date(existingSeries.updatedAt || existingSeries.createdAt).getTime();
@@ -352,6 +363,17 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
         notes: notes || '',
         additionalTags: additionalTags || []
       });
+      // Fire hunts trigger for user-added rec with note (existing work)
+      try {
+        if (notes && String(notes).trim()) {
+          const { fireTrigger } = await import('../../../../shared/hunts/triggerEngine.js');
+          const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
+          const announce = makeSamAnnouncer({ interaction });
+          await fireTrigger('sam.rec.sent', { userId: interaction.user.id, announce, interaction });
+        }
+      } catch (huntErr) {
+        console.warn('[hunts] sam.rec.sent trigger (rec duplicate) failed:', huntErr);
+      }
       // Queue for refresh if older than 3 days
       const oneDayMs = 24 * 60 * 60 * 1000;
       const ageMs = Date.now() - new Date(existingRec.updatedAt || existingRec.createdAt).getTime();
@@ -478,6 +500,17 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
       // Return cached result: fetch Recommendation and build embed directly (no AO3 access)
       const rec = await Recommendation.findOne({ where: { url } });
       if (rec) {
+        // Fire hunts trigger for user-added rec with note (cached result path)
+        try {
+          if (notes && String(notes).trim()) {
+            const { fireTrigger } = await import('../../../../shared/hunts/triggerEngine.js');
+            const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
+            const announce = makeSamAnnouncer({ interaction });
+            await fireTrigger('sam.rec.sent', { userId: interaction.user.id, announce, interaction });
+          }
+        } catch (huntErr) {
+          console.warn('[hunts] sam.rec.sent trigger (cached result) failed:', huntErr);
+        }
         // UserFicMetadata already saved above, just build embed
         const recWithSeries = await fetchRecWithSeries(rec.id, true);
         // For additional tags, always concat (deduplication later)

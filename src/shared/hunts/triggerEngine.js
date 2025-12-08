@@ -1,4 +1,5 @@
 import { awardHunt, incrementHuntProgress, HUNTS, getHuntMeta } from './registry.js';
+import { Op } from 'sequelize';
 import { metaRequirementsSatisfied } from './narrative.js';
 
 // Declarative triggers registry; bots call fireTrigger with context
@@ -41,10 +42,10 @@ export const TRIGGERS = {
         }
       }
       await incrementHuntProgress(userId, 'ten_recs_sent', 1);
-      // Grace-pop: backfill progress from historical recommendations if behind
+      // Grace-pop: backfill progress from historical user recs-with-notes if behind
       try {
-        const { Recommendation, RecommendationFields } = await import('../../models/index.js');
-        const total = await Recommendation.count({ where: { [RecommendationFields.recommendedBy]: userId } });
+        const { UserFicMetadata } = await import('../../models/index.js');
+        const total = await UserFicMetadata.count({ where: { userID: userId, rec_note: { [Op.ne]: null } } });
         const prog = await incrementHuntProgress(userId, 'ten_recs_sent', 0);
         if (prog && typeof prog.progress === 'number' && total > prog.progress) {
           prog.progress = total;
@@ -306,10 +307,9 @@ export async function fireTrigger(triggerId, context) {
       if (!meta || !meta.baseline) return;
       let baselineVal = 0;
       try {
-        if (meta.baseline === 'recommendations_count') {
-          const { Recommendation, Config } = await import('../../models/index.js');
-          const { Op } = await import('sequelize');
-          let where = { recommendedBy: userId };
+        if (meta.baseline === 'ufm_note_count') {
+          const { UserFicMetadata, Config } = await import('../../models/index.js');
+          let where = { userID: userId, rec_note: { [Op.ne]: null } };
           if (meta.baselineMode === 'event' && meta.windowConfigKey) {
             try {
               const cfg = await Config.findOne({ where: { key: meta.windowConfigKey } });
@@ -319,7 +319,7 @@ export async function fireTrigger(triggerId, context) {
               }
             } catch {}
           }
-          baselineVal = await Recommendation.count({ where });
+          baselineVal = await UserFicMetadata.count({ where });
         }
         // Future baselines can be added here
       } catch (e) {
