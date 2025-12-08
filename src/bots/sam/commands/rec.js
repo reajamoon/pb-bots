@@ -51,6 +51,10 @@ export default {
                         .setDescription('Fanfiction URL (AO3 preferred)')
                         .setRequired(true))
                 .addStringOption(option =>
+                    option.setName('notes')
+                        .setDescription('Recommendation notes (required)')
+                        .setRequired(true))
+                .addStringOption(option =>
                     option.setName('title')
                         .setDescription('Title (optional, for manual entry)')
                         .setRequired(false))
@@ -74,10 +78,6 @@ export default {
                     option.setName('tags')
                         .setDescription('Additional tags (comma-separated, optional)')
                         .setRequired(false))
-                .addStringOption(option =>
-                    option.setName('notes')
-                        .setDescription('Recommendation notes (required)')
-                        .setRequired(true))
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -92,16 +92,24 @@ export default {
                         .setDescription('Fic ID, AO3 WorkId, or URL')
                         .setRequired(true))
                 .addStringOption(option =>
+                    option.setName('notes')
+                        .setDescription('Recommendation notes, these are REQUIRED for ALL RECS. This is ONLY optional if you have already added notes.')
+                        .setRequired(false))
+                .addStringOption(option =>
+                    option.setName('tags')
+                        .setDescription('Recommendation tags (comma-separated) Help our library be searchable and filterable! These get added together and deduplicated with the fic tags for searches and randoms.')
+                        .setRequired(false))
+                .addBooleanOption(option =>
+                    option.setName('manual_only')
+                        .setDescription('Skip fetch metadata and only update provided fields. Useful to add notes to old entries or fixing bad parses! Dont use manual fields instead of fetch just for funsies.')
+                        .setRequired(false)))
+                .addStringOption(option =>
                     option.setName('title')
                         .setDescription('Story title')
                         .setRequired(false))
                 .addStringOption(option =>
                     option.setName('author')
                         .setDescription('Author name (required if auto-parsing fails)')
-                        .setRequired(false))
-                .addStringOption(option =>
-                    option.setName('tags')
-                        .setDescription('Additional tags (comma-separated)')
                         .setRequired(false))
                 .addStringOption(option =>
                     option.setName('summary')
@@ -116,25 +124,17 @@ export default {
                         .setDescription('Story rating (e.g., Teen And Up Audiences, Explicit)')
                         .setRequired(false))
                 .addStringOption(option =>
-                    option.setName('notes')
-                        .setDescription('Personal notes about this fic')
-                        .setRequired(false))
-                .addStringOption(option =>
                     option.setName('status')
                         .setDescription('Manually set fic status (MODS ONLY)')
                         .setRequired(false))
                 .addBooleanOption(option =>
                     option.setName('deleted')
-                        .setDescription('Mark this fic as deleted from its original site')
+                        .setDescription('Mark this fic as deleted from its original site (MODS ONLY)')
                         .setRequired(false))
                 .addAttachmentOption(option =>
                     option.setName('attachment')
                         .setDescription('File attachment (only for deleted fics)')
                         .setRequired(false))
-                .addBooleanOption(option =>
-                    option.setName('manual_only')
-                        .setDescription('Skip fetching new metadata and only update provided fields')
-                        .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('random')
@@ -291,20 +291,6 @@ export default {
                 case 'clearqueue': {
                     const handleClearQueue = (await import('./recHandlers/clearQueueHandler.js')).default;
                     await handleClearQueue(interaction);
-                    break;
-                }
-                case 'add_ao3share': {
-                    const mod = await import('discord.js');
-                    const modal = new mod.ModalBuilder()
-                        .setCustomId('ao3share_modal')
-                        .setTitle('Paste AO3 Share HTML');
-                    const htmlInput = new mod.TextInputBuilder()
-                        .setCustomId('ao3share_html')
-                        .setLabel('Paste the AO3 share HTML here')
-                        .setStyle(mod.TextInputStyle.Paragraph)
-                        .setRequired(true);
-                    modal.addComponents(new mod.ActionRowBuilder().addComponents(htmlInput));
-                    await interaction.showModal(modal);
                     break;
                 }
                 case 'help':

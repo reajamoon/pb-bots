@@ -46,6 +46,14 @@ export default async function handleAddRecommendation(interaction) {
     const notes = interaction.options.getString('notes');
     // Require a recommendation note with a minimum length
     try {
+      const notes = interaction.options.getString('notes');
+      if (!notes || !notes.trim()) {
+        await interaction.reply({
+          content: 'Notes are required for `/rec add`. Please include your recommendation notes in the `notes:` field.',
+          flags: Discord.MessageFlags?.Ephemeral ?? 64
+        });
+        return;
+      }
       const { Config } = await import('../../../../models/index.js');
       const minCfg = await Config.findOne({ where: { key: 'min_rec_note_length' } });
       const minLen = minCfg && Number(minCfg.value) > 0 ? Number(minCfg.value) : 50; // default 50 chars ~ a sentence
