@@ -7,14 +7,11 @@ assignees: reajamoon
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**Is your feature request related to a problem? If so, you probably want to submit a bug report instead**
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
-
-**Are you sure this is related to Sambot?**
-Please make sure this is an issue or feature related to Sambot. This repository is *only* for issues and bugs relating to Sambot and his features.
+**Brief details of the feature you envision, or examples**
+Please make sure this is an issue or feature related to the PB Bots. Discord stuff unrelated to bot functions should go right to the mods.
 
 **Additional context**
 Add any other context or screenshots about the feature request here.
+
