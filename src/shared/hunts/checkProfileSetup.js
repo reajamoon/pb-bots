@@ -22,6 +22,6 @@ export default async function maybeTriggerProfileSetupComplete(userId, options =
       const makeSamAnnouncer = (await import('../../bots/sam/utils/huntsAnnouncer.js')).default;
       announce = makeSamAnnouncer({ interaction });
     }
-    await fireTrigger('sam.profile.setupComplete', { userId, announce });
+    await fireTrigger('sam.profile.setupComplete', { userId, announce, interaction });
   }
 }
