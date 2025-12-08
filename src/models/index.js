@@ -138,6 +138,7 @@ export {
 // Convenience re-exports for model helpers
 export { fetchRecWithSeries } from './fetchRecWithSeries.js';
 export { fetchAllRecsWithSeries } from './fetchAllRecsWithSeries.js';
+export { fetchSeriesWithUserMetadata } from './fetchSeriesWithUserMetadata.js';
 // Field name constants re-exports for safer queries
 export { RecommendationFields } from './fields/recommendationFields.js';
 export { SeriesFields } from './fields/seriesFields.js';

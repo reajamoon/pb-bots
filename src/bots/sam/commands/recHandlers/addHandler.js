@@ -1,4 +1,5 @@
 import updateMessages from '../../../../shared/text/updateMessages.js';
+import { MessageFlags } from 'discord.js';
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import { saveUserMetadata } from '../../../../shared/recUtils/processUserMetadata.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
@@ -17,7 +18,8 @@ import { isFieldGloballyModlockedFor } from '../../../../shared/utils/globalModl
 export default async function handleAddRecommendation(interaction) {
 
   try {
-    await interaction.deferReply();
+    // Defer ephemerally using flags to match project conventions
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     let url = interaction.options.getString('url');
     url = normalizeAO3Url(url);
     const manualTitle = interaction.options.getString('title');
@@ -48,9 +50,8 @@ export default async function handleAddRecommendation(interaction) {
     try {
       const notes = interaction.options.getString('notes');
       if (!notes || !notes.trim()) {
-        await interaction.reply({
-          content: 'Notes are required for `/rec add`. Please include your recommendation notes in the `notes:` field.',
-          flags: Discord.MessageFlags?.Ephemeral ?? 64
+        await interaction.editReply({
+          content: 'Notes are required for `/rec add`. Please include your recommendation notes in the `notes:` field.'
         });
         return;
       }
@@ -59,12 +60,10 @@ export default async function handleAddRecommendation(interaction) {
       const minLen = minCfg && Number(minCfg.value) > 0 ? Number(minCfg.value) : 50; // default 50 chars ~ a sentence
       const noteText = (notes || '').trim();
       if (!noteText || noteText.length < minLen) {
-        const { MessageFlags } = await import('discord.js');
-        await interaction.reply({
+        await interaction.editReply({
           content: `Every rec needs a recommender’s note. Make sure it's at least ${minLen} characters.
 
-Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.`,
-          flags: MessageFlags.Ephemeral
+Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.`
         });
         return;
       }
@@ -73,12 +72,10 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
       const noteText = (notes || '').trim();
       const minLen = 50;
       if (!noteText || noteText.length < minLen) {
-        const { MessageFlags } = await import('discord.js');
-        await interaction.reply({
+        await interaction.editReply({
           content: `Every rec needs a recommender’s note. Make sure it's at least ${minLen} characters.
 
-Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.`,
-          flags: MessageFlags.Ephemeral
+Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.`
         });
         return;
       }
@@ -171,7 +168,6 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
         });
         const successfulAddsToday = successfulRecAddsToday + successfulSeriesAddsToday;
         if (successfulAddsToday >= dailyLimit) {
-          const { MessageFlags } = await import('discord.js');
           await interaction.followUp({
             content: `You’ve hit today’s add limit (${dailyLimit}). Try again tomorrow, or ask a mod if you need a bump.`,
             flags: MessageFlags.Ephemeral
@@ -220,6 +216,7 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           // Ensure series jobs are marked for batch processing
           try { await queueEntry.update({ batch_type: 'series' }); } catch {}
           // Post a clean embed now and record it for poller to edit later
+          const { fetchSeriesWithUserMetadata } = await import('../../../../models/index.js');
           const seriesWithMeta = await fetchSeriesWithUserMetadata(existingSeries.id, true);
           const embedNow = createSeriesEmbed(seriesWithMeta, {
             preferredUserId: interaction.user.id,
@@ -267,7 +264,8 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           return;
         } else {
           // No refresh needed; send a single embed now with the user’s note override
-          const seriesWithMetaNoRefresh = await fetchSeriesWithUserMetadata(existingSeries.id, true);
+          const { fetchSeriesWithUserMetadata: fetchSeriesWithUserMetadata2 } = await import('../../../../models/index.js');
+          const seriesWithMetaNoRefresh = await fetchSeriesWithUserMetadata2(existingSeries.id, true);
           const embed = createSeriesEmbed(seriesWithMetaNoRefresh, {
             preferredUserId: interaction.user.id,
             overrideNotes: notes || '',
@@ -334,12 +332,10 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           const { Config } = await import('../../../../models/index.js');
           const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
           const inRecChannel = recCfg && recCfg.value && interaction.channelId === recCfg.value;
-          const { MessageFlags } = await import('discord.js');
           if (inRecChannel) {
             // Keep fic-recs clean: send confirmation ephemerally
             return await interaction.editReply({
-              content: updateMessages.addedToQueue + ' No works have been imported. Use `/rec add <work url>` to import works if they require their own recs.',
-              flags: MessageFlags.Ephemeral
+              content: updateMessages.addedToQueue + ' No works have been imported. Use `/rec add <work url>` to import works if they require their own recs.'
             });
           }
         } catch {}
@@ -589,7 +585,6 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           console.warn('[rec add] Failed to post public cached-result embed:', postErr);
         }
         try { await interaction.deleteReply(); } catch {}
-        const { MessageFlags } = await import('discord.js');
         await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
         return;
       } else {

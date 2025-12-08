@@ -332,8 +332,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                             await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
                             return;
                         } else {
-                            await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
-                            const msg = await interaction.fetchReply();
+                            const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
                             await ParseQueueSubscriber.update(
                                 { channel_id: msg.channelId, message_id: msg.id },
                                 { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
@@ -370,11 +369,10 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
 
                     // If already pending/processing, just subscribe and inform the user
                     if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
-                        await interaction.editReply({
+                        const msg = await interaction.editReply({
                             content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready."
                         });
                         try {
-                            const msg = await interaction.fetchReply();
                             await ParseQueueSubscriber.update(
                                 { channel_id: msg.channelId, message_id: msg.id },
                                 { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
@@ -454,8 +452,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                         await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll update the existing embed when it’s ready." });
                     }
                 } else {
-                    await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
-                    const msg = await interaction.fetchReply();
+                    const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
                     await ParseQueueSubscriber.update(
                         { channel_id: msg.channelId, message_id: msg.id },
                         { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
