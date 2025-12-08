@@ -125,6 +125,79 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
     try {
         const recommendation = await findRecommendationByIdOrUrl(interaction, identifier, null, null);
         if (!recommendation) {
+            // Fallback: if identifier is a valid fic URL, enqueue a refresh and subscribe the user
+            const looksLikeUrl = isValidFanficUrl(identifier) || /^https?:\/\/.*archiveofourown\.org\//i.test(identifier);
+            if (looksLikeUrl) {
+                const normalizedUrl = normalizeAO3Url(identifier);
+                // Persist user metadata tied to the URL even if the rec record doesn't exist yet
+                try {
+                    await saveUserMetadata({
+                        url: normalizedUrl,
+                        user: interaction.user,
+                        notes: newNotesTrim || '',
+                        additionalTags: newTags || [],
+                        manualFields
+                    });
+                } catch (metaErr) {
+                    console.warn('[rec update] Failed to save user metadata for URL fallback:', metaErr);
+                }
+
+                // Create or join a queue entry for this URL
+                try {
+                    const { ParseQueue, ParseQueueSubscriber } = await import('../../../../models/index.js');
+                    // Decide instant candidate
+                    const activeJobs = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
+                    const isSeriesUrl = /archiveofourown\.org\/series\//i.test(normalizedUrl);
+                    const isInstant = !isSeriesUrl && activeJobs === 0;
+
+                    let queueEntry = await ParseQueue.findOne({ where: { fic_url: normalizedUrl } });
+                    if (!queueEntry) {
+                        queueEntry = await ParseQueue.create({
+                            fic_url: normalizedUrl,
+                            status: 'pending',
+                            requested_by: interaction.user.id,
+                            instant_candidate: isInstant,
+                            batch_type: isSeriesUrl ? 'series' : null
+                        });
+                    } else if (queueEntry.status !== 'pending' && queueEntry.status !== 'processing') {
+                        // Requeue existing entry
+                        let requestedBy = interaction.user.id;
+                        if (queueEntry.requested_by && !queueEntry.requested_by.split(',').includes(interaction.user.id)) {
+                            requestedBy = `${queueEntry.requested_by},${interaction.user.id}`;
+                        }
+                        await queueEntry.update({
+                            status: 'pending',
+                            validation_reason: null,
+                            error_message: null,
+                            result: null,
+                            submitted_at: new Date(),
+                            requested_by: requestedBy,
+                            instant_candidate: isInstant,
+                            batch_type: isSeriesUrl ? 'series' : null
+                        });
+                    }
+
+                    // Subscribe current user
+                    const existingSub = await ParseQueueSubscriber.findOne({ where: { queue_id: queueEntry.id, user_id: interaction.user.id } });
+                    if (!existingSub) {
+                        await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: interaction.user.id });
+                    }
+
+                    // Provide feedback and track message for poller edits
+                    const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
+                    await ParseQueueSubscriber.update(
+                        { channel_id: msg.channelId, message_id: msg.id },
+                        { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                    );
+                    return;
+                } catch (queueErr) {
+                    console.error('[rec update] URL fallback enqueue failed:', queueErr);
+                    await interaction.editReply({
+                        content: `I couldn't find that fic in the library, and the refresh queue failed. Please try again in a minute or use \`/rec add\`.`
+                    });
+                    return;
+                }
+            }
             await interaction.editReply({
                 content: `I couldn't find a recommendation with identifier \`${identifier}\` in our library. Use \`/rec stats\` to see what's available.`
             });
