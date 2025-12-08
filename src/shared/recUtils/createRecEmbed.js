@@ -87,63 +87,40 @@ function getSiteLinkContent(url) {
 // ================== TAG PROCESSING ==================
 
 /**
- * Combine and deduplicate tags from AO3 and user metadata, prioritizing title case
+ * Only use AO3 freeform tags from Recommendation.tags and
+ * member-added tags from UserFicMetadata.additional_tags.
+ * No fandom/character filtering — keep this builder simple.
  */
 function processTagsForEmbed(rec) {
     const items = [];
 
-    function add(val, source = 'generic') {
+    function add(val) {
         if (!val) return;
         if (Array.isArray(val)) {
             for (const t of val) {
-                if (t != null && String(t).trim()) items.push({ text: String(t).trim(), source });
+                if (t != null && String(t).trim()) items.push(String(t).trim());
             }
         } else if (typeof val === 'string') {
             const parts = val.split(/\s*[|,]\s*/).map(s => s.trim()).filter(Boolean);
-            for (const p of parts) items.push({ text: p, source });
+            for (const p of parts) items.push(p);
         }
     }
 
-    // Collect tags from known fields
+    // Collect only the intended sources
     add(rec.tags);
-    add(rec.freeform_tags);
-    add(rec.fandom_tags, 'fandom');
-    add(rec.relationship_tags, 'relationship');
     if (Array.isArray(rec.userMetadata)) {
         for (const m of rec.userMetadata) add(m && m.additional_tags);
     }
 
     if (items.length === 0) return null;
 
-    // Exclusions for our single-fandom/ship server
-    function isSupernaturalTag(str) {
-        const s = String(str).toLowerCase();
-        return s.includes('supernatural') || /\bspn\b/.test(s) || /supernatural\s*\(tv\s*2005/.test(s);
-    }
-    function isDestielish(str) {
-        const s = String(str).toLowerCase().trim();
-        const normalized = s
-            .replace(/&/g, '/').replace(/\\/g, '/').replace(/\s+and\s+/g, '/')
-            .replace(/\s+/g, ' ');
-        const compact = s.replace(/[^a-z]/g, '');
-        if (/(deancas|casdean|destiel|destial)/.test(compact)) return true;
-        if (/\bdean\b.*\bwinchester\b/.test(normalized) && /\bcastiel\b/.test(normalized)) return true;
-        if (/\bcastiel\b/.test(normalized) && /\bdean\b.*\bwinchester\b/.test(normalized)) return true;
-        if (/\bdean\b\s*\/\s*\bcas(tiel)?\b/.test(normalized) || /\bcas(tiel)?\b\s*\/\s*\bdean\b/.test(normalized)) return true;
-        return false;
-    }
-
     const seen = new Set();
     const out = [];
-    for (const it of items) {
-        const t = it.text;
+    for (const t of items) {
         const n = t.toLowerCase();
-        if (it.source === 'fandom' && isSupernaturalTag(t)) continue;
-        if (it.source === 'relationship' && isDestielish(t)) continue;
         if (!seen.has(n)) { seen.add(n); out.push(t); }
     }
 
-    if (out.length === 0) return null;
     const tagText = out.join(', ');
     return tagText.length > 1024 ? tagText.slice(0, 1021) + '...' : tagText;
 }

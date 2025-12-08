@@ -132,33 +132,28 @@ function getSiteLinkContent(url) {
 // ================== TAG PROCESSING ==================
 
 /**
- * Combine and deduplicate tags from series works and user metadata, prioritizing title case
+ * Only use AO3 freeform tags from work.tags and
+ * member-added tags from UserFicMetadata.additional_tags.
  */
 function processTagsForEmbed(series) {
     const allTags = [];
 
-    // Helper to add tags from a value that can be array or string
-    function addTags(val, source = 'generic') {
+    function addTags(val) {
         if (!val) return;
         if (Array.isArray(val)) {
-            for (const t of val) if (t && String(t).trim()) allTags.push({ text: String(t).trim(), source });
+            for (const t of val) if (t && String(t).trim()) allTags.push(String(t).trim());
         } else if (typeof val === 'string') {
             const parts = val.split(/\s*[|,]\s*/).map(s => s.trim()).filter(Boolean);
-            for (const p of parts) allTags.push({ text: p, source });
+            for (const p of parts) allTags.push(p);
         }
     }
 
-    // Add tags from all works in the series (cover multiple AO3 tag categories)
     if (Array.isArray(series.works)) {
         for (const work of series.works) {
             addTags(work && work.tags);
-            addTags(work && work.freeform_tags);
-            addTags(work && work.fandom_tags, 'fandom');
-            addTags(work && work.relationship_tags, 'relationship');
         }
     }
 
-    // Add all users' additional tags from UserFicMetadata
     if (Array.isArray(series.userMetadata)) {
         for (const userMeta of series.userMetadata) {
             addTags(userMeta && userMeta.additional_tags);
@@ -167,51 +162,14 @@ function processTagsForEmbed(series) {
 
     if (allTags.length === 0) return null;
 
-    // Exclusion rules: remove fandom 'Supernatural' variants; remove relationship 'Castiel/Dean Winchester' variants
-    function isSupernaturalTag(str) {
-        const s = String(str).toLowerCase().trim();
-        return (
-            s === 'supernatural' ||
-            s === 'spn' ||
-            s.includes('supernatural (tv)') ||
-            s.includes('supernatural tv')
-        );
-    }
-    function isDestielRelationship(str) {
-        const s = String(str).toLowerCase().trim();
-        const normalized = s
-            .replace(/&/g, '/').replace(/\\/g, '/').replace(/\s+and\s+/g, '/')
-            .replace(/\s+/g, ' ');
-        const compact = s.replace(/[^a-z]/g, '');
-        if (/(deancas|casdean|destiel|destial)/.test(compact)) return true;
-        if (/\bdean\b.*\bwinchester\b/.test(normalized) && /\bcastiel\b/.test(normalized)) return true;
-        if (/\bcastiel\b/.test(normalized) && /\bdean\b.*\bwinchester\b/.test(normalized)) return true;
-        if (/\bdean\b\s*\/\s*\bcas(tiel)?\b/.test(normalized) || /\bcas(tiel)?\b\s*\/\s*\bdean\b/.test(normalized)) return true;
-        return false;
-    }
-
-    // Deduplicate using normalized versions but prioritize title case for display
     const seen = new Set();
-    const uniqueTags = [];
-
-    for (const item of allTags) {
-        const tag = item.text;
-        const normalized = tag.trim().toLowerCase();
-        if (item.source === 'fandom' && isSupernaturalTag(tag)) continue;
-        if (item.source === 'relationship' && isDestielRelationship(tag)) continue;
-        if (!seen.has(normalized)) {
-            seen.add(normalized);
-            uniqueTags.push(tag);
-        } else {
-            // We've seen this tag before, but check if this version is title case
-            const existingIndex = uniqueTags.findIndex(existing => existing.toLowerCase() === normalized);
-            if (existingIndex >= 0 && isTitleCase(tag) && !isTitleCase(uniqueTags[existingIndex])) {
-                uniqueTags[existingIndex] = tag;
-            }
-        }
+    const unique = [];
+    for (const tag of allTags) {
+        const n = tag.toLowerCase();
+        if (!seen.has(n)) { seen.add(n); unique.push(tag); }
     }
 
-    const tagText = uniqueTags.join(', ');
+    const tagText = unique.join(', ');
     return tagText.length > 1024 ? tagText.slice(0, 1021) + '...' : tagText;
 }
 

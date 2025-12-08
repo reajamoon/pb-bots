@@ -239,11 +239,7 @@ async function processAO3Job(payload) {
         comments: metadata.comments,
         category: metadata.category,
         [RecommendationFields.ao3ID]: ao3ID,
-        fandom_tags: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags : [],
-        relationship_tags: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags : [],
-        character_tags: Array.isArray(metadata.character_tags) ? metadata.character_tags : [],
-        category_tags: Array.isArray(metadata.category_tags) ? metadata.category_tags : [],
-        freeform_tags: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : [],
+        // Only persist normalized AO3 freeform/general tags on Recommendation
         ...(seriesId ? { [RecommendationFields.seriesId]: seriesId } : {}),
         notPrimaryWork,
         ...(part ? { part } : {})
@@ -339,20 +335,6 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
   if (existingRec.bookmarks !== metadata.bookmarks) updateFields.bookmarks = metadata.bookmarks;
   if (existingRec.comments !== metadata.comments) updateFields.comments = metadata.comments;
     await applyIfAllowed('category', metadata.category, existingRec.category);
-
-  // Tag arrays
-  const tagFields = ['fandom_tags', 'relationship_tags', 'character_tags', 'category_tags', 'freeform_tags'];
-  for (const field of tagFields) {
-    const newValue = Array.isArray(metadata[field]) ? metadata[field] : [];
-    const oldValue = Array.isArray(existingRec[field]) ? existingRec[field] : [];
-    if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
-      // Apply global lock rule for tag arrays too (respect flag)
-      const botsRespect = await shouldBotsRespectGlobalModlocks();
-      const globallyLocked = botsRespect ? await isFieldGloballyModlocked(field) : false;
-      const lockedAndSet = globallyLocked && !isUnset(oldValue);
-      if (!lockedAndSet) updateFields[field] = newValue;
-    }
-  }
 
   // Archive warnings
   if (Array.isArray(metadata.archiveWarnings)) {

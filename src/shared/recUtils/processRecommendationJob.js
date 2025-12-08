@@ -174,11 +174,8 @@ async function processAO3Job(payload) {
         comments: metadata.comments,
         category: metadata.category,
         [RecommendationFields.ao3ID]: ao3ID,
-        fandom_tags: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags : [],
-        relationship_tags: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags : [],
-        character_tags: Array.isArray(metadata.character_tags) ? metadata.character_tags : [],
-        category_tags: Array.isArray(metadata.category_tags) ? metadata.category_tags : [],
-        freeform_tags: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : [],
+        // Only persist normalized AO3 freeform/general tags on Recommendation
+        // Fandom/relationship/character/category are not stored on this model
         ...(seriesId ? { [RecommendationFields.seriesId]: seriesId } : {}),
         notPrimaryWork
       });
@@ -280,17 +277,7 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
     if (!lockedAndSet && existingRec.category !== metadata.category) updateFields.category = metadata.category;
   }
   
-  // Tag arrays
-  const tagFields = ['fandom_tags', 'relationship_tags', 'character_tags', 'category_tags', 'freeform_tags'];
-  for (const field of tagFields) {
-    const newValue = Array.isArray(metadata[field]) ? metadata[field] : [];
-    const oldValue = Array.isArray(existingRec[field]) ? existingRec[field] : [];
-    if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
-      const botsRespect = await shouldBotsRespectGlobalModlocks();
-      const locked = botsRespect ? await isFieldGloballyModlocked(field) : false;
-      if (!(locked && !isUnset(oldValue))) updateFields[field] = newValue;
-    }
-  }
+  // No longer track secondary AO3 tag arrays on Recommendation
   
   // Archive warnings
   if (Array.isArray(metadata.archiveWarnings)) {
