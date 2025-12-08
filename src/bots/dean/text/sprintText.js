@@ -88,7 +88,7 @@ export function endTeamEmbed() {
 export function statusSoloEmbed(remainingMin, label) {
   return {
     title: 'Sprint status',
-    description: `About ${remainingMin} minute${remainingMin === 1 ? '' : 's'} left. ${pick(soloBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
+    description: `About ${remainingMin} minute${remainingMin === 1 ? '' : 's'} left. You're cooking. ${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
     color: colors.info,
   };
 }
@@ -96,7 +96,7 @@ export function statusSoloEmbed(remainingMin, label) {
 export function statusTeamEmbed(remainingMin, count, label) {
   return {
     title: 'Team sprint status',
-    description: `About ${remainingMin} minute${remainingMin === 1 ? '' : 's'} left. ${count} sprinter${count === 1 ? '' : 's'} in. ${pick(teamBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
+    description: `About ${remainingMin} minute${remainingMin === 1 ? '' : 's'} left. ${count} sprinter${count === 1 ? '' : 's'} in. Keep pace. ${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
     color: colors.info,
   };
 }
@@ -129,7 +129,7 @@ export function formatListLine(kind, remainingMin, userId, label) {
 export function midpointEmbed() {
   return {
     title: 'Midpoint',
-    description: `Halfway there. You got this${maybeEndearment()}!`,
+    description: `Halfway there. You got this${maybeEndearment()}.`,
     color: colors.info,
   };
 }
@@ -147,7 +147,7 @@ export function summaryEmbed(channelMention, label, isTeam) {
   const lbl = label ? ` (${label})` : '';
   return {
     title: 'Sprint summary',
-    description: `${who} complete${lbl} in ${channelMention}.`,
+    description: `${who} complete${lbl} in ${channelMention}. Nice pull.`,
     color: colors.info,
   };
 }
@@ -158,25 +158,25 @@ export function notEnabledInChannelText(sprintChannelMention = '') {
   return `Hey buddy, you can't sprint here.${tail}`;
 }
 export function noActiveTeamText() {
-  return "There ain't anybody sprinting in here. You can start one with /sprint host. I can call up my buddies if you need more bodies.";
+  return "There ain't anybody sprinting in here. Start one with `/sprint host`. If you need more bodies, I can call up my buddies.";
 }
 export function alreadyActiveSprintText() {
-  return 'You already have a sprint going, dude. Need to ditch it? Use /sprint end. Or just keep going.';
+  return 'You already have a sprint going, dude. Need to ditch it? Use `/sprint end`. Or just keep rolling.';
 }
 export function noActiveSprintText() {
-  return "Nobody's sprinting right now. Wanna kick one off with /sprint start?";
+  return "Nobody's sprinting right now. Kick one off with `/sprint start`.";
 }
 export function notInTeamSprintText() {
-  return "You're not in a team sprint. Wanna join one? Ask the host for the code and use /sprint join.";
+  return "You're not in a team sprint. Ask the host for the code and use `/sprint join`.";
 }
 export function hostsUseEndText() {
-  return 'If you started it, use /sprint end.';
+  return 'If you started it, use `/sprint end`.';
 }
 export function selectAChannelText() {
-  return 'Pick a channel to use.';
+  return 'Pick a channel to use. Keep it tidy.';
 }
 export function onlyStaffSetChannelText() {
-  return "Only mods can set the sprint channel. If you need a hand, call up a mod.";
+  return "Only mods can set the sprint channel. Need a hand? Flag a mod.";
 }
 export function sprintChannelSetText(channelId, allowThreads) {
   return `Sprint channel set to <#${channelId}>. Threads are ${allowThreads ? 'allowed' : 'not allowed'}.`;

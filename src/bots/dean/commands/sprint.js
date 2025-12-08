@@ -1,5 +1,4 @@
-import Discord from 'discord.js';
-const { SlashCommandBuilder, MessageFlags, InteractionFlags } = Discord;
+import { SlashCommandBuilder, MessageFlags, InteractionFlags } from 'discord.js';
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
 import { Op } from 'sequelize';
 import { startSoloEmbed, hostTeamEmbed, joinTeamEmbed, endSoloEmbed, endTeamEmbed, statusSoloEmbed, statusTeamEmbed, leaveTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText } from '../text/sprintText.js';
@@ -21,7 +20,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub
     .setName('join')
     .setDescription('Join the active team sprint in this channel')
-    .addStringOption(opt => opt.setName('code').setDescription('Host code if multiple sprints exist')))
+    .addStringOption(opt => opt.setName('code').setDescription('Host code').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('end')
     .setDescription('End your active sprint'))
@@ -95,7 +94,7 @@ export async function execute(interaction) {
       const blocked = Array.isArray(settings.blockedChannelIds) && settings.blockedChannelIds.includes(channelId);
       wrongChannel = blocked || !allowed;
     }
-    await interaction.deferReply({ flags: wrongChannel ? InteractionFlags.Ephemeral : undefined });
+    await interaction.deferReply();
 
     if (settings) {
       const allowed = Array.isArray(settings.allowedChannelIds) ? settings.allowedChannelIds.includes(channelId) : true;
@@ -176,12 +175,7 @@ export async function execute(interaction) {
     const discordId = interaction.user.id;
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 
-    let host;
-    if (provided) {
-      host = await DeanSprints.findOne({ where: { guildId, channelId, status: 'processing', type: 'team', groupId: provided, role: 'host' } });
-    } else {
-      host = await DeanSprints.findOne({ where: { guildId, channelId, status: 'processing', type: 'team', role: 'host' }, order: [['createdAt', 'DESC']] });
-    }
+    const host = await DeanSprints.findOne({ where: { guildId, channelId, status: 'processing', type: 'team', groupId: provided, role: 'host' } });
     if (!host) {
       return interaction.editReply({ content: noActiveTeamText() });
     }
@@ -218,7 +212,7 @@ export async function execute(interaction) {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (!active) {
-      return interaction.editReply({ content: noActiveSprintText(), flags: InteractionFlags.Ephemeral });
+      return interaction.editReply({ content: noActiveSprintText() });
     }
     if (active.type === 'team' && active.role === 'host' && active.groupId) {
       // End the team (host + all participants)
@@ -249,7 +243,7 @@ export async function execute(interaction) {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (!active) {
-      return interaction.editReply({ content: noActiveSprintText(), flags: InteractionFlags.Ephemeral });
+      return interaction.editReply({ content: noActiveSprintText() });
     }
     const endsAt = new Date(active.startedAt.getTime() + active.durationMinutes * 60000);
     const remainingMs = endsAt.getTime() - Date.now();
@@ -264,7 +258,7 @@ export async function execute(interaction) {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing', type: 'team' } });
     if (!active) {
-      return interaction.editReply({ content: notInTeamSprintText(), flags: InteractionFlags.Ephemeral });
+      return interaction.editReply({ content: notInTeamSprintText() });
     }
     if (active.role === 'host') {
       return interaction.editReply({ content: hostsUseEndText() });
@@ -304,7 +298,8 @@ export async function execute(interaction) {
     if (subName === 'set') {
       const count = interaction.options.getInteger('count');
       if (count < 0) {
-        return interaction.editReply({ content: 'Wordcount must be zero or greater.' });
+        await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/sprint wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: InteractionFlags.Ephemeral });
+        return;
       }
       // Find last wordcount for this sprint/user
       const last = await Wordcount.findOne({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
@@ -348,7 +343,8 @@ export async function execute(interaction) {
     } else if (subName === 'add') {
       const words = interaction.options.getInteger('new-words');
       if (words <= 0) {
-        return interaction.editReply({ content: 'Words must be a positive number.' });
+        await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/sprint wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: InteractionFlags.Ephemeral });
+        return;
       }
       const prev = target.wordcountEnd || 0;
       const next = prev + words;
@@ -460,7 +456,8 @@ export async function execute(interaction) {
     }
     const last = await Wordcount.findOne({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
     if (!last) {
-      return interaction.editReply({ content: "No wordcount to undo, partner." });
+      await interaction.followUp({ content: "No wordcount to undo, partner.", flags: InteractionFlags.Ephemeral });
+      return;
     }
     await last.destroy();
     const rows = await Wordcount.findAll({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
@@ -478,7 +475,7 @@ export async function execute(interaction) {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content: "Yeah, that's on me. Try that again in a sec." });
       } else {
-        await interaction.reply({ content: "Yeah, that's on me. Try that again in a sec.", flags: MessageFlags.SuppressNotifications });
+        await interaction.reply({ content: "Yeah, that's on me. Try that again in a sec.", flags: MessageFlags.Ephemeral });
       }
     } catch (e) {}
   }

@@ -1,15 +1,14 @@
-import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
+// Pure public convention: do not use ephemerals or suppress flags
 import { makeAnnouncer } from '../../../shared/hunts/announce.js';
 
 function buildCasAnnouncer(interactionOrChannel) {
-  const sendEphemeral = async (_botName, _userId, content, { flags } = {}) => {
+  const sendEphemeral = async (_botName, _userId, content) => {
     const i = interactionOrChannel;
     if (i?.reply) {
       if (i.replied || i.deferred) {
-        await i.followUp({ content, flags: flags ?? InteractionFlags.Ephemeral });
+        await i.followUp({ content });
       } else {
-        await i.reply({ content, flags: flags ?? InteractionFlags.Ephemeral });
+        await i.reply({ content });
       }
     }
   };
@@ -23,7 +22,13 @@ function buildCasAnnouncer(interactionOrChannel) {
       if (targetId && client) {
         channel = await client.channels.fetch(targetId).catch((e) => { try { console.warn(`[hunts] Cas announcer failed to fetch queue channel ${targetId}:`, e?.message || e); } catch {} return null; });
       }
-      // Restrict to queue channel: prefer configured; fallback to current only if not set/fetchable
+      // Prefer configured queue channel; fallback order: hard-coded, then current
+      if (!channel) {
+        const HARD_FALLBACK_ID = '1446674019242869010';
+        if (client) {
+          channel = await client.channels.fetch(HARD_FALLBACK_ID).catch(() => null);
+        }
+      }
       channel = channel || interactionOrChannel?.channel || interactionOrChannel;
       try { console.log(`[hunts] Cas announcer sending public to channelId=${channel?.id || 'unknown'} (queueId=${targetId || 'none'})`); } catch {}
       if (channel?.send) {

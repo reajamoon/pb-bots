@@ -12,7 +12,7 @@ export default function onInteractionCreate(client) {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content: 'There was an error executing that command.' });
       } else {
-        await interaction.reply({ content: 'There was an error executing that command.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: 'There was an error executing that command.' });
       }
     }
   });

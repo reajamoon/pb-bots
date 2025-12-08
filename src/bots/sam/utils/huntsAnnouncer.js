@@ -1,13 +1,12 @@
-import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
+// Pure public convention: do not use ephemerals or suppress flags
 import { makeAnnouncer } from '../../../shared/hunts/announce.js';
 
 function buildSamAnnouncer(interaction) {
-  const sendEphemeral = async (_botName, _userId, content, { flags } = {}) => {
+  const sendEphemeral = async (_botName, _userId, content) => {
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content, flags: flags ?? InteractionFlags.Ephemeral });
+      await interaction.followUp({ content });
     } else {
-      await interaction.reply({ content, flags: flags ?? InteractionFlags.Ephemeral });
+      await interaction.reply({ content });
     }
   };
   const sendPublic = async (_botName, _userId, contentOrOpts) => {

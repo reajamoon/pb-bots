@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, InteractionFlags } from 'discord.js';
 import { Op } from 'sequelize';
 import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
 
@@ -12,14 +12,15 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub
     .setName('info')
     .setDescription('Show details and recent totals for a project')
-    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(false)))
+    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('list')
     .setDescription('List your projects'))
   .addSubcommand(sub => sub
     .setName('invite')
     .setDescription('Invite a member to your project')
-    .addUserOption(opt => opt.setName('member').setDescription('User to invite').setRequired(true)))
+    .addUserOption(opt => opt.setName('member').setDescription('User to invite').setRequired(true))
+    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('remove')
     .setDescription('Remove a member from your project')
@@ -70,18 +71,16 @@ export async function execute(interaction) {
     // Ensure user row exists
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 
-    // Default defer to avoid timeouts; make sensitive prompts ephemeral
-    const wantsConfirmEphemeral = ['remove', 'transfer', 'leave'].includes(subName) && !(interaction.options.getBoolean('confirm') ?? false);
+    // Default defer to avoid timeouts; keep all replies public
     if (!interaction.deferred && !interaction.replied) {
-      const { InteractionFlags } = await import('discord.js');
-      await interaction.deferReply({ flags: wantsConfirmEphemeral ? InteractionFlags.Ephemeral : undefined });
+      await interaction.deferReply();
     }
 
     if (subName === 'create') {
       const name = interaction.options.getString('name');
       const project = await Project.create({ ownerId: discordId, name });
       await ProjectMember.create({ projectId: project.id, userId: discordId, role: 'owner' });
-      return interaction.editReply({ content: `Project **${name}** created. ID: ${project.id}` });
+      return interaction.editReply({ content: `Done. Project **${name}** is live. ID: ${project.id}.` });
     }
 
     if (subName === 'info') {
@@ -95,7 +94,7 @@ export async function execute(interaction) {
         const joinedProjects = memberships.map(m => m.project).filter(p => p && p.ownerId !== discordId);
         const allProjects = [...ownedProjects, ...joinedProjects];
         if (allProjects.length === 0) {
-          return interaction.editReply({ content: "You don't have any projects yet. Try `/project create`." });
+          return interaction.editReply({ content: "You don’t have any projects yet. Spin one up with `/project create`." });
         }
         // Build a summary embed listing all projects
         const Discord = await import('discord.js');
@@ -127,7 +126,7 @@ export async function execute(interaction) {
         }
       }
       if (!project) {
-        return interaction.editReply({ content: "I can't find that project. Try `/project list`." });
+        return interaction.editReply({ content: "Nope. Can’t find that project. Try `/project list`." });
       }
       const members = await ProjectMember.findAll({ where: { projectId: project.id } });
       const ownerTag = interaction.client.users.cache.get(project.ownerId)?.tag ?? project.ownerId;
@@ -196,18 +195,23 @@ export async function execute(interaction) {
         }
       }
       if (!project) {
-        return interaction.editReply({ content: 'I can’t find that project. Use the project ID or exact name.' });
+        await interaction.followUp({ content: 'Nope. Use the project ID or exact name.', flags: InteractionFlags.Ephemeral });
+        return;
       }
       const projectId = project.id;
       // Validate membership
       const membership = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
       if (!membership) {
-        return interaction.editReply({ content: 'You’re not on that project, buddy.' });
+        await interaction.followUp({ content: 'You’re not on that project, buddy. Get invited first with `/project invite` or ask the owner to pull you in.', flags: InteractionFlags.Ephemeral });
+        return;
       }
       const leaf = interaction.options.getSubcommand();
       if (leaf === 'add') {
         const words = interaction.options.getInteger('new-words');
-        if (words <= 0) return interaction.editReply({ content: 'Words must be a positive number.' });
+        if (words <= 0) {
+          await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/project wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: InteractionFlags.Ephemeral });
+          return;
+        }
         await Wordcount.create({
           userId: discordId,
           projectId,
@@ -220,14 +224,20 @@ export async function execute(interaction) {
         return interaction.editReply({ content: `Logged **+${words}** to that project. Keep it moving.` });
       } else if (leaf === 'set') {
         const count = interaction.options.getInteger('count');
-        if (count < 0) return interaction.editReply({ content: 'Wordcount must be zero or greater.' });
+        if (count < 0) {
+          await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/project wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: InteractionFlags.Ephemeral });
+          return;
+        }
         const rows = await Wordcount.findAll({ where: { projectId, userId: discordId }, order: [['recordedAt', 'ASC']] });
         const current = rows.reduce((acc, r) => {
           const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
           return acc + (d > 0 ? d : 0);
         }, 0);
         const delta = Math.max(0, count - current);
-        if (delta === 0) return interaction.editReply({ content: `You’re already sitting at **${count}** for this project.` });
+        if (delta === 0) {
+          await interaction.followUp({ content: `You’re at **${count}** on this project.`, flags: InteractionFlags.Ephemeral });
+          return;
+        }
         await Wordcount.create({
           userId: discordId,
           projectId,
@@ -237,21 +247,21 @@ export async function execute(interaction) {
           delta,
           recordedAt: new Date(),
         });
-        return interaction.editReply({ content: `Locked **${count}** as your project count (added **+${delta}**).` });
+        return interaction.editReply({ content: `Locked **${count}**. Added **+${delta}**.` });
       } else if (leaf === 'show') {
         const rows = await Wordcount.findAll({ where: { projectId, userId: discordId }, order: [['recordedAt', 'ASC']] });
         const current = rows.reduce((acc, r) => {
           const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
           return acc + (d > 0 ? d : 0);
         }, 0);
-        return interaction.editReply({ content: `You’re at **${current}** on this project.` });
+        return interaction.editReply({ content: `You’re sitting at **${current}** on this project. Keep pace.` });
       }
     }
 
     if (subName === 'list') {
       const memberships = await ProjectMember.findAll({ where: { userId: discordId }, limit: 50 });
       if (!memberships.length) {
-        return interaction.editReply({ content: "You're not on any projects yet." });
+        return interaction.editReply({ content: "You’re not on any projects yet. Spin one up with `/project create`." });
       }
       const ids = memberships.map(m => m.projectId);
       const projects = await Project.findAll({ where: { id: ids } });
@@ -260,28 +270,50 @@ export async function execute(interaction) {
     }
 
     if (subName === 'invite') {
-      const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-      if (!active || !active.projectId) {
-        return interaction.editReply({ content: 'No project hooked up to this sprint, champ.' });
+      // Resolve target project: prefer provided option; else active sprint's project
+      const projectInput = interaction.options.getString('project');
+      let project = null;
+      if (projectInput) {
+        const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+        if (uuidRegex.test(projectInput)) {
+          project = await Project.findByPk(projectInput);
+        }
+        if (!project) {
+          // Try by name: owned first, then membership list
+          project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
+          if (!project) {
+            const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
+            project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
+          }
+        }
+      } else {
+        const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
+        if (active && active.projectId) {
+          project = await Project.findByPk(active.projectId);
+        }
       }
+      if (!project) {
+          return interaction.editReply({ content: 'No target project. Pass `project:` (ID or exact name), or link one to your sprint. You can create a new project with `/project create`.' });
+      }
+      // Permission: owner or mod on the target project, or elevated global permission
       const requester = await User.findOne({ where: { discordId } });
       const level = (requester?.permissionLevel || 'member').toLowerCase();
-      const project = await Project.findByPk(active.projectId);
-      const isOwner = project && project.ownerId === discordId;
       const isPrivileged = level !== 'member';
-      if (!isOwner && !isPrivileged) {
-        const { InteractionFlags } = await import('discord.js');
-        return interaction.editReply({ content: 'Only the owner or a mod can invite folks.', flags: InteractionFlags.Ephemeral });
+      const isOwner = project.ownerId === discordId;
+      const membership = await ProjectMember.findOne({ where: { projectId: project.id, userId: discordId } });
+      const isMod = membership?.role === 'mod';
+      if (!isOwner && !isMod && !isPrivileged) {
+        return interaction.editReply({ content: 'Only the owner or a mod can invite folks. Flag a mod if you need backup.' });
       }
       const member = interaction.options.getUser('member');
-      await ProjectMember.findOrCreate({ where: { projectId: active.projectId, userId: member.id }, defaults: { role: 'member' } });
-      return interaction.editReply({ content: `Pulled <@${member.id}> onto the crew.` });
+      await ProjectMember.findOrCreate({ where: { projectId: project.id, userId: member.id }, defaults: { role: 'member' } });
+      return interaction.editReply({ content: `Nice pull. <@${member.id}> is on **${project.name}**. Welcome aboard.` });
     }
 
     if (subName === 'remove') {
       const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
       if (!active || !active.projectId) {
-        return interaction.editReply({ content: 'No project hooked up to this sprint, champ.' });
+        return interaction.editReply({ content: 'No project hooked to this sprint, champ.' });
       }
       const member = interaction.options.getUser('member');
       const confirm = interaction.options.getBoolean('confirm') ?? false;
@@ -294,17 +326,16 @@ export async function execute(interaction) {
       const isOwner = project && project.ownerId === discordId;
       const isPrivileged = level !== 'member';
       if (!isOwner && !isPrivileged) {
-        const { InteractionFlags } = await import('discord.js');
-        return interaction.editReply({ content: 'Heads up: only the owner or a mod can boot folks.', flags: InteractionFlags.Ephemeral });
+        return interaction.editReply({ content: 'Heads up: only the owner or a mod can boot folks.' });
       }
       await ProjectMember.destroy({ where: { projectId: active.projectId, userId: member.id } });
-      return interaction.editReply({ content: `Alright, <@${member.id}> is off the roster.` });
+      return interaction.editReply({ content: `Alright. <@${member.id}> is off the roster. Keep it rolling.` });
     }
 
     if (subName === 'leave') {
       const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
       if (!active || !active.projectId) {
-        return interaction.editReply({ content: 'No project hooked up to this sprint, champ.' });
+        return interaction.editReply({ content: 'No project hooked to this sprint, champ.' });
       }
       const confirm = interaction.options.getBoolean('confirm') ?? false;
       if (!confirm) {
@@ -313,7 +344,7 @@ export async function execute(interaction) {
       const projectId = active.projectId;
       const project = await Project.findByPk(projectId);
       if (project && project.ownerId === discordId) {
-        return interaction.editReply({ content: "You're the owner, buddy. Transfer ownership first or end the project." });
+        return interaction.editReply({ content: "You’re the owner, buddy. Transfer ownership first or end the project." });
       }
       await ProjectMember.destroy({ where: { projectId, userId: discordId } });
       await active.update({ projectId: null });
@@ -331,17 +362,20 @@ export async function execute(interaction) {
           project = memberships.map(m => m.Project).find(p => p?.name === projectInput) || null;
         }
       }
-      if (!project) {
-        return interaction.editReply({ content: "I can't find that project. Try `/project list`." });
-      }
+        if (!project) {
+          await interaction.followUp({ content: "Nope. Try `/project list` or create a new one with `/project create`.", flags: InteractionFlags.Ephemeral });
+          return;
+        }
       const projectId = project.id;
       const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
       if (!active) {
-        return interaction.editReply({ content: 'No active sprint right now.' });
+        await interaction.followUp({ content: 'No active sprint right now. Kick one off with `/sprint start`.', flags: InteractionFlags.Ephemeral });
+        return;
       }
       const member = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
       if (!member) {
-        return interaction.editReply({ content: 'You’re not on that project, buddy. Get invited first.' });
+        await interaction.followUp({ content: 'You’re not on that project, buddy. Get invited first.', flags: InteractionFlags.Ephemeral });
+        return;
       }
       await active.update({ projectId });
       return interaction.editReply({ content: `Locked this sprint to project **${projectId}**. Let’s get those pages.` });
@@ -350,7 +384,7 @@ export async function execute(interaction) {
     if (subName === 'members') {
       const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
       if (!active || !active.projectId) {
-        return interaction.editReply({ content: 'No active project on this sprint.' });
+        return interaction.editReply({ content: 'No active project on this sprint. Use `/project use` to link one, or create with `/project create`.' });
       }
       const members = await ProjectMember.findAll({ where: { projectId: active.projectId }, limit: 50 });
       const list = members.map(m => `• <@${m.userId}> (${m.role})`).join('\n') || 'Just you right now. That’s fine, solo hero arc.';
