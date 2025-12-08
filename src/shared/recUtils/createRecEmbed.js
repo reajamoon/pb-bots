@@ -92,7 +92,7 @@ function getSiteLinkContent(url) {
 function processTagsForEmbed(rec) {
     const allTags = [];
 
-    // Add AO3 freeform tags
+    // Add AO3 freeform tags from Recommendation model's `tags`
     if (rec.tags && Array.isArray(rec.tags)) {
         allTags.push(...rec.tags);
     }
@@ -106,6 +106,7 @@ function processTagsForEmbed(rec) {
         }
     }
 
+    // If we still have no tags, return null to allow a fallback message
     if (allTags.length === 0) return null;
 
     // Deduplicate using normalized versions but prioritize title case for display
@@ -230,6 +231,9 @@ export function createRecEmbed(rec, options = {}) {
     const tagText = processTagsForEmbed(recForTags);
     if (tagText) {
         embed.addFields({ name: 'Tags', value: tagText, inline: false });
+    } else {
+        // Explicitly clarify when no tags are present from AO3 or members
+        embed.addFields({ name: 'Tags', value: 'This work has no tags.', inline: false });
     }
 
     // Engagement stats (Hits, Kudos, Bookmarks)

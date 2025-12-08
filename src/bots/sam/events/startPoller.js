@@ -149,6 +149,22 @@ async function notifyQueueSubscribers(client) {
                     try {
                         const rec = await Recommendation.findOne({ where: { url: job.fic_url } });
                         if (rec) {
+                            // Guard: ensure AO3 parsed or member tags present before posting
+                            const hasFandomTags = Array.isArray(rec.fandom_tags) && rec.fandom_tags.length > 0;
+                            let hasMemberTags = false;
+                            if (Array.isArray(rec.userMetadata)) {
+                                for (const m of rec.userMetadata) {
+                                    if (m && Array.isArray(m.additional_tags) && m.additional_tags.length) { hasMemberTags = true; break; }
+                                }
+                            }
+                            if (!hasFandomTags && !hasMemberTags) {
+                                console.warn('[Poller] Recommendation missing parse indicators (no fandom_tags and no member tags). Skipping post and marking for refresh:', rec.id);
+                                try {
+                                    const { queueRecommendationRefresh } = await import('../../../shared/recUtils/queueUtils.js');
+                                    await queueRecommendationRefresh(rec.url);
+                                } catch {}
+                                continue;
+                            }
                             const embed = createRecEmbed(rec);
                             await thread.send({ embeds: [embed] });
                         } else {
@@ -320,7 +336,41 @@ async function notifyQueueSubscribers(client) {
                 const { fetchRecWithSeries } = await import('../../../models/fetchRecWithSeries.js');
                 recWithSeries = await fetchRecWithSeries(job.result.id, true);
                 if (recWithSeries) {
-                    // Use regular recommendation embed
+                    // Parse guards for individual recs: require AO3 parse indicators or member tags
+                    const hasFandomTags = Array.isArray(recWithSeries.fandom_tags) && recWithSeries.fandom_tags.length > 0;
+                    let hasMemberTags = false;
+                    if (Array.isArray(recWithSeries.userMetadata)) {
+                        for (const m of recWithSeries.userMetadata) {
+                            if (m && Array.isArray(m.additional_tags) && m.additional_tags.length) { hasMemberTags = true; break; }
+                        }
+                    }
+                    if (!hasFandomTags && !hasMemberTags) {
+                        console.warn('[Poller] Recommendation missing parse indicators (no fandom_tags and no member tags). Skipping post and marking for refresh:', recWithSeries.id);
+                        try {
+                            const { queueRecommendationRefresh } = await import('../../../shared/recUtils/queueUtils.js');
+                            if (recWithSeries.url) await queueRecommendationRefresh(recWithSeries.url);
+                        } catch {}
+                        continue;
+                    }
+
+                    // Series guard: require core fields or member tags; else refresh
+                    const seriesOk = !!(recWithSeries && recWithSeries.series && recWithSeries.series.ao3SeriesId && recWithSeries.series.name);
+                    let seriesHasMemberTags = false;
+                    if (recWithSeries && Array.isArray(recWithSeries.userMetadata)) {
+                        for (const m of recWithSeries.userMetadata) {
+                            if (m && Array.isArray(m.additional_tags) && m.additional_tags.length) { seriesHasMemberTags = true; break; }
+                        }
+                    }
+                    if (!seriesOk && !seriesHasMemberTags) {
+                        console.warn('[Poller] Series missing parse indicators and member tags. Skipping post and marking for refresh:', recWithSeries && recWithSeries.id);
+                        try {
+                            const { queueSeriesRefresh } = await import('../../../shared/recUtils/queueUtils.js');
+                            if (recWithSeries && recWithSeries.series && recWithSeries.series.url) {
+                                await queueSeriesRefresh(recWithSeries.series.url);
+                            }
+                        } catch {}
+                        continue;
+                    }
                     embed = createRecEmbed(recWithSeries);
                 } else {
                     console.warn(`[Poller] No Recommendation found for rec ID: ${job.result.id} (job id: ${job.id}, url: ${job.fic_url})`);

@@ -93,19 +93,22 @@ async function processAO3Job(payload) {
     return { error: 'connection_error' };
   }
 
-  // Dean/Cas validation (always runs for AO3)
-  try {
-    const { validateDeanCasRec } = await import('./ao3/validateDeanCasRec.js');
-    const fandomTags = metadata.fandom_tags || metadata.fandom || [];
-    const relationshipTags = metadata.relationship_tags || [];
-    const validation = validateDeanCasRec(fandomTags, relationshipTags);
-    
-    if (!validation.valid) {
-      return { error: validation.reason || 'Failed Dean/Cas validation' };
+  // Dean/Cas validation — allow mod-approved override to skip validation but still fetch/update
+  const skipValidation = Boolean(payload && (payload.approvedOverride || payload.skipValidation));
+  if (!skipValidation) {
+    try {
+      const { validateDeanCasRec } = await import('./ao3/validateDeanCasRec.js');
+      const fandomTags = metadata.fandom_tags || metadata.fandom || [];
+      const relationshipTags = metadata.relationship_tags || [];
+      const validation = validateDeanCasRec(fandomTags, relationshipTags);
+      
+      if (!validation.valid) {
+        return { error: validation.reason || 'Failed Dean/Cas validation' };
+      }
+    } catch (err) {
+      console.error('[processAO3Job] Error in Dean/Cas validation:', err);
+      return { error: 'Dean/Cas validation error' };
     }
-  } catch (err) {
-    console.error('[processAO3Job] Error in Dean/Cas validation:', err);
-    return { error: 'Dean/Cas validation error' };
   }
 
   // Normalize metadata for AO3
