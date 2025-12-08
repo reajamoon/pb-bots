@@ -14,17 +14,24 @@ const EMOJI_CACHE = {
 };
 
 /**
- * Normalize emoji names for lookup consistency.
- * - Lowercase
- * - Strip common prefixes like `PB__`
- * - Replace spaces/underscores with single underscores
+ * Build a set of lookup keys for a given emoji name without mutating the name schema.
+ * - Includes exact name
+ * - Includes lowercase name
+ * - Includes PB__ and PB_ stripped variants (exact and lowercase)
  */
-function normalizeName(name) {
-  return String(name || '')
-    .toLowerCase()
-    .replace(/^pb__/, '')
-    .replace(/\s+/g, '_')
-    .replace(/__+/g, '_');
+function buildLookupKeys(name) {
+  const original = String(name || '');
+  const lower = original.toLowerCase();
+  const keys = new Set([original, lower]);
+  if (original.startsWith('PB__')) {
+    keys.add(original.slice(4));
+    keys.add(lower.slice(4));
+  }
+  if (original.startsWith('PB_')) {
+    keys.add(original.slice(3));
+    keys.add(lower.slice(3));
+  }
+  return keys;
 }
 
 /**
@@ -45,15 +52,17 @@ export async function initEmojiStore(client, guildId) {
   EMOJI_CACHE.byId.clear();
   EMOJI_CACHE.byName.clear();
   coll.forEach(e => {
+    const keys = buildLookupKeys(e.name);
     const info = {
       id: e.id,
       name: e.name,
-      normalized: normalizeName(e.name),
       animated: !!e.animated,
       mention: e.animated ? `<a:${e.name}:${e.id}>` : `<:${e.name}:${e.id}>`
     };
     EMOJI_CACHE.byId.set(e.id, info);
-    EMOJI_CACHE.byName.set(info.normalized, info);
+    for (const k of keys) {
+      EMOJI_CACHE.byName.set(k, info);
+    }
   });
   EMOJI_CACHE.loadedAt = Date.now();
   return true;
@@ -66,9 +75,12 @@ export async function initEmojiStore(client, guildId) {
  * @param {string} fallback Optional fallback, e.g., "🤗"
  */
 export function emoji(name, fallback = '') {
-  const key = normalizeName(name);
-  const entry = EMOJI_CACHE.byName.get(key);
-  return entry ? entry.mention : fallback;
+  const keys = buildLookupKeys(name);
+  for (const k of keys) {
+    const entry = EMOJI_CACHE.byName.get(k);
+    if (entry) return entry.mention;
+  }
+  return fallback;
 }
 
 /**
