@@ -24,7 +24,9 @@ function createSearchResultsEmbed(recs, page, totalPages, query) {
 
     for (const rec of recs) {
         const title = rec.title || 'Untitled';
-        const author = Array.isArray(rec.authors) ? rec.authors.join(', ') : (rec.author || 'Unknown Author');
+        // Truncate overly long author strings to avoid field length errors
+        let author = Array.isArray(rec.authors) ? rec.authors.join(', ') : (rec.author || 'Unknown Author');
+        if (author.length > 200) author = author.slice(0, 197) + '...';
         const url = rec.url || '';
         const summary = rec.summary ? (rec.summary.length > 120 ? rec.summary.slice(0, 117) + '...' : rec.summary) : '';
         const rating = rec.rating || 'Unrated';
@@ -42,12 +44,14 @@ function createSearchResultsEmbed(recs, page, totalPages, query) {
             tags = rec.tags.split(',').map(t => t.trim()).filter(Boolean);
         }
         const tagDisplay = tags.length ? `Tags: ${tags.slice(0, 5).join(', ')}${tags.length > 5 ? ', ...' : ''}` : '';
-        embed.addFields({
-            name: `📖 ${title}`,
-            value: `By: ${author}
-[Link](${url}) | ${rating} | ${status} | ${wordcount} words${tagDisplay ? ` | ID: ${rec.id}\n${tagDisplay}` : ''}${summary ? `\n>>> ${summary}` : ''}`,
-            inline: false
-        });
+        let value = `By: ${author}\n[Link](${url}) | ${rating} | ${status} | ${wordcount} words`;
+        if (tagDisplay) value += ` | ID: ${rec.id}\n${tagDisplay}`;
+        if (summary) value += `\n>>> ${summary}`;
+        // Discord field value must be <= 1024 chars
+        if (value.length > 1024) {
+            value = value.slice(0, 1021) + '...';
+        }
+        embed.addFields({ name: `📖 ${title}`, value, inline: false });
     }
     return embed;
 }

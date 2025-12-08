@@ -157,7 +157,19 @@ export function createRecEmbed(rec, options = {}) {
     const targetUserId = preferredUserId || userId || null;
 
     // Build author description line
-    const author = Array.isArray(rec.authors) ? rec.authors.join(', ') : (rec.author || 'Unknown Author');
+    let author = Array.isArray(rec.authors) ? rec.authors.filter(Boolean) : [];
+    // Dedupe and cap to prevent pathological duplicates from bad parses
+    if (author.length) {
+        const seen = new Set();
+        author = author.filter(a => {
+            const key = String(a).toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+    author = author.length ? author.join(', ') : (rec.author || 'Unknown Author');
+    if (author.length > 200) author = author.slice(0, 197) + '...';
     const authorLine = `**By:** ${author}`;
     
     // Add summary if available, separated by newlines

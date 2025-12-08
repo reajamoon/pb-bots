@@ -205,14 +205,25 @@ export function createSeriesEmbed(series, options = {}) {
     const targetUserId = preferredUserId || userId || null;
 
     // Build author description line with fallback to primary work
-    let author = Array.isArray(series.authors) ? series.authors.join(', ') : series.author;
-    if (!author && series.works && series.works.length > 0) {
-        // Fallback: get author from primary work
+    let authorArr = Array.isArray(series.authors) ? series.authors.filter(Boolean) : [];
+    if (!authorArr.length && series.works && series.works.length > 0) {
         const primaryWork = series.works.find(work => !work.notPrimaryWork) || findOldestWork(series.works);
         if (primaryWork) {
-            author = Array.isArray(primaryWork.authors) ? primaryWork.authors.join(', ') : primaryWork.author;
+            authorArr = Array.isArray(primaryWork.authors) ? primaryWork.authors.filter(Boolean) : (primaryWork.author ? [primaryWork.author] : []);
         }
     }
+    // Dedupe and cap
+    if (authorArr.length) {
+        const seen = new Set();
+        authorArr = authorArr.filter(a => {
+            const key = String(a).toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+    let author = authorArr.length ? authorArr.join(', ') : (series.author || 'Unknown Author');
+    if (author.length > 200) author = author.slice(0, 197) + '...';
     author = author || 'Unknown Author';
     const authorLine = `**Series by:** ${author}`;
 
