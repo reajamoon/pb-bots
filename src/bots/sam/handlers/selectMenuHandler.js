@@ -1,8 +1,8 @@
 import { User } from '../../../models/index.js';
 import logger from '../../../shared/utils/logger.js';
 import Discord from 'discord.js';
-const { InteractionFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
-const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
+const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
 
 /**
  * Handle select menu interactions

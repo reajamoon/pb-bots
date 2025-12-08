@@ -1,6 +1,6 @@
 // Pure routing function for testability
 import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
+const { MessageFlags } = Discord;
 import { parseButtonId } from '../../../../../shared/utils/buttonId.js';
 function getHelpMenuPayload(customId) {
     const parsed = parseButtonId(customId);

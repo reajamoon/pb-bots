@@ -1,5 +1,5 @@
 import Discord from 'discord.js';
-const { Events, InteractionFlags } = Discord;
+const { Events, MessageFlags } = Discord;
 import logger from '../../../shared/utils/logger.js';
 import { handleCommand } from '../handlers/commandHandler.js';
 import { handleButton } from '../handlers/buttonHandler.js';
@@ -43,7 +43,7 @@ export default {
             logger.error('Error in interaction handler:', error);
             // Try to respond to the user if we haven't already
             try {
-                const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+                const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
                 // Prevent double replies and expired token errors
                 if (typeof interaction.isExpired === 'function' && interaction.isExpired()) {
                     logger.warn('Interaction is expired, cannot reply or update.', { customId: interaction.customId });

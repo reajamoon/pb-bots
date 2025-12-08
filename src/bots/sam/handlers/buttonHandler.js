@@ -1,7 +1,7 @@
 
 import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
-const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+const { MessageFlags } = Discord;
+const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
 import { handleProfileButtons } from './buttons/profile/index.js';
 import { handleNavigationButtons } from './buttons/navigation/index.js';
 import { handlePrivacyButtons } from './buttons/privacyButtons.js';

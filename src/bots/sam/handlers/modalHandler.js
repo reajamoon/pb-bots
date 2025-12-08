@@ -6,8 +6,8 @@ import { handleRegionModal } from './modals/regionModal.js';
 import { handleAo3ShareModal } from './modals/ao3ShareModal.js';
 import logger from '../../../shared/utils/logger.js';
 import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
-const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+const { MessageFlags } = Discord;
+const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
 
 /**
  * Handle modal submissions by delegating to appropriate handlers
