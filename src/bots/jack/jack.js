@@ -30,9 +30,12 @@ async function cleanupOldQueueJobs() {
 		console.log('[QueueWorker] Cleanup: No old completed jobs to remove.');
 	}
 
-	// Find 'pending' or 'processing' jobs older than 15 minutes
-	const stuckCutoff = new Date(now.getTime() - 15 * 60 * 1000);
-	const stuckJobs = await ParseQueue.findAll({ where: { status: ['pending', 'processing'], updated_at: { [Op.lt]: stuckCutoff } } });
+	// Consider 'pending' jobs stuck if older than 45 minutes, 'processing' if older than 90 minutes
+	const pendingCutoff = new Date(now.getTime() - 45 * 60 * 1000);
+	const processingCutoff = new Date(now.getTime() - 90 * 60 * 1000);
+	const stuckPendingJobs = await ParseQueue.findAll({ where: { status: 'pending', updated_at: { [Op.lt]: pendingCutoff } } });
+	const stuckProcessingJobs = await ParseQueue.findAll({ where: { status: 'processing', updated_at: { [Op.lt]: processingCutoff } } });
+	const stuckJobs = [...stuckPendingJobs, ...stuckProcessingJobs];
 	const errorJobs = await ParseQueue.findAll({ where: { status: 'error' } });
 	const allJobs = [...stuckJobs, ...errorJobs];
 	if (allJobs.length === 0) return;
@@ -46,16 +49,15 @@ async function cleanupOldQueueJobs() {
 		console.log('[QueueWorker] Cleanup: No stuck pending/processing jobs to remove.');
 	}
 	for (const job of stuckJobs) {
-		// Notify all subscribers (respect queueNotifyTag)
-		const subscribers = await ParseQueueSubscriber.findAll({ where: { queue_id: job.id } });
-		const configEntry = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-		if (configEntry && subscribers.length > 0) {
-			// No direct Discord interaction for Jack; notification logic should be handled by Sam.
-			// Optionally, write a notification row or update a status for Sam to pick up.
+		// Mark stuck jobs as error and preserve subscribers for Sam to DM via poller
+		try {
+			const existingResult = job.result && typeof job.result === 'object' ? job.result : {};
+			await job.update({ status: 'error', error_message: 'stuck: dropped by cleanup', result: { ...existingResult, droppedByCleanup: true } });
+			console.log(`[QueueWorker] Cleanup: Marked stuck job id=${job.id} as error for DM (prev status: ${job.status}, url: ${job.fic_url})`);
+		} catch (e) {
+			console.error('[QueueWorker] Failed to mark stuck job as error:', job.id, e);
 		}
-		await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
-		await job.destroy();
-		console.log(`[QueueWorker] Cleanup: Dropped stuck job id=${job.id} (status: ${job.status}, url: ${job.fic_url})`);
+		// Do NOT destroy subscribers or the job here; Sam will notify and clean them up
 	}
 
 	// Notify and clean up for each job
@@ -63,9 +65,7 @@ async function cleanupOldQueueJobs() {
 		const subscribers = allSubscribers.filter(sub => sub.queue_id === job.id);
 		// No direct Discord interaction for Jack; notification logic should be handled by Sam.
 	}
-	// Bulk destroy all subscribers and jobs
-	await ParseQueueSubscriber.destroy({ where: { queue_id: allJobIds } });
-	await ParseQueue.destroy({ where: { id: allJobIds } });
+	// Do not bulk destroy subscribers/jobs here; Sam's poller handles notification and cleanup.
 }
 
 // Estimate AO3 requests for a job (can be improved for series, etc.)
@@ -232,10 +232,23 @@ async function pollQueue() {
 				const numRequests = estimateAO3Requests(job);
 				const nextAvailable = getNextAvailableAO3Time(numRequests);
 				const now = Date.now();
+				// Mark as processing immediately to avoid cleanup dropping long waits
+				try { await job.update({ status: 'processing' }); } catch {}
 				if (nextAvailable > now) {
 					const wait = nextAvailable - now;
 					console.log(`[QueueWorker] AO3 rate limit: waiting ${wait}ms before processing job ${job.id}`);
-					await new Promise(res => setTimeout(res, wait));
+					// Periodic keepalive touch during long waits (45–75s jitter)
+					let remaining = wait;
+					while (remaining > 0) {
+						const step = 45000 + Math.floor(Math.random() * 30000); // 45–75s
+						const sleepMs = Math.min(step, remaining);
+						await new Promise(res => setTimeout(res, sleepMs));
+						remaining -= sleepMs;
+						try {
+							const existingResult = job.result && typeof job.result === 'object' ? job.result : {};
+							await job.update({ result: { ...existingResult, lastKeepaliveTs: Date.now() } });
+						} catch {}
+					}
 				}
 				// Simulate 'think time' before starting each job (0.5–2s)
 				const thinkTime = 500 + Math.floor(Math.random() * 1500);
@@ -253,7 +266,6 @@ async function pollQueue() {
 				// Mark AO3 slot as used for this job
 				markAO3Requests(numRequests);
 				console.log(`[QueueWorker] Finished job ${job.id} at ${new Date().toISOString()}`);
-
 				// Vary delay range (12–20s normal, 20–30s rare)
 				// Use a weighted random: 75% chance 12–20s, 25% chance 20–30s
 				let delayMs;
@@ -263,18 +275,43 @@ async function pollQueue() {
 				} else {
 					delayMs = 20000 + Math.floor(Math.random() * 10000); // 20–30s
 				}
-
 				// Rare long pause: every 10–20 jobs, pause 1–3 min
 				pollQueue.jobCount = (pollQueue.jobCount || 0) + 1;
 				const jobsPerPause = 10 + Math.floor(Math.random() * 11);
 				if (pollQueue.jobCount % jobsPerPause === 0) {
 					const longPause = 60000 + Math.floor(Math.random() * 120000); // 1–3 min
 					console.log(`[QueueWorker] Taking a long pause for ${Math.round(longPause/1000)} seconds after job ${job.id} (jobCount: ${pollQueue.jobCount}, jobsPerPause: ${jobsPerPause})`);
-					await new Promise(res => setTimeout(res, longPause));
+					// Keepalive during long pauses every 45–75s
+					let remainingPause = longPause;
+					while (remainingPause > 0) {
+						const step = 45000 + Math.floor(Math.random() * 30000);
+						const sleepMs = Math.min(step, remainingPause);
+						await new Promise(res => setTimeout(res, sleepMs));
+						remainingPause -= sleepMs;
+						try {
+							const existingResult = job.result && typeof job.result === 'object' ? job.result : {};
+							await job.update({ result: { ...existingResult, lastKeepaliveTs: Date.now() } });
+						} catch {}
+					}
 					console.log(`[QueueWorker] Finished long pause after job ${job.id} at ${new Date().toISOString()}`);
 				} else {
 					console.log(`[QueueWorker] Waiting delay: ${delayMs}ms after job ${job.id}`);
-					await new Promise(res => setTimeout(res, delayMs));
+					// Keepalive during post-job delay if very long (>30s)
+					if (delayMs > 30000) {
+						let remainingDelay = delayMs;
+						while (remainingDelay > 0) {
+							const step = 45000 + Math.floor(Math.random() * 30000);
+							const sleepMs = Math.min(step, remainingDelay);
+							await new Promise(res => setTimeout(res, sleepMs));
+							remainingDelay -= sleepMs;
+							try {
+								const existingResult = job.result && typeof job.result === 'object' ? job.result : {};
+								await job.update({ result: { ...existingResult, lastKeepaliveTs: Date.now() } });
+							} catch {}
+						}
+					} else {
+						await new Promise(res => setTimeout(res, delayMs));
+					}
 					console.log(`[QueueWorker] Finished delay after job ${job.id} at ${new Date().toISOString()}`);
 				}
 
@@ -335,7 +372,7 @@ pollQueue();
 setInterval(() => {
 	console.log('[QueueWorker] Running scheduled cleanup of old queue jobs...');
 	cleanupOldQueueJobs();
-}, 15 * 60 * 1000);
+}, 30 * 60 * 1000);
 // Also run once at startup
 console.log('[QueueWorker] Running initial cleanup of old queue jobs...');
 cleanupOldQueueJobs();

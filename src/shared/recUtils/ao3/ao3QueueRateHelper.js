@@ -4,6 +4,12 @@
 
 // Minimum interval between AO3 requests (default: 20s)
 export const MIN_INTERVAL_MS = parseInt(process.env.AO3_MIN_REQUEST_INTERVAL_MS, 10) || 20000;
+// Apply slight variability to intervals to avoid synchronized pacing
+function withJitter(baseMs) {
+    // ±10% jitter
+    const jitterRatio = (Math.random() * 0.2) - 0.1;
+    return Math.max(0, Math.floor(baseMs + baseMs * jitterRatio));
+}
 let lastRequestTime = 0;
 
 
@@ -13,7 +19,8 @@ let lastRequestTime = 0;
  */
 export function getNextAvailableAO3Time(numRequests = 1) {
     const now = Date.now();
-    const earliest = lastRequestTime + MIN_INTERVAL_MS * numRequests;
+    const base = MIN_INTERVAL_MS * numRequests;
+    const earliest = lastRequestTime + withJitter(base);
     return Math.max(now, earliest);
 }
 
@@ -22,7 +29,8 @@ export function getNextAvailableAO3Time(numRequests = 1) {
  * @param {number} numRequests - Number of AO3 requests just made.
  */
 export function markAO3Requests(numRequests = 1) {
-    lastRequestTime = Math.max(Date.now(), lastRequestTime + MIN_INTERVAL_MS * numRequests);
+    const base = MIN_INTERVAL_MS * numRequests;
+    lastRequestTime = Math.max(Date.now(), lastRequestTime + withJitter(base));
 }
 
 /**
