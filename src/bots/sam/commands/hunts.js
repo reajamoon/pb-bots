@@ -59,12 +59,6 @@ export default {
     const progressRows = await listUserHunts(targetUser.id);
     const { points, completed } = computeTotals(progressRows);
     const narratives = await getNarrativeProgress(targetUser.id);
-
-    // Removed embed; only send generated hunter card PNG
-
-    // Narrative info is rendered inside the PNG via cardRenderer
-
-    // Try to render PNG badge; fallback to embed if renderer fails
     try {
       const buffer = await renderHunterCardPNG({
         user: targetUser,
@@ -76,8 +70,7 @@ export default {
       const attachment = new AttachmentBuilder(buffer, { name: 'hunter-card.png' });
       await interaction.editReply({ files: [attachment] });
     } catch (e) {
-      // Fallback: minimal text if renderer fails
-      await interaction.editReply({ content: `Here is your Hunter Card, <@${targetUser.id}>. (PNG renderer failed)` });
+      await interaction.editReply({ content: "I couldn't find your card, not sure what happened with that. Hit up crypto - they can probably print you up a new one." });
     }
   }
 };
