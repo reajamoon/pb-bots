@@ -3,11 +3,13 @@ import { DeanSprints } from '../../../models/index.js';
 import { scheduleSprintNotifications, startSprintWatchdog } from '../sprintScheduler.js';
 
 export default function onReady(client) {
+  // Listen on custom 'clientReady' to decouple from discord.js internals
   client.once('clientReady', async () => {
     console.log(`[dean] Logged in as ${client.user.tag}`);
 
     // Initialize shared emoji store
-    const ok = await initEmojiStore(client).catch(() => false);
+    const guildId = process.env.DEAN_GUILD_ID || process.env.GUILD_ID || process.env.SAM_GUILD_ID || process.env.CAS_GUILD_ID;
+    const ok = await initEmojiStore(client, guildId).catch(() => false);
     if (!ok) {
       console.warn('[dean] Emoji store did not initialize. Check guild ID env (DEAN_GUILD_ID or GUILD_ID).');
     }
