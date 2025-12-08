@@ -209,7 +209,7 @@ export default async function handleSearchRecommendations(interaction) {
         const fireTrigger = (await import('../../../../shared/hunts/triggerEngine.js')).default;
         const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
         const announce = makeSamAnnouncer({ interaction });
-        await fireTrigger('sam.rec.search.used', { userId: interaction.user.id, announce });
+        await fireTrigger('sam.rec.search.used', { userId: interaction.user.id, announce, interaction });
     } catch (huntErr) {
         // Non-fatal; continue search flow
     }
