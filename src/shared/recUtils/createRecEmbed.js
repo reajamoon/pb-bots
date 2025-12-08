@@ -93,15 +93,26 @@ function processTagsForEmbed(rec) {
     const allTags = [];
 
     // Add AO3 freeform tags from Recommendation model's `tags`
-    if (rec.tags && Array.isArray(rec.tags)) {
-        allTags.push(...rec.tags);
+    if (rec.tags) {
+        if (Array.isArray(rec.tags)) {
+            allTags.push(...rec.tags);
+        } else if (typeof rec.tags === 'string') {
+            // Support both comma and bar separators ("," or "|")
+            const parts = rec.tags.split(/\s*[|,]\s*/).filter(Boolean);
+            allTags.push(...parts);
+        }
     }
 
     // Add all users' additional tags
     if (rec.userMetadata && rec.userMetadata.length > 0) {
         for (const userMeta of rec.userMetadata) {
-            if (userMeta.additional_tags && Array.isArray(userMeta.additional_tags)) {
-                allTags.push(...userMeta.additional_tags);
+            if (userMeta.additional_tags) {
+                if (Array.isArray(userMeta.additional_tags)) {
+                    allTags.push(...userMeta.additional_tags);
+                } else if (typeof userMeta.additional_tags === 'string') {
+                    const parts = userMeta.additional_tags.split(/\s*[|,]\s*/).filter(Boolean);
+                    allTags.push(...parts);
+                }
             }
         }
     }

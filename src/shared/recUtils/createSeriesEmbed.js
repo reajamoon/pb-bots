@@ -140,8 +140,13 @@ function processTagsForEmbed(series) {
     // Add tags from all works in the series
     if (series.works && Array.isArray(series.works)) {
         for (const work of series.works) {
-            if (work.tags && Array.isArray(work.tags)) {
-                allTags.push(...work.tags);
+            if (work.tags) {
+                if (Array.isArray(work.tags)) {
+                    allTags.push(...work.tags);
+                } else if (typeof work.tags === 'string') {
+                    const parts = work.tags.split(/\s*[|,]\s*/).filter(Boolean);
+                    allTags.push(...parts);
+                }
             }
         }
     }
@@ -149,8 +154,13 @@ function processTagsForEmbed(series) {
     // Add all users' additional tags from UserFicMetadata
     if (series.userMetadata && series.userMetadata.length > 0) {
         for (const userMeta of series.userMetadata) {
-            if (userMeta.additional_tags && Array.isArray(userMeta.additional_tags)) {
-                allTags.push(...userMeta.additional_tags);
+            if (userMeta.additional_tags) {
+                if (Array.isArray(userMeta.additional_tags)) {
+                    allTags.push(...userMeta.additional_tags);
+                } else if (typeof userMeta.additional_tags === 'string') {
+                    const parts = userMeta.additional_tags.split(/\s*[|,]\s*/).filter(Boolean);
+                    allTags.push(...parts);
+                }
             }
         }
     }
