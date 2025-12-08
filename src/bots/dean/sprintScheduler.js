@@ -126,15 +126,11 @@ export async function startSprintWatchdog(client) {
     const active = await DeanSprints.findAll({ where: { status: 'processing' }, limit: 100 });
     for (const s of active) {
       const endsAt = new Date(s.startedAt).getTime() + s.durationMinutes * 60000;
-      const midpointAt = new Date(s.startedAt).getTime() + Math.floor(s.durationMinutes / 2) * 60000;
       try {
         // For team sprints, only host triggers channel notifications
         const isTeamHost = s.type === 'team' && s.role === 'host';
         const shouldNotify = s.type === 'solo' || isTeamHost;
-        if (shouldNotify && !s.midpointNotified && now >= midpointAt && s.durationMinutes >= 2) {
-          await notify(client, s, { embeds: [midpointEmbed()] });
-          await s.update({ midpointNotified: true });
-        }
+        // Midpoint notifications are handled by scheduleSprintNotifications to avoid duplicates
         if (!s.endNotified && now >= endsAt) {
           if (shouldNotify) {
             await notify(client, s, { embeds: [completeEmbed()] });

@@ -304,7 +304,8 @@ export async function execute(interaction) {
       }
       // Find last wordcount for this sprint/user
       const last = await Wordcount.findOne({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
-      const prev = last ? (last.countEnd ?? 0) : 0;
+      // Fallback to sprint's tracked end if no row found to avoid zero-based spikes
+      const prev = last && typeof last.countEnd === 'number' ? last.countEnd : (typeof target.wordcountEnd === 'number' ? target.wordcountEnd : 0);
       const delta = count - prev;
       await target.update({ wordcountEnd: count });
       await Wordcount.create({
