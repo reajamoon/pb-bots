@@ -2,8 +2,7 @@
 // Complete series processing flow for AO3 series
 
 import { Series, Recommendation } from '../../models/index.js';
-import { SeriesFields } from '../../models/fields/seriesFields.js';
-import { RecommendationFields } from '../../models/fields/recommendationFields.js';
+import { SeriesFields, RecommendationFields } from '../../models/index.js';
 import processAO3Job from './processAO3Job.js';
 import { isFieldGloballyModlocked, shouldBotsRespectGlobalModlocks } from '../utils/globalModlockUtils.js';
 import { markPrimaryAndNotPrimaryWorks } from '../../bots/sam/commands/recHandlers/seriesUtils.js';

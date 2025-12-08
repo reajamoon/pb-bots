@@ -43,8 +43,7 @@ export const TRIGGERS = {
       await incrementHuntProgress(userId, 'ten_recs_sent', 1);
       // Grace-pop: backfill progress from historical recommendations if behind
       try {
-        const { Recommendation } = await import('../../models/index.js');
-        const { RecommendationFields } = await import('../../models/fields/recommendationFields.js');
+        const { Recommendation, RecommendationFields } = await import('../../models/index.js');
         const total = await Recommendation.count({ where: { [RecommendationFields.recommendedBy]: userId } });
         const prog = await incrementHuntProgress(userId, 'ten_recs_sent', 0);
         if (prog && typeof prog.progress === 'number' && total > prog.progress) {

@@ -4,9 +4,7 @@
 import { Op } from 'sequelize';
 import updateMessages from '../text/updateMessages.js';
 import normalizeAO3Url from './normalizeAO3Url.js';
-import { Recommendation, Series } from '../../models/index.js';
-import { SeriesFields } from '../../models/fields/seriesFields.js';
-import { RecommendationFields } from '../../models/fields/recommendationFields.js';
+import { Recommendation, Series, SeriesFields, RecommendationFields } from '../../models/index.js';
 
 /**
  * Finds a series or recommendation by identifier

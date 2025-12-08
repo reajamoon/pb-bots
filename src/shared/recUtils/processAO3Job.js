@@ -2,9 +2,7 @@
 // Clean implementation for processing AO3 data (used by queue worker)
 // User metadata (notes, manual fields) is handled separately by command handlers
 
-import { Recommendation, Series, ModLock } from '../../models/index.js';
-import { RecommendationFields } from '../../models/fields/recommendationFields.js';
-import { SeriesFields } from '../../models/fields/seriesFields.js';
+import { Recommendation, Series, ModLock, RecommendationFields, SeriesFields } from '../../models/index.js';
 import { fetchFicMetadata } from './ficParser.js';
 import { isFieldGloballyModlocked, shouldBotsRespectGlobalModlocks } from '../utils/globalModlockUtils.js';
 import { createRecEmbed } from './createRecEmbed.js';
