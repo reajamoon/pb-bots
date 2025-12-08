@@ -5,7 +5,7 @@ import { parseButtonId } from '../../../../../shared/utils/buttonId.js';
 function getHelpMenuPayload(customId) {
     const parsed = parseButtonId(customId);
     if (parsed && parsed.context === 'profile_help_menu') {
-        const ephemeralFlag = InteractionFlags?.Ephemeral ?? 64;
+        const ephemeralFlag = Discord.MessageFlags?.Ephemeral ?? 64;
         // Import modular help builders
         // ESM imports at top
         import { createBirthdayHelp } from '../../../utils/profileHelpBirthday.js';

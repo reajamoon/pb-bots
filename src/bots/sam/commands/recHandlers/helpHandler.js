@@ -52,10 +52,9 @@ async function handleHelpNavigation(interaction) {
         console.error('Error in handleHelpNavigation:', error);
         try {
                 const Discord = await import('discord.js');
-                const { InteractionFlags } = Discord;
             await interaction.reply({
                 content: 'Sorry, something went wrong with the help navigation. Try using `/rec help` again.',
-                flags: InteractionFlags.Ephemeral
+                flags: Discord.MessageFlags.Ephemeral
             });
         } catch (replyError) {
             console.error('Failed to send error message:', replyError);

@@ -1,6 +1,6 @@
 
 import Discord from 'discord.js';
-const { SlashCommandBuilder, InteractionFlags } = Discord;
+const { SlashCommandBuilder, MessageFlags } = Discord;
 import handleProfileHelp from './profile/helpHandler.js';
 import handleProfileSettings from './profile/settingsHandler.js';
 import handlePrivacySettings from './profile/privacyHandler.js';
@@ -27,7 +27,7 @@ export default {
         console.log('Profile command starting...');
         const quick = interaction.options.getString('quick');
         if (quick === 'help') {
-            const ephemeralFlag = InteractionFlags?.Ephemeral ?? 64;
+            const ephemeralFlag = MessageFlags?.Ephemeral ?? 64;
             await interaction.deferReply({ flags: ephemeralFlag });
             console.log('Profile help deferred as ephemeral');
             await handleProfileHelp(interaction);

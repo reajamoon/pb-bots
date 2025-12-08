@@ -1,5 +1,5 @@
 import Discord from 'discord.js';
-const { SlashCommandBuilder, MessageFlags, InteractionFlags } = Discord;
+const { SlashCommandBuilder, MessageFlags } = Discord;
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
 import { Op } from 'sequelize';
 import { startSoloEmbed, hostTeamEmbed, joinTeamEmbed, endSoloEmbed, endTeamEmbed, statusSoloEmbed, statusTeamEmbed, leaveTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText } from '../text/sprintText.js';
@@ -299,7 +299,7 @@ export async function execute(interaction) {
     if (subName === 'set') {
       const count = interaction.options.getInteger('count');
       if (count < 0) {
-        await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/sprint wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: InteractionFlags.Ephemeral });
+        await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/sprint wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: MessageFlags.Ephemeral });
         return;
       }
       // Find last wordcount for this sprint/user
@@ -346,7 +346,7 @@ export async function execute(interaction) {
     } else if (subName === 'add') {
       const words = interaction.options.getInteger('new-words');
       if (words <= 0) {
-        await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/sprint wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: InteractionFlags.Ephemeral });
+        await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/sprint wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: MessageFlags.Ephemeral });
         return;
       }
       const prev = target.wordcountEnd || 0;
@@ -459,7 +459,7 @@ export async function execute(interaction) {
     }
     const last = await Wordcount.findOne({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
     if (!last) {
-      await interaction.followUp({ content: "No wordcount to undo, partner.", flags: InteractionFlags.Ephemeral });
+      await interaction.followUp({ content: "No wordcount to undo, partner.", flags: MessageFlags.Ephemeral });
       return;
     }
     await last.destroy();

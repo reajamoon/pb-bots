@@ -1,5 +1,5 @@
 import Discord from 'discord.js';
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, InteractionFlags } = Discord;
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } = Discord;
 const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';

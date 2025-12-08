@@ -1,7 +1,7 @@
 import { getOrCreateUser } from '../../utils/profileCard.js';
 import { buildPrivacySettingsMenu } from '../../handlers/buttons/privacy/privacyMenu.js';
 import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
+const { MessageFlags } = Discord;
 
 export default async function handlePrivacySettings(interaction) {
     const targetUser = interaction.user;
@@ -19,6 +19,6 @@ export default async function handlePrivacySettings(interaction) {
         content,
         embeds,
         components,
-        flags: InteractionFlags.Ephemeral
+        flags: MessageFlags.Ephemeral
     });
 }

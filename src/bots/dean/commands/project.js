@@ -1,5 +1,5 @@
 import Discord from 'discord.js';
-const { SlashCommandBuilder, InteractionFlags } = Discord;
+const { SlashCommandBuilder, MessageFlags } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
 
@@ -196,21 +196,21 @@ export async function execute(interaction) {
         }
       }
       if (!project) {
-        await interaction.followUp({ content: 'Nope. Use the project ID or exact name.', flags: InteractionFlags.Ephemeral });
+        await interaction.followUp({ content: 'Nope. Use the project ID or exact name.', flags: MessageFlags.Ephemeral });
         return;
       }
       const projectId = project.id;
       // Validate membership
       const membership = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
       if (!membership) {
-        await interaction.followUp({ content: 'You’re not on that project, buddy. Get invited first with `/project invite` or ask the owner to pull you in.', flags: InteractionFlags.Ephemeral });
+        await interaction.followUp({ content: 'You’re not on that project, buddy. Get invited first with `/project invite` or ask the owner to pull you in.', flags: MessageFlags.Ephemeral });
         return;
       }
       const leaf = interaction.options.getSubcommand();
       if (leaf === 'add') {
         const words = interaction.options.getInteger('new-words');
         if (words <= 0) {
-          await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/project wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: InteractionFlags.Ephemeral });
+          await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/project wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: MessageFlags.Ephemeral });
           return;
         }
         await Wordcount.create({
@@ -226,7 +226,7 @@ export async function execute(interaction) {
       } else if (leaf === 'set') {
         const count = interaction.options.getInteger('count');
         if (count < 0) {
-          await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/project wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: InteractionFlags.Ephemeral });
+          await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/project wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: MessageFlags.Ephemeral });
           return;
         }
         const rows = await Wordcount.findAll({ where: { projectId, userId: discordId }, order: [['recordedAt', 'ASC']] });
@@ -236,7 +236,7 @@ export async function execute(interaction) {
         }, 0);
         const delta = Math.max(0, count - current);
         if (delta === 0) {
-          await interaction.followUp({ content: `You’re at **${count}** on this project.`, flags: InteractionFlags.Ephemeral });
+          await interaction.followUp({ content: `You’re at **${count}** on this project.`, flags: MessageFlags.Ephemeral });
           return;
         }
         await Wordcount.create({
@@ -364,18 +364,18 @@ export async function execute(interaction) {
         }
       }
         if (!project) {
-          await interaction.followUp({ content: "Nope. Try `/project list` or create a new one with `/project create`.", flags: InteractionFlags.Ephemeral });
+          await interaction.followUp({ content: "Nope. Try `/project list` or create a new one with `/project create`.", flags: MessageFlags.Ephemeral });
           return;
         }
       const projectId = project.id;
       const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
       if (!active) {
-        await interaction.followUp({ content: 'No active sprint right now. Kick one off with `/sprint start`.', flags: InteractionFlags.Ephemeral });
+        await interaction.followUp({ content: 'No active sprint right now. Kick one off with `/sprint start`.', flags: MessageFlags.Ephemeral });
         return;
       }
       const member = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
       if (!member) {
-        await interaction.followUp({ content: 'You’re not on that project, buddy. Get invited first.', flags: InteractionFlags.Ephemeral });
+        await interaction.followUp({ content: 'You’re not on that project, buddy. Get invited first.', flags: MessageFlags.Ephemeral });
         return;
       }
       await active.update({ projectId });

@@ -1,6 +1,6 @@
 import { getOrCreateUser, generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
 import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
+const { MessageFlags } = Discord;
 
 export default async function handleProfileSettings(interaction) {
     const targetUser = interaction.user;
@@ -19,6 +19,6 @@ export default async function handleProfileSettings(interaction) {
     await interaction.editReply({
         embeds: [embed],
         components: [profileSettingsRow],
-        flags: InteractionFlags.Ephemeral
+        flags: MessageFlags.Ephemeral
     });
 }

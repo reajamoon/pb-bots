@@ -1,5 +1,5 @@
 import Discord from 'discord.js';
-const { SlashCommandBuilder, InteractionFlags, PermissionsBitField } = Discord;
+const { SlashCommandBuilder, MessageFlags, PermissionsBitField } = Discord;
 import { HUNTS, awardHunt, getHuntMeta } from '../../../shared/hunts/registry.js';
 
 export const data = new SlashCommandBuilder()
@@ -20,10 +20,10 @@ export async function execute(interaction) {
     const member = interaction.member;
     const hasAdmin = member?.permissions?.has?.(PermissionsBitField.Flags.Administrator);
     if (!hasAdmin) {
-      await interaction.reply({ content: 'You need admin to use this.', flags: InteractionFlags.Ephemeral });
+      await interaction.reply({ content: 'You need admin to use this.', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.deferReply({ flags: InteractionFlags.Ephemeral });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const user = interaction.options.getUser('user', true);
     const userId = user.id;
@@ -62,7 +62,7 @@ export async function execute(interaction) {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content: 'Failed to force award. Check logs.' });
       } else {
-        await interaction.reply({ content: 'Failed to force award. Check logs.', flags: InteractionFlags.Ephemeral });
+        await interaction.reply({ content: 'Failed to force award. Check logs.', flags: MessageFlags.Ephemeral });
       }
     } catch {}
   }
