@@ -1,4 +1,5 @@
-import { SlashCommandBuilder, InteractionFlags } from 'discord.js';
+import Discord from 'discord.js';
+const { SlashCommandBuilder, InteractionFlags } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
 
