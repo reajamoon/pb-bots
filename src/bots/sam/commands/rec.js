@@ -48,7 +48,7 @@ export default {
                 .setDescription('Add a new fanfiction recommendation to the library')
                 .addStringOption(option =>
                     option.setName('url')
-                        .setDescription('Fanfiction URL (AO3, FFNet, Wattpad, etc.)')
+                        .setDescription('Fanfiction URL (AO3 preferred)')
                         .setRequired(true))
                 .addStringOption(option =>
                     option.setName('title')
@@ -76,8 +76,8 @@ export default {
                         .setRequired(false))
                 .addStringOption(option =>
                     option.setName('notes')
-                        .setDescription('Personal notes (optional)')
-                        .setRequired(false))
+                        .setDescription('Recommendation notes (required)')
+                        .setRequired(true))
         )
         .addSubcommand(subcommand =>
             subcommand
