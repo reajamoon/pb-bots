@@ -9,6 +9,9 @@ import { createSeriesEmbed } from '../../../shared/recUtils/createSeriesEmbed.js
 const POLL_INTERVAL_MS = 10000;
 // Single-flight guard for nOTP jobs per heartbeat
 const nOTPInFlight = new Set();
+// Cooldown map to avoid repeatedly re-queuing series refreshes
+const seriesRefreshCooldown = new Map(); // key: series URL, value: timestamp ms
+const SERIES_REFRESH_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
 async function notifyQueueSubscribers(client) {
     // Heartbeat counters for this cycle
@@ -365,8 +368,16 @@ async function notifyQueueSubscribers(client) {
                         console.warn('[Poller] Series missing parse indicators and member tags. Skipping post and marking for refresh:', recWithSeries && recWithSeries.id);
                         try {
                             const { queueSeriesRefresh } = await import('../../../shared/recUtils/queueUtils.js');
-                            if (recWithSeries && recWithSeries.series && recWithSeries.series.url) {
-                                await queueSeriesRefresh(recWithSeries.series.url);
+                            const seriesUrl = recWithSeries && recWithSeries.series && recWithSeries.series.url ? recWithSeries.series.url : null;
+                            if (seriesUrl) {
+                                const lastTs = seriesRefreshCooldown.get(seriesUrl) || 0;
+                                const nowTs = Date.now();
+                                if (nowTs - lastTs >= SERIES_REFRESH_COOLDOWN_MS) {
+                                    await queueSeriesRefresh(seriesUrl);
+                                    seriesRefreshCooldown.set(seriesUrl, nowTs);
+                                } else {
+                                    console.log('[Poller] Skipping duplicate series refresh request within cooldown for URL:', seriesUrl);
+                                }
                             }
                         } catch {}
                         continue;
