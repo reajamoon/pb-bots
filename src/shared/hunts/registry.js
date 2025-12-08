@@ -28,7 +28,7 @@ export const HUNTS = [
   },
   {
     key: 'first_sprint',
-    name: "Hunter's Kit",
+    name: "The Whistle Makes Me Their God.",
     description: 'Completed your first sprint.',
     category: 'writing',
     points: 10,
