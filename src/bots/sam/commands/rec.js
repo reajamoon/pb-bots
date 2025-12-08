@@ -93,15 +93,15 @@ export default {
                         .setRequired(true))
                 .addStringOption(option =>
                     option.setName('notes')
-                        .setDescription('Recommendation notes, these are REQUIRED for ALL RECS. This is ONLY optional if you have already added notes.')
+                        .setDescription('Your recommendation notes (ONLY optional if already added).')
                         .setRequired(false))
                 .addStringOption(option =>
                     option.setName('tags')
-                        .setDescription('Recommendation tags (comma-separated) Help our library be searchable and filterable! These get added together and deduplicated with the fic tags for searches and randoms.')
+                        .setDescription('Recommendation tags (comma-separated)')
                         .setRequired(false))
                 .addBooleanOption(option =>
                     option.setName('manual_only')
-                        .setDescription('Skip fetch metadata and only update provided fields. Useful to add notes to old entries or fixing bad parses! Dont use manual fields instead of fetch just for funsies.')
+                        .setDescription('Skip fetch metadata and only update provided fields.')
                         .setRequired(false)))
                 .addStringOption(option =>
                     option.setName('title')
