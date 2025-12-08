@@ -77,15 +77,25 @@ export async function execute(interaction) {
       await interaction.deferReply();
     }
 
+    // Helper to robustly extract a UUID from user input (handles trailing punctuation)
+    function extractUuid(input) {
+      if (!input) return null;
+      const str = String(input).trim();
+      const match = str.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+      return match ? match[0] : null;
+    }
+
     if (subName === 'create') {
       const name = interaction.options.getString('name');
       const project = await Project.create({ ownerId: discordId, name });
       await ProjectMember.create({ projectId: project.id, userId: discordId, role: 'owner' });
-      return interaction.editReply({ content: `Done. Project **${name}** is live. ID: ${project.id}.` });
+      return interaction.editReply({ content: `Done. Project **${name}** is live. ID: \`${project.id}\`. ` });
     }
 
     if (subName === 'info') {
-      const projectInput = interaction.options.getString('project');
+      const projectInputRaw = interaction.options.getString('project');
+      const uuid = extractUuid(projectInputRaw);
+      const projectInput = projectInputRaw?.trim();
       // If no argument, return all projects owned or joined by user
       if (!projectInput) {
         // Get all owned projects
@@ -113,10 +123,9 @@ export async function execute(interaction) {
         return interaction.editReply({ embeds: [embed] });
       }
       let project = null;
-      // Only try findByPk if input matches UUID format
-      const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-      if (uuidRegex.test(projectInput)) {
-        project = await Project.findByPk(projectInput);
+      // Try by extracted UUID first
+      if (uuid) {
+        project = await Project.findByPk(uuid);
       }
       if (!project) {
         // Try by name (owned or member)
@@ -181,11 +190,12 @@ export async function execute(interaction) {
 
     if (subGroup === 'wc') {
       // Resolve project: required, can be ID or Name
-      let projectInput = interaction.options.getString('project');
+      let projectInputRaw = interaction.options.getString('project');
+      const uuid = extractUuid(projectInputRaw);
+      let projectInput = projectInputRaw?.trim();
       let project = null;
-      const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-      if (uuidRegex.test(projectInput)) {
-        project = await Project.findByPk(projectInput);
+      if (uuid) {
+        project = await Project.findByPk(uuid);
       }
       if (!project) {
         // Try by name (owned or member)
@@ -272,12 +282,13 @@ export async function execute(interaction) {
 
     if (subName === 'invite') {
       // Resolve target project: prefer provided option; else active sprint's project
-      const projectInput = interaction.options.getString('project');
+      const projectInputRaw = interaction.options.getString('project');
+      const uuid = extractUuid(projectInputRaw);
+      const projectInput = projectInputRaw?.trim();
       let project = null;
       if (projectInput) {
-        const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-        if (uuidRegex.test(projectInput)) {
-          project = await Project.findByPk(projectInput);
+        if (uuid) {
+          project = await Project.findByPk(uuid);
         }
         if (!project) {
           // Try by name: owned first, then membership list
@@ -354,13 +365,14 @@ export async function execute(interaction) {
 
     if (subName === 'use') {
       const projectInput = interaction.options.getString('project');
-      let project = await Project.findByPk(projectInput);
+      const uuid = extractUuid(projectInput);
+      let project = uuid ? await Project.findByPk(uuid) : null;
       if (!project) {
         // Try by name (owned or member)
         project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
         if (!project) {
           const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-          project = memberships.map(m => m.Project).find(p => p?.name === projectInput) || null;
+          project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
         }
       }
         if (!project) {
