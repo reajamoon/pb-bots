@@ -119,7 +119,7 @@ export const TRIGGERS = {
         const endWindow = new Date(now.getTime());
         endWindow.setUTCHours(23, 59, 59, 999);
         const rows = await DeanSprints.findAll({
-          where: { userId, status: 'done', updatedAt: { $between: [startWindow, endWindow] } },
+          where: { userId, status: 'done', updatedAt: { [Op.between]: [startWindow, endWindow] } },
           order: [['updatedAt', 'ASC']],
         });
         // Distinct UTC date keys

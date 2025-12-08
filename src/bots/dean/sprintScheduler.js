@@ -1,5 +1,6 @@
 import { midpointEmbed, completeEmbed, summaryEmbed } from './text/sprintText.js';
 import { DeanSprints, GuildSprintSettings, Wordcount, Project } from '../../models/index.js';
+import fireTrigger from '../../shared/hunts/triggerEngine.js';
 
 function getChannelFromIds(client, guildId, channelId, threadId) {
   const guild = client.guilds.cache.get(guildId);
@@ -64,6 +65,11 @@ export async function scheduleSprintNotifications(sprint, client) {
       } else {
         await fresh.update({ status: 'done', endNotified: true });
       }
+
+      // Fire hunt trigger for sprint completion (covers scheduler-driven finishes)
+      try {
+        await fireTrigger('dean.sprint.completed', { userId: fresh.userId, channel: targetChannel });
+      } catch {}
 
       // Optional summary posting
       const settings = await GuildSprintSettings.findOne({ where: { guildId: fresh.guildId } });
@@ -141,6 +147,11 @@ export async function startSprintWatchdog(client) {
             }
           }
           await s.update({ endNotified: true, status: 'done' });
+          // Fire hunt trigger for sprint completion in watchdog path
+          try {
+            const channel = await client.channels.fetch(s.threadId || s.channelId).catch(() => null);
+            await fireTrigger('dean.sprint.completed', { userId: s.userId, channel });
+          } catch {}
         }
       } catch (e) {
         // Continue processing other sprints
