@@ -137,42 +137,68 @@ function getSiteLinkContent(url) {
 function processTagsForEmbed(series) {
     const allTags = [];
 
-    // Add tags from all works in the series
-    if (series.works && Array.isArray(series.works)) {
+    // Helper to add tags from a value that can be array or string
+    function addTags(val, source = 'generic') {
+        if (!val) return;
+        if (Array.isArray(val)) {
+            for (const t of val) if (t && String(t).trim()) allTags.push({ text: String(t).trim(), source });
+        } else if (typeof val === 'string') {
+            const parts = val.split(/\s*[|,]\s*/).map(s => s.trim()).filter(Boolean);
+            for (const p of parts) allTags.push({ text: p, source });
+        }
+    }
+
+    // Add tags from all works in the series (cover multiple AO3 tag categories)
+    if (Array.isArray(series.works)) {
         for (const work of series.works) {
-            if (work.tags) {
-                if (Array.isArray(work.tags)) {
-                    allTags.push(...work.tags);
-                } else if (typeof work.tags === 'string') {
-                    const parts = work.tags.split(/\s*[|,]\s*/).filter(Boolean);
-                    allTags.push(...parts);
-                }
-            }
+            addTags(work && work.tags);
+            addTags(work && work.freeform_tags);
+            addTags(work && work.fandom_tags, 'fandom');
+            addTags(work && work.relationship_tags, 'relationship');
         }
     }
 
     // Add all users' additional tags from UserFicMetadata
-    if (series.userMetadata && series.userMetadata.length > 0) {
+    if (Array.isArray(series.userMetadata)) {
         for (const userMeta of series.userMetadata) {
-            if (userMeta.additional_tags) {
-                if (Array.isArray(userMeta.additional_tags)) {
-                    allTags.push(...userMeta.additional_tags);
-                } else if (typeof userMeta.additional_tags === 'string') {
-                    const parts = userMeta.additional_tags.split(/\s*[|,]\s*/).filter(Boolean);
-                    allTags.push(...parts);
-                }
-            }
+            addTags(userMeta && userMeta.additional_tags);
         }
     }
 
     if (allTags.length === 0) return null;
 
+    // Exclusion rules: remove fandom 'Supernatural' variants; remove relationship 'Castiel/Dean Winchester' variants
+    function isSupernaturalTag(str) {
+        const s = String(str).toLowerCase().trim();
+        return (
+            s === 'supernatural' ||
+            s === 'spn' ||
+            s.includes('supernatural (tv)') ||
+            s.includes('supernatural tv')
+        );
+    }
+    function isDestielRelationship(str) {
+        const s = String(str).toLowerCase().trim();
+        const normalized = s
+            .replace(/&/g, '/').replace(/\\/g, '/').replace(/\s+and\s+/g, '/')
+            .replace(/\s+/g, ' ');
+        const compact = s.replace(/[^a-z]/g, '');
+        if (/(deancas|casdean|destiel|destial)/.test(compact)) return true;
+        if (/\bdean\b.*\bwinchester\b/.test(normalized) && /\bcastiel\b/.test(normalized)) return true;
+        if (/\bcastiel\b/.test(normalized) && /\bdean\b.*\bwinchester\b/.test(normalized)) return true;
+        if (/\bdean\b\s*\/\s*\bcas(tiel)?\b/.test(normalized) || /\bcas(tiel)?\b\s*\/\s*\bdean\b/.test(normalized)) return true;
+        return false;
+    }
+
     // Deduplicate using normalized versions but prioritize title case for display
     const seen = new Set();
     const uniqueTags = [];
 
-    for (const tag of allTags) {
+    for (const item of allTags) {
+        const tag = item.text;
         const normalized = tag.trim().toLowerCase();
+        if (item.source === 'fandom' && isSupernaturalTag(tag)) continue;
+        if (item.source === 'relationship' && isDestielRelationship(tag)) continue;
         if (!seen.has(normalized)) {
             seen.add(normalized);
             uniqueTags.push(tag);
