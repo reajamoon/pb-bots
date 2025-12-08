@@ -86,6 +86,10 @@ async function fetchAO3MetadataFromHtml(html, url, includeRawHtml = false) {
         return await Promise.race([fetchPromise(), timeoutPromise]);
     } catch (error) {
         console.error('Metadata fetch failed or timed out:', error.message);
+        // Provide a safe fallback for AO3 to avoid null results cascading to errors
+        if (url.includes('archiveofourown.org')) {
+            return createFallbackMetadata(url, 'ao3', 'Metadata fetch timeout - taking too long');
+        }
         return null;
     }
 }

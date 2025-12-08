@@ -78,7 +78,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 (pageTitle && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(pageTitle)) ||
                 (errorText && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(errorText));
             if (rateLimitMatch) {
-                console.warn('[AO3] Rate limit or CAPTCHA detected during fetch (title or error container).');
+                console.warn(`[AO3] Rate limit/CAPTCHA detected. title="${pageTitle}" errors="${(errorText||'').trim().slice(0,180)}" url=${ao3Url}`);
                 html = null;
                 // Defensive: always delete cookies and reset in-memory cookies on rate limit
                 const COOKIES_PATH = 'ao3_cookies.json';
@@ -92,6 +92,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 return false;
             }
             html = await page.content();
+            console.log(`[AO3][Fetch] Loaded content length=${html ? html.length : 0} url=${ao3Url}`);
             // Extra check: ensure not still on login/interstitial page
             let currentUrl = page.url();
             if (
@@ -108,9 +109,11 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     global.__samInMemoryCookies = null;
                     console.warn('[AO3] In-memory cookies reset due to login/interstitial page.');
                 }
+                console.warn(`[AO3] Login/interstitial page detected. title="${pageTitle}" currentUrl=${currentUrl}`);
                 return false;
             }
             loggedIn = isAO3LoggedInPage(html);
+            console.log(`[AO3][Fetch] LoggedIn=${loggedIn} currentUrl=${currentUrl}`);
             return true;
         }
 
@@ -133,6 +136,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 } catch (err) {
                     lastError = err;
                     ok = false;
+                    console.warn(`[AO3] doLoginAndFetch failed on retry attempt ${attempts}: ${err && err.message}`);
                     // Robust: always close browser on fatal error
                     if (browser && browser.isConnected()) {
                         try { await browser.close(); console.warn('[AO3] Closed browser after fatal error in doLoginAndFetch.'); } catch (e) { console.warn('[AO3] Failed to close browser after fatal error:', e); }
@@ -163,6 +167,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     } catch (err) {
                         lastError = err;
                         ok = false;
+                        console.warn(`[AO3] Parser session retry failed: ${err && err.message}`);
                         // Robust: always close browser on fatal error
                         if (browser && browser.isConnected()) {
                             try { await browser.close(); console.warn('[AO3] Closed browser after fatal error in parser session retry.'); } catch (e) { console.warn('[AO3] Failed to close browser after fatal error:', e); }
@@ -170,6 +175,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     }
                     attempts++;
                 }
+                console.log(`[AO3][Fetch] Parse complete. hasError=${!!(parsed && parsed.error)} title=${parsed && parsed.title ? parsed.title.slice(0,80) : 'N/A'}`);
                 // --- Dean/Cas validation: set nOTP status if invalid ---
                 if (parsed && parsed.fandom_tags && parsed.relationship_tags) {
                     const validation = validateDeanCasRec(parsed.fandom_tags, parsed.relationship_tags, parsed.freeform_tags || []);

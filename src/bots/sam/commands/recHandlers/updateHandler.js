@@ -129,6 +129,17 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
             const looksLikeUrl = isValidFanficUrl(identifier) || /^https?:\/\/.*archiveofourown\.org\//i.test(identifier);
             if (looksLikeUrl) {
                 const normalizedUrl = normalizeAO3Url(identifier);
+                // Guard: creating a new rec via update requires a recommender note, regardless of channel
+                let minLen = 50;
+                try {
+                    const minCfg = await Config.findOne({ where: { key: 'min_rec_note_length' } });
+                    if (minCfg && Number(minCfg.value) > 0) minLen = Number(minCfg.value);
+                } catch {}
+                if (!newNotesTrim || newNotesTrim.length < minLen) {
+                    const line = `You’re trying to add a new rec via \`/rec update\` for:\n<${normalizedUrl}>\n\nThis creates a new library entry. It requires a recommender’s note of at least ${minLen} characters.\n\nAdd your note with the \`notes:\` option (what you loved, why it’s worth reading), then run the command again.`;
+                    await interaction.editReply({ content: line, flags: MessageFlags.Ephemeral });
+                    return;
+                }
                 // Persist user metadata tied to the URL even if the rec record doesn't exist yet
                 try {
                     await saveUserMetadata({
