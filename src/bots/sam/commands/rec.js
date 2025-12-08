@@ -102,7 +102,7 @@ export default {
                 .addBooleanOption(option =>
                     option.setName('manual_only')
                         .setDescription('Skip fetch metadata and only update provided fields.')
-                        .setRequired(false)))
+                        .setRequired(false))
                 .addStringOption(option =>
                     option.setName('title')
                         .setDescription('Story title')
@@ -135,6 +135,7 @@ export default {
                     option.setName('attachment')
                         .setDescription('File attachment (only for deleted fics)')
                         .setRequired(false))
+        )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('random')
