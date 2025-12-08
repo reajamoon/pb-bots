@@ -378,21 +378,20 @@ async function notifyQueueSubscribers(client) {
                 }
             }
             // Prefer editing tracked messages; only post publicly if no tracked message exists
+            // Choose channel: prefer initiating channel (if allowed), else fic_rec_channel -> fic_queue_channel
             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-            const noteCfg = await Config.findOne({ where: { key: 'queue_notification_channel' } });
             const recId = recCfg && recCfg.value ? recCfg.value : null;
             const queueId = queueCfg && queueCfg.value ? queueCfg.value : null;
-            const noteId = noteCfg && noteCfg.value ? noteCfg.value : null;
-            const allowedIds = new Set([queueId, noteId, recId].filter(Boolean));
+            const allowedIds = new Set([recId, queueId].filter(Boolean));
             // Prefer the channel where the job was initiated/pulled if allowed
             let preferredFromSub = null;
             for (const sub of subscribers) {
                 if (sub.channel_id && allowedIds.has(sub.channel_id)) { preferredFromSub = sub.channel_id; break; }
             }
-            const channelId = preferredFromSub || queueId || noteId || recId || null;
+            const channelId = preferredFromSub || recId || queueId || null;
             if (!channelId) {
-                console.warn(`[Poller] No allowed notification channel configured; skipping notifications for job id: ${job.id}, url: ${job.fic_url}`);
+                console.warn(`[Poller] No allowed notification channel configured (fic_rec_channel/fic_queue_channel); skipping notifications for job id: ${job.id}, url: ${job.fic_url}`);
                 continue;
             }
             let channel = client.channels.cache.get(channelId);
@@ -502,27 +501,25 @@ async function notifyQueueSubscribers(client) {
             }
 
             // Send notification choosing channel: prefer the channel it was pulled/initiated in (if allowed),
-            // else fall back in order: fic_queue_channel -> queue_notification_channel -> fic_rec_channel
+            // else fall back in order: fic_rec_channel -> fic_queue_channel
             const { Config } = await import('../../../models/index.js');
             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-            const noteCfg = await Config.findOne({ where: { key: 'queue_notification_channel' } });
             const recId = recCfg && recCfg.value ? recCfg.value : null;
             const queueId = queueCfg && queueCfg.value ? queueCfg.value : null;
-            const noteId = noteCfg && noteCfg.value ? noteCfg.value : null;
-            const allowedIds = new Set([queueId, noteId, recId].filter(Boolean));
+            const allowedIds = new Set([recId, queueId].filter(Boolean));
             // Prefer subscriber's channel if it's one of the allowed three
             let preferredFromSub = null;
             for (const sub of subscribers) {
                 if (sub.channel_id && allowedIds.has(sub.channel_id)) { preferredFromSub = sub.channel_id; break; }
             }
-            const channelId = preferredFromSub || queueId || noteId || recId || null;
+            const channelId = preferredFromSub || recId || queueId || null;
             let channel = channelId ? client.channels.cache.get(channelId) : null;
             if (!channel && channelId && client.channels && client.channels.fetch) {
                 channel = await client.channels.fetch(channelId).catch(() => null);
             }
             if (!channel) {
-                console.warn(`[Poller] Queue notification channel missing (checked subscriber channel, fic_queue_channel, queue_notification_channel, fic_rec_channel). Job id: ${job.id}, url: ${job.fic_url}, chosenId: ${channelId || 'none'}`);
+                console.warn(`[Poller] Queue notification channel missing (checked subscriber channel, fic_rec_channel, fic_queue_channel). Job id: ${job.id}, url: ${job.fic_url}, chosenId: ${channelId || 'none'}`);
                 continue;
             }
 
