@@ -328,8 +328,9 @@ export async function execute(interaction) {
       const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
       const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
       // Feedback
+      const sinceLabel = last ? 'since last update' : 'since sprint start';
       let msg = `Locked in at **${count}**.`;
-      msg += `\nWords gained since last update: **${delta >= 0 ? '+' : ''}${delta}**`;
+      msg += `\nWords gained ${sinceLabel}: **${delta >= 0 ? '+' : ''}${delta}**`;
       msg += `\nTotal gained this sprint: **${sprintTotal}**`;
       msg += `\nTotal gained today: **${dayTotal}**`;
       msg += `\nUpdates this sprint: **${updates}**`;
