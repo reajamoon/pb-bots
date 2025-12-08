@@ -353,6 +353,9 @@ async function notifyQueueSubscribers(client) {
                             const { queueRecommendationRefresh } = await import('../../../shared/recUtils/queueUtils.js');
                             if (recWithSeries.url) await queueRecommendationRefresh(recWithSeries.url);
                         } catch {}
+                        // Clean up this DONE job now to avoid repeating every heartbeat
+                        try { await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } }); } catch {}
+                        try { await ParseQueue.destroy({ where: { id: job.id } }); } catch {}
                         continue;
                     }
 
@@ -380,6 +383,9 @@ async function notifyQueueSubscribers(client) {
                                 }
                             }
                         } catch {}
+                        // Clean up this DONE job now to avoid repeating every heartbeat
+                        try { await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } }); } catch {}
+                        try { await ParseQueue.destroy({ where: { id: job.id } }); } catch {}
                         continue;
                     }
                     embed = createRecEmbed(recWithSeries);
