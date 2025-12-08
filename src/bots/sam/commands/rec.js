@@ -261,8 +261,11 @@ export default {
                     await handleRecNotifyTag(interaction);
                     break;
                 case 'add':
-                    await handleAddRecommendation(interaction);
-                    break;
+                    await interaction.reply({
+                        content: 'Quick heads up — adding recs is temporarily disabled tonight. Please try again tomorrow.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
                 case 'random':
                     await handleRandomRecommendation(interaction);
                     break;
@@ -276,8 +279,11 @@ export default {
                     await handleRemoveRecommendation(interaction);
                     break;
                 case 'update':
-                    await handleUpdateRecommendation(interaction);
-                    break;
+                    await interaction.reply({
+                        content: 'Quick heads up — updating recs is temporarily disabled tonight. Please try again tomorrow.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
                 case 'queue':
                     await handleQueue(interaction);
                     break;
