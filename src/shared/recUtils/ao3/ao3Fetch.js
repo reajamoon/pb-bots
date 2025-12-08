@@ -28,7 +28,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
     ao3FetchMutex = prev.then(() => lock);
     try {
         await prev;
-        const { getLoggedInAO3Page, appendAdultViewParamIfNeeded, bypassStayLoggedInInterstitial } = await import('./ao3Utils.js');
+        const { getLoggedInAO3Page, appendAdultViewParamIfNeeded, bypassStayLoggedInInterstitial, sleepJitter, logGentlePacing } = await import('./ao3Utils.js');
         const { parseAO3Metadata } = await import('./ao3Parser.js');
         let html, browser, page, ao3Url;
             let isFirstBrowserLaunch = false;
@@ -57,14 +57,9 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 timeout = Math.max(timeout, 180000); // 3 minutes for first launch
                 fetchAO3MetadataWithFallback._firstBrowserLaunch = false;
             }
-            const { getNextAvailableAO3Time, markAO3Requests } = await import('./ao3QueueRateHelper.js');
-            const nextAvailable = getNextAvailableAO3Time(1);
-            const now = Date.now();
-            if (nextAvailable > now) {
-                await new Promise(res => setTimeout(res, nextAvailable - now));
-            }
-            markAO3Requests(1);
             console.log(`[AO3][Fetch] Navigating to ${ao3Url} with timeout: ${timeout}ms (attempt ${attempt})`);
+            await sleepJitter();
+            logGentlePacing('Fetch goto', { url: ao3Url, attempt, timeout });
             await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout });
             // Bypass 'stay logged in' interstitial if present
             await bypassStayLoggedInInterstitial(page, ao3Url);
