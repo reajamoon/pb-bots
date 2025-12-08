@@ -173,6 +173,22 @@ export async function awardHunt(userId, key) {
   return { unlocked: false, hunt };
 }
 
+// Force-complete a hunt: sets unlockedAt if the row exists but is not finished
+export async function forceCompleteHunt(userId, key) {
+  const prog = await HuntProgress.findOne({ where: { userId, huntKey: key } });
+  if (!prog) {
+    // If no row, delegate to awardHunt which seeds and unlocks
+    return awardHunt(userId, key);
+  }
+  if (!prog.unlockedAt) {
+    prog.unlockedAt = new Date();
+    if (!prog.progress || prog.progress < 1) prog.progress = 1;
+    await prog.save();
+    return { unlocked: true };
+  }
+  return { unlocked: false };
+}
+
 export async function incrementHuntProgress(userId, key, amount = 1) {
   let hunt = await Hunt.findByPk(key);
   if (!hunt) {

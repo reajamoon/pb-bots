@@ -1,11 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-import { Config } from '../../../models/index.js';
-// If available, use ModMailRelay to track thread ↔ user mapping for DM relays
-let ModMailRelay = null;
-try {
-  const models = await import('../../../models/index.js');
-  ModMailRelay = models.ModMailRelay;
-} catch {}
+import { Config, ModmailRelay } from '../../../models/index.js';
 
 const data = new SlashCommandBuilder()
   .setName('modmail')
@@ -56,18 +50,19 @@ async function execute(interaction) {
     reason: 'User-initiated modmail'
   });
 
-  // Persist relay mapping if model exists
+  // Persist relay mapping
   try {
-    if (ModMailRelay) {
-      await ModMailRelay.create({
+      await ModmailRelay.create({
         user_id: interaction.user.id,
+        bot_name: 'cas',
         fic_url: null,
         base_message_id: base.id,
         thread_id: thread.id,
         open: true,
+        status: 'open',
+        created_at: new Date(),
         last_user_message_at: new Date()
       });
-    }
   } catch (persistErr) {
     console.warn('[cas/modmail] Failed to persist ModMailRelay entry:', persistErr);
   }

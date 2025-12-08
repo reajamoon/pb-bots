@@ -286,7 +286,44 @@ export default async function onMessageCreate(message) {
             return;
           }
           // Find relay by this thread
-          const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id, open: true } });
+          let relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id, open: true } });
+          if (!relayEntry) {
+            // Fallback: try to extract user ID from thread starter or first embed
+            try {
+              const starter = await message.channel.fetchStarterMessage().catch(() => null);
+              let userId = null;
+              const tryEmbeds = [];
+              if (starter && starter.embeds && starter.embeds.length) tryEmbeds.push(...starter.embeds);
+              // Also look at the first few messages for an intro embed
+              const msgs = await message.channel.messages.fetch({ limit: 5 }).catch(() => null);
+              if (msgs) {
+                for (const m of msgs.values()) {
+                  if (m.embeds && m.embeds.length) tryEmbeds.push(...m.embeds);
+                }
+              }
+              for (const e of tryEmbeds) {
+                const footerText = e.footer && e.footer.text ? e.footer.text : '';
+                const match = footerText.match(/User ID:\s*(\d{5,})/i);
+                if (match) { userId = match[1]; break; }
+              }
+              if (userId) {
+                // Persist a repair entry so future lookups work reliably
+                try {
+                  await ModmailRelay.upsert({
+                    user_id: userId,
+                    bot_name: 'cas',
+                    thread_id: message.channel.id,
+                    base_message_id: starter ? starter.id : null,
+                    open: true,
+                    status: 'open',
+                    last_relayed_at: new Date(),
+                    created_at: new Date()
+                  });
+                } catch {}
+                relayEntry = { user_id: userId, thread_id: message.channel.id, open: true };
+              }
+            } catch {}
+          }
           if (!relayEntry) {
             await message.reply('I could not find the user for this thread.');
             return;

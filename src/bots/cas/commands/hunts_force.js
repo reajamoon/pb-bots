@@ -1,6 +1,6 @@
 import Discord from 'discord.js';
 const { SlashCommandBuilder, MessageFlags, PermissionsBitField } = Discord;
-import { HUNTS, awardHunt, getHuntMeta } from '../../../shared/hunts/registry.js';
+import { HUNTS, forceCompleteHunt, getHuntMeta } from '../../../shared/hunts/registry.js';
 
 export const data = new SlashCommandBuilder()
   .setName('hunts_force')
@@ -31,7 +31,7 @@ export async function execute(interaction) {
     const doAnnounce = interaction.options.getBoolean('announce') ?? true;
     const channelId = interaction.options.getString('channel_id') || null;
 
-    const res = await awardHunt(userId, key);
+    const res = await forceCompleteHunt(userId, key);
     const meta = getHuntMeta(key);
     const unlockedTxt = res.unlocked ? 'unlocked now' : 'already unlocked';
 
