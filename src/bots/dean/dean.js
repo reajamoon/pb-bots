@@ -25,16 +25,6 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// Bridge discord.js 'ready' to our custom 'clientReady' to stay future-proof
-client.once('ready', () => {
-  try {
-    console.log('[dean] discord.js ready; emitting clientReady');
-    client.emit('clientReady', client);
-  } catch (e) {
-    console.warn('[dean] failed emitting clientReady:', e && e.message ? e.message : e);
-  }
-});
-
 // Dynamically load command handlers from ./commands
 try {
   const here = fileURLToPath(import.meta.url);

@@ -41,16 +41,6 @@ client.cooldowns = new Collection();
 // Initialize birthday notification manager
 const birthdayManager = new BirthdayNotificationManager(client);
 
-// Bridge discord.js 'ready' to our custom 'clientReady' event
-client.once('ready', () => {
-    try {
-        logger.info('[sam] discord.js ready; emitting clientReady');
-        client.emit('clientReady', client);
-    } catch (e) {
-        logger.warn('[sam] failed emitting clientReady:', e && e.message ? e.message : e);
-    }
-});
-
 // Load command files
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
