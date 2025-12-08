@@ -3,6 +3,8 @@
 // User metadata (notes, manual fields) is handled separately by command handlers
 
 import { Recommendation, Series } from '../../models/index.js';
+import { RecommendationFields } from '../../models/fields/recommendationFields.js';
+import { SeriesFields } from '../../models/fields/seriesFields.js';
 import { fetchFicMetadata } from './ficParser.js';
 import { createRecEmbed } from './createRecEmbed.js';
 import normalizeAO3Url from './normalizeAO3Url.js';
@@ -123,7 +125,7 @@ async function processAO3Job(payload) {
 
   if (isUpdate) {
     // Find existing recommendation by ao3ID
-    const existingRec = await Recommendation.findOne({ where: { ao3ID } });
+    const existingRec = await Recommendation.findOne({ where: { [RecommendationFields.ao3ID]: ao3ID } });
     
     if (!existingRec) {
       console.error('[processAO3Job] Update requested but no existing recommendation found for ao3ID:', ao3ID);
@@ -162,21 +164,21 @@ async function processAO3Job(payload) {
         language: metadata.language,
         publishedDate: metadata.publishedDate,
         updatedDate: metadata.updatedDate,
-        recommendedBy: user.id,
-        recommendedByUsername: user.username,
+        [RecommendationFields.recommendedBy]: user.id,
+        [RecommendationFields.recommendedByUsername]: user.username,
         archive_warnings: Array.isArray(metadata.archiveWarnings) ? metadata.archiveWarnings : [],
         kudos: metadata.kudos,
         hits: metadata.hits,
         bookmarks: metadata.bookmarks,
         comments: metadata.comments,
         category: metadata.category,
-        ao3ID,
+        [RecommendationFields.ao3ID]: ao3ID,
         fandom_tags: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags : [],
         relationship_tags: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags : [],
         character_tags: Array.isArray(metadata.character_tags) ? metadata.character_tags : [],
         category_tags: Array.isArray(metadata.category_tags) ? metadata.category_tags : [],
         freeform_tags: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : [],
-        ...(seriesId ? { seriesId } : {}),
+        ...(seriesId ? { [RecommendationFields.seriesId]: seriesId } : {}),
         notPrimaryWork
       });
     } catch (err) {

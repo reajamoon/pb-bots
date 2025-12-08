@@ -2,6 +2,8 @@
 // Complete series processing flow for AO3 series
 
 import { Series, Recommendation } from '../../models/index.js';
+import { SeriesFields } from '../../models/fields/seriesFields.js';
+import { RecommendationFields } from '../../models/fields/recommendationFields.js';
 import processAO3Job from './processAO3Job.js';
 import { isFieldGloballyModlocked, shouldBotsRespectGlobalModlocks } from '../utils/globalModlockUtils.js';
 import { markPrimaryAndNotPrimaryWorks } from '../../bots/sam/commands/recHandlers/seriesUtils.js';
@@ -64,7 +66,7 @@ async function batchSeriesRecommendationJob(payload) {
 
       // Check if this work already exists to determine if we should update
       const { Recommendation } = await import('../../models/index.js');
-      const existingWork = await Recommendation.findOne({ where: { ao3ID } });
+      const existingWork = await Recommendation.findOne({ where: { [RecommendationFields.ao3ID]: ao3ID } });
       const shouldUpdate = !!existingWork;
 
       // Use the proper notPrimaryWork flag from the analysis
@@ -73,7 +75,7 @@ async function batchSeriesRecommendationJob(payload) {
       // Process individual work
       const workResult = await processAO3Job({
         ao3ID,
-        seriesId: seriesRecord.ao3SeriesId, // Use AO3 series ID, not database ID
+        seriesId: seriesRecord[SeriesFields.ao3SeriesId], // Use AO3 series ID, not database ID
         user,
         isUpdate: shouldUpdate,
         type: 'work',
@@ -162,14 +164,14 @@ async function upsertSeriesRecord(seriesMetadata, url, user) {
     };
 
     // Find existing by URL; if exists, update only unlocked fields
-    let seriesRecord = await Series.findOne({ where: { url } });
+    let seriesRecord = await Series.findOne({ where: { [SeriesFields.url]: url } });
     let created = false;
     if (!seriesRecord) {
       seriesRecord = await Series.create(seriesData);
       created = true;
     } else {
       const updatePayload = {};
-      const candidateFields = ['name','summary','authors','workCount','wordCount','status','workIds','series_works'];
+      const candidateFields = [SeriesFields.name, SeriesFields.summary, SeriesFields.authors, SeriesFields.workCount, SeriesFields.wordCount, SeriesFields.status, SeriesFields.workIds, SeriesFields.series_works];
       for (const field of candidateFields) {
         const botsRespect = await shouldBotsRespectGlobalModlocks();
         const locked = botsRespect ? await isFieldGloballyModlocked(field) : false;

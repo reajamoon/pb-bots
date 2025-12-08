@@ -217,7 +217,7 @@ export default async function handleSearchRecommendations(interaction) {
     // Handle series search if searching by series ID
     if (searchingSeries) {
         const { Series } = await import('../../../../models/index.js');
-        const { fetchSeriesWithUserMetadata } = await import('../../../../models/fetchSeriesWithUserMetadata.js');
+        const { fetchSeriesWithUserMetadata } = await import('../../../../models/index.js');
         
         const series = await fetchSeriesWithUserMetadata(seriesId);
         if (!series) {

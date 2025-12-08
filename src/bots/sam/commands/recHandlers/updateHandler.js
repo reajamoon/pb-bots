@@ -48,24 +48,30 @@ export default async function handleUpdateRecommendation(interaction) {
     const identifier = interaction.options.getString('identifier');
     
     // Channel policy: in fic_rec_channel, require a note (keep embeds clean in rec channel)
+    // Read and trim notes once; use consistently across flow
+    const newNotesRaw = interaction.options.getString('notes');
+    const newNotesTrim = (newNotesRaw || '').trim();
+    let noteTooShort = false;
     try {
         const recChannelCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
         const recChannelId = recChannelCfg && recChannelCfg.value ? recChannelCfg.value : null;
         if (recChannelId && interaction.channelId === recChannelId) {
-            const newNotes = interaction.options.getString('notes');
             // Enforce minimum length using config fallback 50
             let minLen = 50;
             try {
                 const minCfg = await Config.findOne({ where: { key: 'min_rec_note_length' } });
                 if (minCfg && Number(minCfg.value) > 0) minLen = Number(minCfg.value);
             } catch {}
-            if (!newNotes || !newNotes.trim() || newNotes.trim().length < minLen) {
+            if (!newNotesTrim || newNotesTrim.length < minLen) {
                 const line = `Every rec in here needs a recommender’s note. Make sure it's at least ${minLen} characters.
 
 Tell us what you love: squee, gush, nerd out. Share the good stuff readers look for. If you’re bumping a WIP for a chapter update, drop a new line or add a little more detail to your note. And if you’ve already left one, you can nudge a friend to add theirs.
 
 For raw refreshes without a note, hop over to the team-free-bots channel.`;
-                return await interaction.editReply({ content: line, flags: MessageFlags.Ephemeral });
+                noteTooShort = true;
+                await interaction.editReply({ content: line, flags: MessageFlags.Ephemeral });
+                // Stop here in fic-recs: do not enqueue/refresh without a valid note
+                return;
             }
         }
     } catch (policyErr) {
@@ -111,7 +117,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
             ? interaction.options.getString('tags').split(',')
             : []
     );
-    const newNotes = interaction.options.getString('notes');
+    const newNotes = newNotesTrim;
     const deleted = interaction.options.getBoolean('deleted');
     const newAttachment = interaction.options.getAttachment('attachment');
     const manualOnly = interaction.options.getBoolean('manual_only');
@@ -181,7 +187,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
         await saveUserMetadata({
             url: urlToUse,
             user: interaction.user,
-            notes: newNotes || '',
+            notes: newNotesTrim || '',
             additionalTags: newTags || [],
             manualFields
         });
@@ -197,14 +203,14 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                 const recChannelCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
                 const recChannelId = recChannelCfg && recChannelCfg.value ? recChannelCfg.value : null;
                 const inRecChannel = recChannelId && interaction.channelId === recChannelId;
-                if (inRecChannel && newNotes && newNotes.trim()) {
+                if (inRecChannel && newNotesTrim) {
                     // If recommendation exists and is fresh (<= 1 day), post embed now and confirm ephemerally
                     const oneDayMs = 24 * 60 * 60 * 1000;
                     const lastUpdated = recommendation.updatedAt || recommendation.createdAt;
                     const ageMs = Date.now() - new Date(lastUpdated).getTime();
                     if (ageMs <= oneDayMs) {
                         const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
-                        const embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotes });
+                        const embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
                         try {
                             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
                             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
@@ -308,7 +314,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                         const inRecChannel = recChannelCfg && recChannelCfg.value && interaction.channelId === recChannelCfg.value;
                         if (inRecChannel) {
                             const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
-                            const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotes });
+                            const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
                             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
                             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
                             let targetChannel = null;
@@ -425,7 +431,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                 const inRecChannel = recChannelCfg && recChannelCfg.value && interaction.channelId === recChannelCfg.value;
                 if (inRecChannel) {
                     const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
-                    const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotes });
+                    const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
                     // Avoid duplicate embeds if we already have a tracked message for this queue/user
                     if (!existingSub || !existingSub.channel_id || !existingSub.message_id) {
                         const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });

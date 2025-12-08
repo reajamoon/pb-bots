@@ -298,7 +298,7 @@ async function notifyQueueSubscribers(client) {
             // Handle different job types
             if (job.result && job.result.type === 'series' && job.result.seriesId) {
                 // For series notifications, get the Series record with works and metadata
-                const { fetchSeriesWithUserMetadata } = await import('../../../models/fetchSeriesWithUserMetadata.js');
+                const { fetchSeriesWithUserMetadata } = await import('../../../models/index.js');
                 const series = await fetchSeriesWithUserMetadata(job.result.seriesId);
                 if (series) {
                     const firstSub = subscribers && subscribers.length ? subscribers[0] : null;
@@ -415,7 +415,7 @@ async function notifyQueueSubscribers(client) {
             let embed = null;
             // Handle series jobs - get series data and create series embed
             if (job.result && job.result.type === 'series' && job.result.seriesId) {
-                const { fetchSeriesWithUserMetadata } = await import('../../../models/fetchSeriesWithUserMetadata.js');
+                const { fetchSeriesWithUserMetadata } = await import('../../../models/index.js');
                 const series = await fetchSeriesWithUserMetadata(job.result.seriesId);
                 if (series) {
                     // Tie footer to the first subscriber (note-owner preference) and include notes/tags if provided

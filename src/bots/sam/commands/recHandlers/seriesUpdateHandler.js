@@ -391,7 +391,7 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
         const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
         const inRecChannel = recCfg && recCfg.value && interaction.channelId === recCfg.value;
         if (inRecChannel && newNotes && newNotes.trim()) {
-            const { fetchSeriesWithUserMetadata } = await import('../../../../models/fetchSeriesWithUserMetadata.js');
+            const { fetchSeriesWithUserMetadata } = await import('../../../../models/index.js');
             const { createSeriesEmbed } = await import('../../../../shared/recUtils/createSeriesEmbed.js');
             const seriesWithMeta = await fetchSeriesWithUserMetadata(series.id, true);
             const embedNow = createSeriesEmbed(seriesWithMeta, {

@@ -171,7 +171,7 @@ async function handleRandomRecommendation(interaction) {
         try {
             // Check if this recommendation has series data - if so, show series embed
             if (recWithSeries.series && recWithSeries.series.id) {
-                const { fetchSeriesWithUserMetadata } = await import('../../../../models/fetchSeriesWithUserMetadata.js');
+                const { fetchSeriesWithUserMetadata } = await import('../../../../models/index.js');
                 const seriesWithUserMetadata = await fetchSeriesWithUserMetadata(recWithSeries.series.id);
                 if (seriesWithUserMetadata) {
                     embed = createSeriesEmbed(seriesWithUserMetadata);

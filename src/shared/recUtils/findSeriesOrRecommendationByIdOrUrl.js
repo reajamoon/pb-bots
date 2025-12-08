@@ -5,6 +5,8 @@ import { Op } from 'sequelize';
 import updateMessages from '../text/updateMessages.js';
 import normalizeAO3Url from './normalizeAO3Url.js';
 import { Recommendation, Series } from '../../models/index.js';
+import { SeriesFields } from '../../models/fields/seriesFields.js';
+import { RecommendationFields } from '../../models/fields/recommendationFields.js';
 
 /**
  * Finds a series or recommendation by identifier
@@ -39,7 +41,7 @@ async function findSeriesOrRecommendationByIdOrUrl(interaction, identifier) {
         // Try as AO3 Work ID if not found as rec ID
         const recByAO3 = await Recommendation.findOne({
             where: {
-                url: {
+                [RecommendationFields.url]: {
                     [Op.like]: `%archiveofourown.org/works/${identifier}%`
                 }
             }
@@ -57,14 +59,14 @@ async function findSeriesOrRecommendationByIdOrUrl(interaction, identifier) {
         const seriesMatch = normalizedUrl.match(/archiveofourown\.org\/series\/(\d+)/);
         if (seriesMatch) {
             const ao3SeriesId = parseInt(seriesMatch[1], 10);
-            const series = await Series.findOne({ where: { ao3SeriesId } });
+            const series = await Series.findOne({ where: { [SeriesFields.ao3SeriesId]: ao3SeriesId } });
             if (series) {
                 return { type: 'series', record: series };
             }
             throw new Error(`Series with AO3 ID ${ao3SeriesId} not found.`);
         } else {
             // Regular work URL
-            const recommendation = await Recommendation.findOne({ where: { url: normalizedUrl } });
+            const recommendation = await Recommendation.findOne({ where: { [RecommendationFields.url]: normalizedUrl } });
             if (recommendation) {
                 return { type: 'recommendation', record: recommendation };
             }
@@ -72,7 +74,7 @@ async function findSeriesOrRecommendationByIdOrUrl(interaction, identifier) {
     }
 
     // Try as exact case-sensitive title
-    const recommendation = await Recommendation.findOne({ where: { title: identifier } });
+    const recommendation = await Recommendation.findOne({ where: { [RecommendationFields.title]: identifier } });
     if (recommendation) {
         return { type: 'recommendation', record: recommendation };
     }
