@@ -133,6 +133,18 @@ async function processAO3Job(payload) {
       const fandomTags = metadata.fandom_tags || metadata.fandom || [];
       const relationshipTags = metadata.relationship_tags || [];
       const freeformTags = metadata.freeform_tags || [];
+      // Targeted debug: show counts and samples prior to validation
+      try {
+        console.log('[processAO3Job] Dean/Cas validation inputs:', {
+          ao3ID,
+          fandomCount: Array.isArray(fandomTags) ? fandomTags.length : 0,
+          fandomSample: Array.isArray(fandomTags) ? fandomTags.slice(0, 5) : [],
+          relationshipCount: Array.isArray(relationshipTags) ? relationshipTags.length : 0,
+          relationshipSample: Array.isArray(relationshipTags) ? relationshipTags.slice(0, 5) : [],
+          freeformCount: Array.isArray(freeformTags) ? freeformTags.length : 0,
+          freeformSample: Array.isArray(freeformTags) ? freeformTags.slice(0, 5) : []
+        });
+      } catch {}
       const validation = validateDeanCasRec(fandomTags, relationshipTags, freeformTags);
       
       if (!validation.valid) {
@@ -196,7 +208,10 @@ async function processAO3Job(payload) {
       ao3ID: existingRec.ao3ID,
       updateFieldKeys: Object.keys(updateFields),
       hasAuthorsUpdate: 'authors' in updateFields,
-      authorsUpdate: updateFields.authors
+      authorsUpdate: updateFields.authors,
+      fandomTagsLen: Array.isArray(updateFields.fandom_tags) ? updateFields.fandom_tags.length : undefined,
+      relationshipTagsLen: Array.isArray(updateFields.relationship_tags) ? updateFields.relationship_tags.length : undefined,
+      freeformTagsLen: Array.isArray(updateFields.freeform_tags) ? updateFields.freeform_tags.length : undefined
     });
 
     if (Object.keys(updateFields).length > 0) {
@@ -223,6 +238,10 @@ async function processAO3Job(payload) {
         authors: metadata.authors || (metadata.author ? [metadata.author] : ['Unknown Author']),
         summary: metadata.summary,
         tags: Array.isArray(metadata.tags) ? metadata.tags : [],
+        // Persist AO3 tag groups
+        fandom_tags: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags : (Array.isArray(metadata.fandom) ? metadata.fandom : []),
+        relationship_tags: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags : [],
+        freeform_tags: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : [],
         rating: metadata.rating,
         wordCount: metadata.wordCount,
         chapters: metadata.chapters,
@@ -243,6 +262,12 @@ async function processAO3Job(payload) {
         ...(seriesId ? { [RecommendationFields.seriesId]: seriesId } : {}),
         notPrimaryWork,
         ...(part ? { part } : {})
+      });
+      console.log('[processAO3Job] Create recommendation tag debug:', {
+        ao3ID,
+        fandomTagsLen: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags.length : (Array.isArray(metadata.fandom) ? metadata.fandom.length : 0),
+        relationshipTagsLen: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags.length : 0,
+        freeformTagsLen: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags.length : 0
       });
     } catch (err) {
       console.error('[processAO3Job] Error creating recommendation:', err);
@@ -303,6 +328,25 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
   const oldTags = Array.isArray(existingRec.tags) ? existingRec.tags : [];
   if (JSON.stringify(oldTags) !== JSON.stringify(newTags) && !lockedFields.has('tags')) {
     updateFields.tags = newTags;
+  }
+
+  // AO3 tag groups: fandom, relationship, freeform
+  const newFandomTags = Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags : (Array.isArray(metadata.fandom) ? metadata.fandom : []);
+  const newRelationshipTags = Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags : [];
+  const newFreeformTags = Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : [];
+
+  const oldFandomTags = Array.isArray(existingRec.fandom_tags) ? existingRec.fandom_tags : [];
+  const oldRelationshipTags = Array.isArray(existingRec.relationship_tags) ? existingRec.relationship_tags : [];
+  const oldFreeformTags = Array.isArray(existingRec.freeform_tags) ? existingRec.freeform_tags : [];
+
+  if (JSON.stringify(oldFandomTags) !== JSON.stringify(newFandomTags) && !lockedFields.has('fandom_tags')) {
+    updateFields.fandom_tags = newFandomTags;
+  }
+  if (JSON.stringify(oldRelationshipTags) !== JSON.stringify(newRelationshipTags) && !lockedFields.has('relationship_tags')) {
+    updateFields.relationship_tags = newRelationshipTags;
+  }
+  if (JSON.stringify(oldFreeformTags) !== JSON.stringify(newFreeformTags) && !lockedFields.has('freeform_tags')) {
+    updateFields.freeform_tags = newFreeformTags;
   }
 
   // Basic fields

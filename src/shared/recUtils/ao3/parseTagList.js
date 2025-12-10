@@ -31,31 +31,92 @@ function excludeChapters($, selector) {
 }
 
 export function freeformTags($) {
-    return parseTagList($, excludeChapters($, 'dd.freeform.tags'));
+    let tags = parseTagList($, excludeChapters($, 'dd.freeform.tags'));
+    if (tags.length === 0) {
+        // Fallback: find DD after DT 'Additional Tags'
+        const dt = $("dl.meta.group dt").filter((i, el) => /additional\s+tags/i.test($(el).text()));
+        if (dt.length) {
+            const dd = dt.first().next('dd');
+            tags = parseTagList($, dd);
+        }
+        // Global fallback: any '.tags' block outside chapters
+        if (tags.length === 0) {
+            tags = excludeChapters($, 'dd.tags a.tag').map((i, el) => $(el).text().trim()).get();
+        }
+    }
+    return tags;
 }
 
 export function archiveWarnings($) {
-    return parseTagList($, excludeChapters($, 'dd.warning.tags'));
+    let tags = parseTagList($, excludeChapters($, 'dd.warning.tags'));
+    if (tags.length === 0) {
+        const dt = $("dl.meta.group dt").filter((i, el) => /archive\s+warnings/i.test($(el).text()));
+        if (dt.length) {
+            const dd = dt.first().next('dd');
+            tags = parseTagList($, dd);
+        }
+    }
+    return tags;
 }
 
 export function relationshipTags($) {
-    return parseTagList($, excludeChapters($, 'dd.relationship.tags'));
+    let tags = parseTagList($, excludeChapters($, 'dd.relationship.tags'));
+    if (tags.length === 0) {
+        const dt = $("dl.meta.group dt").filter((i, el) => /relationships?/i.test($(el).text()));
+        if (dt.length) {
+            const dd = dt.first().next('dd');
+            tags = parseTagList($, dd);
+        }
+    }
+    return tags;
 }
 
 export function characterTags($) {
-    return parseTagList($, excludeChapters($, 'dd.character.tags'));
+    let tags = parseTagList($, excludeChapters($, 'dd.character.tags'));
+    if (tags.length === 0) {
+        const dt = $("dl.meta.group dt").filter((i, el) => /characters?/i.test($(el).text()));
+        if (dt.length) {
+            const dd = dt.first().next('dd');
+            tags = parseTagList($, dd);
+        }
+    }
+    return tags;
 }
 
 export function categoryTags($) {
-    return parseTagList($, excludeChapters($, 'dd.category.tags'));
+    let tags = parseTagList($, excludeChapters($, 'dd.category.tags'));
+    if (tags.length === 0) {
+        const dt = $("dl.meta.group dt").filter((i, el) => /categories?/i.test($(el).text()));
+        if (dt.length) {
+            const dd = dt.first().next('dd');
+            tags = parseTagList($, dd);
+        }
+    }
+    return tags;
 }
 
 export function fandomTags($) {
-    return parseTagList($, excludeChapters($, 'dd.fandom.tags'));
+    let tags = parseTagList($, excludeChapters($, 'dd.fandom.tags'));
+    if (tags.length === 0) {
+        const dt = $("dl.meta.group dt").filter((i, el) => /fandoms?/i.test($(el).text()));
+        if (dt.length) {
+            const dd = dt.first().next('dd');
+            tags = parseTagList($, dd);
+        }
+    }
+    return tags;
 }
 
 export function requiredTags($) {
-    return parseTagList($, excludeChapters($, 'dd.required.tags'));
+    let tags = parseTagList($, excludeChapters($, 'dd.required.tags'));
+    if (tags.length === 0) {
+        const dt = $("dl.meta.group dt").filter((i, el) => /required\s+tags/i.test($(el).text()));
+        if (dt.length) {
+            const dd = dt.first().next('dd');
+            tags = parseTagList($, dd);
+        }
+    }
+    return tags;
 }
 
 // General utility for custom tag class

@@ -10,8 +10,12 @@ const FANDOM_ALIASES = [
   'supernatural (tv 2005)',
   'supernatural (2005)',
   'supernatural (tv)',
-  'spn',
-  'spn rpf' // allow if relationship tags clearly indicate Dean/Cas (rare)
+  'supernatural (tv series)',
+  'supernatural (tv series 2005)',
+  'supernatural - all media types',
+  'supernatural (all media types)',
+  'spn'
+  // Note: do not include 'spn rpf' here; handle RPF separately
 ];
 
 const SHIP_ALIASES = [
@@ -31,8 +35,16 @@ function normalizeTag(s) {
 }
 
 function isSupernaturalFandomTag(tag) {
-  const t = normalizeTag(tag).replace(/\s*\([^)]*\)\s*/g, match => match); // keep variants
+  const t = normalizeTag(tag);
+  // Broad match: any tag containing 'supernatural' qualifies (handled RPF separately)
+  if (/\bsupernatural\b/.test(t)) return true;
+  // Alias match
   return FANDOM_ALIASES.some(a => t.includes(a));
+}
+
+function isSPNRpfTag(tag) {
+  const t = normalizeTag(tag);
+  return /\b(supernatural|spn)\b/.test(t) && /\brpf\b/.test(t);
 }
 
 function isDeanCasExactShip(tag) {
@@ -129,7 +141,15 @@ function isQualifier(tag) {
 
 export function validateDeanCasRec(fandomTags, relationshipTags, freeformTags = []) {
   // 1. Must have Supernatural fandom (allow common aliases)
-  if (!Array.isArray(fandomTags) || !fandomTags.some(isSupernaturalFandomTag)) {
+  const fandomArray = Array.isArray(fandomTags) ? fandomTags : [];
+  const hasMainlineSPN = fandomArray.some(tag => isSupernaturalFandomTag(tag) && !isSPNRpfTag(tag));
+  const hasSPNRpf = fandomArray.some(isSPNRpfTag);
+  const relArray = Array.isArray(relationshipTags) ? relationshipTags : [];
+
+  // Allow RPF-only fandom if the relationship explicitly matches Dean/Cas
+  const hasExplicitDeanCas = relArray.some(isDeanCasExactShip);
+
+  if (!hasMainlineSPN && !(hasSPNRpf && hasExplicitDeanCas)) {
     return { valid: false, reason: 'Missing Supernatural fandom tag.' };
   }
   // 2. If no relationship tags, treat as gen (allowed)
