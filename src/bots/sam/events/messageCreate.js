@@ -28,26 +28,21 @@ export default {
     async execute(message) {
         // Don't track bot messages
         if (message.author.bot) return;
-        
-        console.log('[MessageCreate] Message received - Channel type:', message.channel.type, 'Is DM:', message.channel.type === ChannelType.DM, 'Author:', message.author.id);
-        
         // Handle DM replies from users back to modmail threads
         if (message.channel.type === ChannelType.DM) {
             console.log('[ModmailRelay] DM received from user:', message.author.id, 'Content:', message.content);
-            
             // Find if this user has any active modmail relays
             const relayEntry = await ModmailRelay.findOne({
                 where: { user_id: message.author.id, bot_name: 'sam', open: true },
                 order: [['last_relayed_at', 'DESC']]
             });
-            
             if (!relayEntry) {
                 console.log('[ModmailRelay] No active relay found for user:', message.author.id);
                 return;
             }
-            
+
             console.log('[ModmailRelay] Found relay entry:', relayEntry.thread_id);
-            
+
             // Get the modmail thread
             try {
                 const thread = await message.client.channels.fetch(relayEntry.thread_id);
@@ -55,27 +50,27 @@ export default {
                     console.log('[ModmailRelay] Thread not found or not a thread:', relayEntry.thread_id);
                     return;
                 }
-                
+
                 // Send the user's reply to the modmail thread
                 await thread.send(`**Reply from <@${message.author.id}>:**\n\n${message.content}`);
                 console.log('[ModmailRelay] Relayed DM to thread:', thread.id);
-                
+
                 // Acknowledge to the user
                 await message.react('✅');
-                
+
             } catch (err) {
                 console.log('[ModmailRelay] Error relaying DM to thread:', err);
             }
             return;
         }
-        
+
         // Handle modmail thread relay commands (@relay, @sam relay, /relay)
         if (message.channel.isThread()) {
             console.log('[ModmailRelay] Message in thread detected:', message.channel.name);
-            
+
             const parent = message.channel.parent;
             if (!parent) return;
-            
+
             // Check if this is the modmail channel
             const modmailConfig = await Config.findOne({ where: { key: 'modmail_channel_id' } });
             if (!modmailConfig) {
@@ -93,7 +88,7 @@ export default {
                     // Check for relay commands
                     const content = message.content.trim();
                     console.log('[ModmailRelay] Message content:', content);
-                    
+
                     if (content.toLowerCase().startsWith('@ticket') || content.toLowerCase().startsWith('/ticket')) {
                         const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id } });
                         if (!relayEntry) {
@@ -128,11 +123,11 @@ export default {
                         }
                         return;
                     }
-                    if (content.toLowerCase().startsWith('@relay') || 
+                    if (content.toLowerCase().startsWith('@relay') ||
                         content.toLowerCase().startsWith('/relay')) {
-                        
+
                         console.log('[ModmailRelay] Processing relay command...');
-                        
+
                         // Get fic info from thread starter message
                         const ficInfo = await getFicInfoFromThread(message.channel);
                         if (!ficInfo) {
@@ -140,14 +135,14 @@ export default {
                             return; // Stop processing if can't get fic info
                         } else {
                             console.log('[ModmailRelay] Found fic info:', ficInfo);
-                            
+
                             // Remove the command prefix
                             const relayMsg = content.replace(/^(@relay|\/relay)/i, '').trim();
                             if (!relayMsg) {
                                 await message.reply('Dude, you gotta actually tell me what you want me to say to them. Just add your message after `@relay` or `/relay`.');
                                 return;
                             }
-                            
+
                             // DM the submitter
                             try {
                                 const dmUser = await message.client.users.fetch(ficInfo.submitterId);
@@ -200,7 +195,7 @@ export default {
                 }
             }
         }
-        
+
         try {
             // Find or create user in database
             const [user, created] = await User.findOrCreate({
