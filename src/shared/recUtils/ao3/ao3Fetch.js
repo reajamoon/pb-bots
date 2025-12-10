@@ -28,7 +28,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
     ao3FetchMutex = prev.then(() => lock);
     try {
         await prev;
-        const { getLoggedInAO3Page, appendAdultViewParamIfNeeded, bypassStayLoggedInInterstitial, sleepJitter, logGentlePacing } = await import('./ao3Utils.js');
+        const { getLoggedInAO3Page, appendAdultViewParamIfNeeded, bypassStayLoggedInInterstitial } = await import('./ao3Utils.js');
         const { parseAO3Metadata } = await import('./ao3Parser.js');
         let html, browser, page, ao3Url;
             let isFirstBrowserLaunch = false;
@@ -57,15 +57,15 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 timeout = Math.max(timeout, 180000); // 3 minutes for first launch
                 fetchAO3MetadataWithFallback._firstBrowserLaunch = false;
             }
+            const { getNextAvailableAO3Time, markAO3Requests } = await import('./ao3QueueRateHelper.js');
+            const nextAvailable = getNextAvailableAO3Time(1);
+            const now = Date.now();
+            if (nextAvailable > now) {
+                await new Promise(res => setTimeout(res, nextAvailable - now));
+            }
+            markAO3Requests(1);
             console.log(`[AO3][Fetch] Navigating to ${ao3Url} with timeout: ${timeout}ms (attempt ${attempt})`);
-            await sleepJitter();
-            logGentlePacing('Fetch goto', { url: ao3Url, attempt, timeout });
-            const t0 = Date.now();
             await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout });
-            const tGoto = Date.now() - t0;
-            console.log(`[AO3][Fetch] goto completed in ${tGoto}ms (attempt ${attempt})`);
-            // Breathing room after navigation to let AO3 settle
-            await sleepJitter();
             // Bypass 'stay logged in' interstitial if present
             await bypassStayLoggedInInterstitial(page, ao3Url);
             // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
@@ -83,7 +83,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                 (pageTitle && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(pageTitle)) ||
                 (errorText && /rate limit|too many requests|prove you are human|unusual traffic|captcha/i.test(errorText));
             if (rateLimitMatch) {
-                console.warn(`[AO3] Rate limit/CAPTCHA detected. title="${pageTitle}" errors="${(errorText||'').trim().slice(0,180)}" url=${ao3Url}`);
+                console.warn('[AO3] Rate limit or CAPTCHA detected during fetch (title or error container).');
                 html = null;
                 // Defensive: always delete cookies and reset in-memory cookies on rate limit
                 const COOKIES_PATH = 'ao3_cookies.json';
@@ -94,16 +94,9 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     global.__samInMemoryCookies = null;
                     console.warn('[AO3] In-memory cookies reset due to rate limit/CAPTCHA.');
                 }
-                // Do not hard-fail immediately; allow outer loop to retry after pacing
                 return false;
             }
-            const t1 = Date.now();
             html = await page.content();
-            const tContent = Date.now() - t1;
-            console.log(`[AO3][Fetch] content() took ${tContent}ms`);
-            // Additional breathing room before checks
-            await sleepJitter();
-            console.log(`[AO3][Fetch] Loaded content length=${html ? html.length : 0} url=${ao3Url}`);
             // Extra check: ensure not still on login/interstitial page
             let currentUrl = page.url();
             if (
@@ -120,37 +113,31 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     global.__samInMemoryCookies = null;
                     console.warn('[AO3] In-memory cookies reset due to login/interstitial page.');
                 }
-                console.warn(`[AO3] Login/interstitial page detected. title="${pageTitle}" currentUrl=${currentUrl}`);
-                // Do not exit early; signal retry to caller
                 return false;
             }
             loggedIn = isAO3LoggedInPage(html);
-            console.log(`[AO3][Fetch] LoggedIn=${loggedIn} currentUrl=${currentUrl}`);
             return true;
         }
 
         let ok = false;
         let attempts = 1;
-        const maxAttempts = 3;
+        const maxAttempts = 2;
         let lastError = null;
         try {
             ok = await doLoginAndFetch(attempts);
             while ((!ok || !html) && attempts < maxAttempts) {
-                // If we failed, delete cookies and add pacing before retry
+                // If we failed, delete cookies and try again
                 const COOKIES_PATH = 'ao3_cookies.json';
                 if (fs.existsSync(COOKIES_PATH)) {
                     console.warn('[AO3] Detected login/interstitial page. Deleting cookies and retrying login.');
                     try { fs.unlinkSync(COOKIES_PATH); } catch {}
                 }
-                // Breathing room before retrying
-                await sleepJitter();
                 retried = true;
                 try {
                     ok = await doLoginAndFetch(attempts);
                 } catch (err) {
                     lastError = err;
                     ok = false;
-                    console.warn(`[AO3] doLoginAndFetch failed on retry attempt ${attempts}: ${err && err.message}`);
                     // Robust: always close browser on fatal error
                     if (browser && browser.isConnected()) {
                         try { await browser.close(); console.warn('[AO3] Closed browser after fatal error in doLoginAndFetch.'); } catch (e) { console.warn('[AO3] Failed to close browser after fatal error:', e); }
@@ -174,8 +161,6 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     }
                     retried = true;
                     try {
-                        // Short pacing before re-login
-                        await sleepJitter();
                         ok = await doLoginAndFetch();
                         if (ok && html) {
                             parsed = await parseAO3Metadata(html, ao3Url, includeRawHtml);
@@ -183,7 +168,6 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     } catch (err) {
                         lastError = err;
                         ok = false;
-                        console.warn(`[AO3] Parser session retry failed: ${err && err.message}`);
                         // Robust: always close browser on fatal error
                         if (browser && browser.isConnected()) {
                             try { await browser.close(); console.warn('[AO3] Closed browser after fatal error in parser session retry.'); } catch (e) { console.warn('[AO3] Failed to close browser after fatal error:', e); }
@@ -191,8 +175,6 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     }
                     attempts++;
                 }
-                const parsedTitle = parsed?.metadata?.title || parsed?.title || null;
-                console.log(`[AO3][Fetch] Parse complete. hasError=${!!(parsed && parsed.error)} title=${parsedTitle ? String(parsedTitle).slice(0,80) : 'N/A'}`);
                 // --- Dean/Cas validation: set nOTP status if invalid ---
                 if (parsed && parsed.fandom_tags && parsed.relationship_tags) {
                     const validation = validateDeanCasRec(parsed.fandom_tags, parsed.relationship_tags, parsed.freeform_tags || []);

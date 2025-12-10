@@ -1,23 +1,8 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getSharedBrowser, logBrowserEvent, getCurrentUserAgent, acquireLoginLock } from './ao3BrowserManager.js';
+import { getSharedBrowser, logBrowserEvent, getCurrentUserAgent } from './ao3BrowserManager.js';
 import { getNextAvailableAO3Time, markAO3Requests } from './ao3QueueRateHelper.js';
-// Gentle pacing: tiny randomized jitter between navigations inside a single job
-export function sleepJitter(minMs = 300, maxMs = 1200) {
-    const span = Math.max(0, maxMs - minMs);
-    const wait = minMs + Math.floor(Math.random() * span);
-    return new Promise(res => setTimeout(res, wait));
-}
-
-export function logGentlePacing(label, details = {}) {
-    try {
-        const now = new Date().toISOString();
-        const msg = `[AO3][Pacing] ${now} ${label} ${JSON.stringify(details)}`;
-        console.log(msg);
-    } catch {}
-}
-
 
 const COOKIES_PATH = 'ao3_cookies.json';
 const COOKIES_META_PATH = 'ao3_cookies_meta.json';
@@ -39,9 +24,14 @@ async function bypassStayLoggedInInterstitial(page, ficUrl) {
     // Check for the interstitial by looking for the message or button
     const content = await page.content();
     if (content.includes("you'll stay logged in for two weeks") || content.includes('stay logged in')) {
-        // Light touch: add micro-jitter to avoid robotic cadence
-        await sleepJitter();
-        logGentlePacing('Bypass interstitial re-goto');
+        // AO3 rate limit: wait until next available slot
+        const nextAvailable = getNextAvailableAO3Time(1);
+        const now = Date.now();
+        if (nextAvailable > now) {
+            const wait = nextAvailable - now;
+            await new Promise(res => setTimeout(res, wait));
+        }
+        markAO3Requests(1);
         await page.goto(ficUrl, { waitUntil: 'domcontentloaded' });
         return true;
     }
@@ -89,9 +79,7 @@ async function debugLoginAndFetchWork(workUrl) {
  * @returns {Promise<{ browser: import('puppeteer').Browser, page: import('puppeteer').Page }>}
  */
 async function getLoggedInAO3Page(ficUrl) {
-    // Serialize login attempts across jobs
-    const releaseLoginLock = await acquireLoginLock();
-    // AO3 rate limit: single gate per job before browser activity
+    // AO3 rate limit: wait until next available slot before any browser activity
     const nextAvailable = getNextAvailableAO3Time(1);
     const now = Date.now();
     if (nextAvailable > now) {
@@ -99,7 +87,6 @@ async function getLoggedInAO3Page(ficUrl) {
         await new Promise(res => setTimeout(res, wait));
     }
     markAO3Requests(1);
-    logGentlePacing('Job gate', { nextAvailable, now });
 
     // Helper: check if page is 'New Session' interstitial by title
     async function isNewSessionTitle(page) {
@@ -170,13 +157,27 @@ async function getLoggedInAO3Page(ficUrl) {
             logBrowserEvent('[AO3] Attempting to load cookies from file...');
             const cookies = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
             await page.setUserAgent(getCurrentUserAgent());
+            // AO3 rate limit before goto
+            {
+                const nextAvailable = getNextAvailableAO3Time(1);
+                const now = Date.now();
+                if (nextAvailable > now) {
+                    await new Promise(res => setTimeout(res, nextAvailable - now));
+                }
+                markAO3Requests(1);
+            }
             await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
-            await sleepJitter();
-            logGentlePacing('Post-cookie home goto');
             await page.setCookie(...cookies);
+            // AO3 rate limit before reload to avoid rapid requests
+            {
+                const nextAvailableReload = getNextAvailableAO3Time(1);
+                const nowReload = Date.now();
+                if (nextAvailableReload > nowReload) {
+                    await new Promise(res => setTimeout(res, nextAvailableReload - nowReload));
+                }
+                markAO3Requests(1);
+            }
             await page.reload({ waitUntil: 'domcontentloaded' });
-            await sleepJitter();
-            logGentlePacing('Post-cookie home reload');
             // Always try to skip stay logged in page and land on fic
             if (ficUrl) await bypassStayLoggedInInterstitial(page, ficUrl);
             // Use a precise selector to check for the 'Log Out' link
@@ -244,9 +245,15 @@ async function getLoggedInAO3Page(ficUrl) {
                         'X-Sam-Bot-Info': 'Hi AO3 devs! This is Sam, a hand-coded Discord bot for a single small server. I only fetch header metadata for user recs and do not retrieve fic content. Contact: https://github.com/reajamoon/sam-bot'
                     });
                 }
+                // Strong AO3 rate limit: wait for next slot and mark
+                const nextAvailable = getNextAvailableAO3Time(1);
+                const now = Date.now();
+                if (nextAvailable > now) {
+                    const wait = nextAvailable - now;
+                    await new Promise(res => setTimeout(res, wait));
+                }
+                markAO3Requests(1);
                 await page.goto(AO3_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT });
-                await sleepJitter();
-                logGentlePacing('Login page goto');
                 return;
             } catch (err) {
                 lastErr = err;
@@ -262,8 +269,8 @@ async function getLoggedInAO3Page(ficUrl) {
                         'X-Sam-Bot-Info': 'Hi AO3 devs! This is Sam, a hand-coded Discord bot for a single small server. I only fetch header metadata for user recs and do not retrieve fic content. Contact: https://github.com/reajamoon/sam-bot'
                     });
                 } else if (err.name === 'TimeoutError' || (err.message && err.message.includes('timeout'))) {
-                    // Exponential backoff with lower floor to reduce total wait
-                    const delay = Math.max(LOGIN_RETRY_BASE_DELAY * Math.pow(2, attempt), 5000);
+                    // Exponential backoff, but always wait at least 20s (rate limit interval)
+                    const delay = Math.max(LOGIN_RETRY_BASE_DELAY * Math.pow(2, attempt), 20000);
                     console.warn(`[AO3] Login page navigation timed out (attempt ${attempt + 1}/${LOGIN_RETRY_MAX}), retrying after ${Math.round(delay/1000)}s...`);
                     await new Promise(res => setTimeout(res, delay));
                 } else {
@@ -325,20 +332,8 @@ async function getLoggedInAO3Page(ficUrl) {
         }
         if (mainLoginExists) {
             logBrowserEvent('[AO3] Using main login form.');
-            // Re-resolve selectors right before typing to avoid stale handles
-            await page.waitForSelector(MAIN_SELECTOR, { timeout: SELECTOR_WAIT });
-            await page.waitForSelector('#user_password', { timeout: SELECTOR_WAIT });
-            try {
-                await page.focus(MAIN_SELECTOR);
-                await page.keyboard.type(username, { delay: 50 });
-                await page.focus('#user_password');
-                await page.keyboard.type(password, { delay: 50 });
-            } catch (typeErr) {
-                logBrowserEvent('[AO3] Typing into login form failed; retrying with $eval setValue. ' + (typeErr && typeErr.message ? typeErr.message : ''));
-                // Fallback: set values via DOM directly to avoid input focus issues
-                await page.$eval(MAIN_SELECTOR, (el, value) => { el.value = value; }, username);
-                await page.$eval('#user_password', (el, value) => { el.value = value; }, password);
-            }
+            await page.type(MAIN_SELECTOR, username);
+            await page.type('#user_password', password);
             try {
                 await Promise.all([
                     page.click('#loginform input[name="commit"]'),
@@ -369,18 +364,8 @@ async function getLoggedInAO3Page(ficUrl) {
             }
             if (smallLoginExists) {
                 logBrowserEvent('[AO3] Using small login form.');
-                await page.waitForSelector(SMALL_SELECTOR, { timeout: SELECTOR_WAIT });
-                await page.waitForSelector('#user_session_password_small', { timeout: SELECTOR_WAIT });
-                try {
-                    await page.focus(SMALL_SELECTOR);
-                    await page.keyboard.type(username, { delay: 50 });
-                    await page.focus('#user_session_password_small');
-                    await page.keyboard.type(password, { delay: 50 });
-                } catch (typeErr) {
-                    logBrowserEvent('[AO3] Typing into small login failed; retrying with $eval setValue. ' + (typeErr && typeErr.message ? typeErr.message : ''));
-                    await page.$eval(SMALL_SELECTOR, (el, value) => { el.value = value; }, username);
-                    await page.$eval('#user_session_password_small', (el, value) => { el.value = value; }, password);
-                }
+                await page.type(SMALL_SELECTOR, username);
+                await page.type('#user_session_password_small', password);
                 try {
                     await Promise.all([
                         page.click('#small_login input[name="commit"]'),
@@ -472,18 +457,40 @@ async function getLoggedInAO3Page(ficUrl) {
         }
         throw new Error('AO3 login failed.' + (err && err.message ? ' ' + err.message : ''));
     } finally {
-        // Keep the logged-in page alive for reuse; do not close here.
-        // Release login lock regardless of outcome.
-        try { releaseLoginLock && releaseLoginLock(); } catch {}
+        if (page && !page.isClosed()) {
+            try { await page.close(); logBrowserEvent('[AO3] Closed page after login attempt.'); } catch (e) { logBrowserEvent('Error closing page after login attempt: ' + e.message); }
+        }
     }
 
-    // At this point, page is logged in; reuse the same page
+    page = await browser.newPage();
     await preparePage(page);
-    // Navigate to home or target fic url (no extra global rate-limit wait within same job)
-    const dest = ficUrl || 'https://archiveofourown.org/';
-    await sleepJitter();
-    logGentlePacing('Final destination goto', { dest });
-    await page.goto(dest, { waitUntil: 'domcontentloaded' });
+    let cookiesToSet = null;
+    if (fs.existsSync(COOKIES_PATH)) {
+        try {
+            cookiesToSet = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
+        } catch {}
+    }
+    if (!cookiesToSet && global.__samInMemoryCookies) {
+        cookiesToSet = global.__samInMemoryCookies;
+    }
+    if (cookiesToSet && Array.isArray(cookiesToSet) && cookiesToSet.length > 0) {
+        try {
+            await page.setCookie(...cookiesToSet);
+        } catch (e) {
+            logBrowserEvent('[AO3] Failed to set cookies on new page after login: ' + e.message);
+        }
+    }
+
+    // AO3 rate limit before goto
+    {
+        const nextAvailable = getNextAvailableAO3Time(1);
+        const now = Date.now();
+        if (nextAvailable > now) {
+            await new Promise(res => setTimeout(res, nextAvailable - now));
+        }
+        markAO3Requests(1);
+    }
+    await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
     if (ficUrl) await bypassStayLoggedInInterstitial(page, ficUrl);
     return { browser, page };
 }
