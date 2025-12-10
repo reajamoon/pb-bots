@@ -1,6 +1,6 @@
 
 import { Op } from 'sequelize';
-import { ParseQueue, ParseQueueSubscriber, User, Recommendation, Config, Series, sequelize } from '../../models/index.js';
+import { ParseQueue, ParseQueueSubscriber, User, Recommendation, Config, Series, RecommendationFields, sequelize } from '../../models/index.js';
 import processAO3Job from '../../shared/recUtils/processAO3Job.js';
 import batchSeriesRecommendationJob from '../../shared/recUtils/batchSeriesRecommendationJob.js';
 import processFicJob from '../../shared/recUtils/processFicJob.js';
@@ -122,7 +122,8 @@ async function processQueueJob(job) {
 			});
 		} else if (siteInfo.isWorkUrl) {
 			// Work URL: Route to single work processor
-			const existingRec = await Recommendation.findOne({ where: { ao3ID: siteInfo.ao3ID } });
+			// Use model field constant to avoid mismatches
+			const existingRec = await Recommendation.findOne({ where: { [RecommendationFields.ao3ID]: siteInfo.ao3ID } });
 			const isUpdate = !!existingRec;
 			
 			result = await processAO3Job({

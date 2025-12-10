@@ -1,6 +1,7 @@
 
 import updateMessages from '../text/updateMessages.js';
 import { ParseQueue, ParseQueueSubscriber, Config } from '../../models/index.js';
+import { detectSiteAndExtractIDs } from './processUserMetadata.js';
 
 /**
  * Attempts to create a new queue entry for the given fic URL, or joins the existing one if it already exists.
@@ -10,6 +11,12 @@ import { ParseQueue, ParseQueueSubscriber, Config } from '../../models/index.js'
  * @returns {Promise<{queueEntry: object, status: string, message?: string}>}
  */
 async function createOrJoinQueueEntry(ficUrl, userId) {
+    // Detect site and whether this is an AO3 series URL
+    let isSeries = false;
+    try {
+        const siteInfo = detectSiteAndExtractIDs(ficUrl);
+        isSeries = siteInfo.site === 'ao3' && siteInfo.isSeriesUrl === true;
+    } catch {}
     // Only mark as instant_candidate if there are no other pending/processing jobs
     const activeJobs = await ParseQueue.count({ where: { status: ['pending', 'processing'] } });
     const isInstant = activeJobs === 0;
@@ -19,7 +26,9 @@ async function createOrJoinQueueEntry(ficUrl, userId) {
             fic_url: ficUrl,
             status: 'pending',
             requested_by: userId,
-            instant_candidate: isInstant
+            instant_candidate: isInstant,
+            // Ensure series jobs are marked for batch processing at creation
+            ...(isSeries ? { batch_type: 'series' } : {})
         });
     } catch (err) {
         // Handle race condition: duplicate key error (Sequelize or raw pg)
@@ -31,6 +40,12 @@ async function createOrJoinQueueEntry(ficUrl, userId) {
                 if (!existingSub) {
                     await ParseQueueSubscriber.create({ queue_id: queueEntry.id, user_id: userId });
                 }
+                // If this is a series URL and batch_type isn't set, set it now
+                try {
+                    if (isSeries && queueEntry.batch_type !== 'series') {
+                        await queueEntry.update({ batch_type: 'series' });
+                    }
+                } catch {}
                 // Return appropriate status and message
                 if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
                     return { queueEntry, status: 'processing', message: updateMessages.alreadyProcessing };

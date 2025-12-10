@@ -3,7 +3,7 @@ import { MessageFlags } from 'discord.js';
 import isValidFanficUrl from '../../../../shared/recUtils/isValidFanficUrl.js';
 import { saveUserMetadata } from '../../../../shared/recUtils/processUserMetadata.js';
 import normalizeAO3Url from '../../../../shared/recUtils/normalizeAO3Url.js';
-import { Recommendation, Config, ParseQueueSubscriber } from '../../../../models/index.js';
+import { Recommendation, Config, ParseQueueSubscriber, RecommendationFields } from '../../../../models/index.js';
 import { User } from '../../../../models/index.js';
 import createOrJoinQueueEntry from '../../../../shared/recUtils/createOrJoinQueueEntry.js';
 import { createRecEmbed } from '../../../../shared/recUtils/createRecEmbed.js';
@@ -91,7 +91,7 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
     let previouslyDeleted = false;
     if (ao3ID) {
       // Find any recs that ever existed for this ao3ID (including soft-deleted if you add that in future)
-      const prevRec = await Recommendation.findOne({ where: { ao3ID } });
+      const prevRec = await Recommendation.findOne({ where: { [RecommendationFields.ao3ID]: ao3ID } });
       if (!prevRec) {
         // Check for any modlocks for this ao3ID (from previously deleted recs)
         const { ModLock } = await import('../../../../models/index.js');
@@ -124,7 +124,7 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
     // If rec exists, get per-rec locks and merge with global locks
     let rec = null;
     if (ao3ID) {
-      rec = await Recommendation.findOne({ where: { ao3ID } });
+      rec = await Recommendation.findOne({ where: { [RecommendationFields.ao3ID]: ao3ID } });
       if (rec) {
         const lockedFields = await getLockedFieldsForRec(rec, interaction.user);
         for (const field of lockedFields) modLocksByField[field] = true;
