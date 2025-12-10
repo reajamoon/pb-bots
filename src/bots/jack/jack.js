@@ -2,6 +2,42 @@
 import { Op } from 'sequelize';
 import { ParseQueue, ParseQueueSubscriber, User, Recommendation, Config, Series, RecommendationFields, sequelize } from '../../models/index.js';
 import processAO3Job from '../../shared/recUtils/processAO3Job.js';
+import path from 'node:path';
+import fs from 'node:fs';
+
+// Helper: clear AO3 cookies file at startup to ensure clean login
+function clearAO3Cookies() {
+	try {
+		const cookiesPath = path.resolve(process.cwd(), 'ao3_cookies.json');
+		if (fs.existsSync(cookiesPath)) {
+			fs.rmSync(cookiesPath, { force: true });
+			console.log('[Jack][Startup] Cleared AO3 cookies at', cookiesPath);
+		} else {
+			console.log('[Jack][Startup] No AO3 cookies file to clear.');
+		}
+	} catch (e) {
+		console.error('[Jack][Startup] Failed to clear AO3 cookies:', e);
+	}
+}
+
+// Helper: warm the AO3 browser/page prior to queue processing
+async function warmAO3Browser() {
+	try {
+		const { getLoggedInAO3Page } = await import('../../shared/recUtils/ao3/ao3Utils.js');
+		const warmUrl = 'https://archiveofourown.org/';
+		const start = Date.now();
+		const loginResult = await getLoggedInAO3Page(warmUrl);
+		const warmMs = Date.now() - start;
+		if (loginResult && loginResult.page) {
+			console.log(`[Jack][Startup] AO3 browser warmed in ${warmMs}ms`);
+			try { await loginResult.page.close(); } catch {}
+		} else {
+			console.log('[Jack][Startup] AO3 warmup did not return a page; continuing.');
+		}
+	} catch (e) {
+		console.error('[Jack][Startup] AO3 browser warmup failed:', e);
+	}
+}
 import batchSeriesRecommendationJob from '../../shared/recUtils/batchSeriesRecommendationJob.js';
 import processFicJob from '../../shared/recUtils/processFicJob.js';
 import { detectSiteAndExtractIDs } from '../../shared/recUtils/processUserMetadata.js';
@@ -93,6 +129,9 @@ async function processQueueJob(job) {
 			};
 			if (userRecord) userMap.set(userRecord.discordId, userRecord);
 		}
+
+		// Clear AO3 cookies at startup
+		clearAO3Cookies();
 
 		const startTime = Date.now();
 		
@@ -392,6 +431,9 @@ async function pollQueue() {
 
 // Jack does not interact with Discord directly, so no Discord.js client is started here.
 
+// Startup tasks: clear AO3 cookies and warm browser, then start polling
+clearAO3Cookies();
+await warmAO3Browser();
 // Start polling the queue and run cleanup on interval
 pollQueue();
 setInterval(() => {
