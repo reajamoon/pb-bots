@@ -137,6 +137,14 @@ async function processQueueJob(job) {
 		}
 
 		// Handle processing result
+		console.log(`[QueueWorker] Result for job ${job.id}:`, {
+			url: job.fic_url,
+			site: siteInfo.site,
+			isSeries: !!siteInfo.isSeriesUrl,
+			isWork: !!siteInfo.isWorkUrl,
+			error: result && result.error ? result.error : null,
+			recommendationId: result && result.recommendation && result.recommendation.id ? result.recommendation.id : (result && result.id ? result.id : null)
+		});
 		await handleJobResult(job, result, siteInfo);
 		
 	} catch (error) {
@@ -149,6 +157,7 @@ async function handleJobResult(job, result, siteInfo) {
 	try {
 		// Handle error cases
 		if (result.error) {
+			console.warn(`[QueueWorker] Job ${job.id} result error`, { url: job.fic_url, error: result.error, message: result.error_message || null });
 			const errCode = (result.error || '').toLowerCase();
 			const errMsg = (result.error_message || result.error || '').toLowerCase();
 			const isValidationFail = errCode === 'validation_failed' || errMsg.includes('dean/cas') || errMsg.includes('validation');
@@ -185,14 +194,29 @@ async function handleJobResult(job, result, siteInfo) {
 			if (job.batch_type === 'series') {
 				finalStatus = 'series-done';
 			}
+			// Guard: if series info missing, treat as error
+			if (!result.seriesId && !(result.seriesRecord && result.seriesRecord.id)) {
+				console.warn(`[QueueWorker] Job ${job.id} series processing returned no seriesId; marking error`, { url: job.fic_url });
+				await job.update({ status: 'error', error_message: 'Series processing returned no seriesId' });
+				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+				return;
+			}
 		} else {
 			// Work result
 			resultPayload = {
 				id: result.recommendation?.id || null,
 				type: 'work'
 			};
+			// Guard: if no recommendation id, treat as error
+			if (!resultPayload.id) {
+				console.warn(`[QueueWorker] Job ${job.id} work processing created no recommendation; marking error`, { url: job.fic_url });
+				await job.update({ status: 'error', error_message: 'Work processing created no recommendation' });
+				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+				return;
+			}
 		}
 
+		console.log(`[QueueWorker] Job ${job.id} success`, { url: job.fic_url, finalStatus, payload: resultPayload });
 		await job.update({ 
 			status: finalStatus, 
 			result: resultPayload, 

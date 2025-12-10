@@ -175,7 +175,8 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     }
                     attempts++;
                 }
-                console.log(`[AO3][Fetch] Parse complete. hasError=${!!(parsed && parsed.error)} title=${parsed && parsed.title ? parsed.title.slice(0,80) : 'N/A'}`);
+                const parsedTitle = parsed?.metadata?.title || parsed?.title || null;
+                console.log(`[AO3][Fetch] Parse complete. hasError=${!!(parsed && parsed.error)} title=${parsedTitle ? String(parsedTitle).slice(0,80) : 'N/A'}`);
                 // --- Dean/Cas validation: set nOTP status if invalid ---
                 if (parsed && parsed.fandom_tags && parsed.relationship_tags) {
                     const validation = validateDeanCasRec(parsed.fandom_tags, parsed.relationship_tags, parsed.freeform_tags || []);
