@@ -60,7 +60,12 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
             console.log(`[AO3][Fetch] Navigating to ${ao3Url} with timeout: ${timeout}ms (attempt ${attempt})`);
             await sleepJitter();
             logGentlePacing('Fetch goto', { url: ao3Url, attempt, timeout });
+            const t0 = Date.now();
             await page.goto(ao3Url, { waitUntil: 'domcontentloaded', timeout });
+            const tGoto = Date.now() - t0;
+            console.log(`[AO3][Fetch] goto completed in ${tGoto}ms (attempt ${attempt})`);
+            // Breathing room after navigation to let AO3 settle
+            await sleepJitter();
             // Bypass 'stay logged in' interstitial if present
             await bypassStayLoggedInInterstitial(page, ao3Url);
             // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
@@ -89,9 +94,15 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     global.__samInMemoryCookies = null;
                     console.warn('[AO3] In-memory cookies reset due to rate limit/CAPTCHA.');
                 }
+                // Do not hard-fail immediately; allow outer loop to retry after pacing
                 return false;
             }
+            const t1 = Date.now();
             html = await page.content();
+            const tContent = Date.now() - t1;
+            console.log(`[AO3][Fetch] content() took ${tContent}ms`);
+            // Additional breathing room before checks
+            await sleepJitter();
             console.log(`[AO3][Fetch] Loaded content length=${html ? html.length : 0} url=${ao3Url}`);
             // Extra check: ensure not still on login/interstitial page
             let currentUrl = page.url();
@@ -110,6 +121,7 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     console.warn('[AO3] In-memory cookies reset due to login/interstitial page.');
                 }
                 console.warn(`[AO3] Login/interstitial page detected. title="${pageTitle}" currentUrl=${currentUrl}`);
+                // Do not exit early; signal retry to caller
                 return false;
             }
             loggedIn = isAO3LoggedInPage(html);
@@ -119,17 +131,19 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
 
         let ok = false;
         let attempts = 1;
-        const maxAttempts = 2;
+        const maxAttempts = 3;
         let lastError = null;
         try {
             ok = await doLoginAndFetch(attempts);
             while ((!ok || !html) && attempts < maxAttempts) {
-                // If we failed, delete cookies and try again
+                // If we failed, delete cookies and add pacing before retry
                 const COOKIES_PATH = 'ao3_cookies.json';
                 if (fs.existsSync(COOKIES_PATH)) {
                     console.warn('[AO3] Detected login/interstitial page. Deleting cookies and retrying login.');
                     try { fs.unlinkSync(COOKIES_PATH); } catch {}
                 }
+                // Breathing room before retrying
+                await sleepJitter();
                 retried = true;
                 try {
                     ok = await doLoginAndFetch(attempts);
@@ -160,6 +174,8 @@ async function fetchAO3MetadataWithFallback(url, includeRawHtml = false) {
                     }
                     retried = true;
                     try {
+                        // Short pacing before re-login
+                        await sleepJitter();
                         ok = await doLoginAndFetch();
                         if (ok && html) {
                             parsed = await parseAO3Metadata(html, ao3Url, includeRawHtml);
