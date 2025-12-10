@@ -72,7 +72,7 @@ async function cleanupOldQueueJobs() {
 	const stuckPendingJobs = await ParseQueue.findAll({ where: { status: 'pending', updated_at: { [Op.lt]: pendingCutoff } } });
 	const stuckProcessingJobs = await ParseQueue.findAll({ where: { status: 'processing', updated_at: { [Op.lt]: processingCutoff } } });
 	const stuckJobs = [...stuckPendingJobs, ...stuckProcessingJobs];
-	const errorJobs = await ParseQueue.findAll({ where: { status: 'error' } });
+	const errorJobs = [];
 	const allJobs = [...stuckJobs, ...errorJobs];
 	if (allJobs.length === 0) return;
 
@@ -88,22 +88,17 @@ async function cleanupOldQueueJobs() {
 		// Mark stuck jobs as error and preserve subscribers for Sam to DM via poller
 		try {
 			const existingResult = job.result && typeof job.result === 'object' ? job.result : {};
-			await job.update({ status: 'error', error_message: 'stuck: dropped by cleanup', result: { ...existingResult, droppedByCleanup: true } });
+			await job.update({ status: job.status, error_message: job.error_message, result: { ...existingResult, cleanupPingTs: Date.now() } });
 			console.log(`[QueueWorker] Cleanup: Marked stuck job id=${job.id} as error for DM (prev status: ${job.status}, url: ${job.fic_url})`);
 		} catch (e) {
 			console.error('[QueueWorker] Failed to mark stuck job as error:', job.id, e);
 		}
 		// Do NOT destroy subscribers or the job here; Sam will notify and clean them up
 	}
-
-	// Notify and clean up for each job
 	for (const job of allJobs) {
 		const subscribers = allSubscribers.filter(sub => sub.queue_id === job.id);
-		// No direct Discord interaction for Jack; notification logic should be handled by Sam.
 	}
-	// Do not bulk destroy subscribers/jobs here; Sam's poller handles notification and cleanup.
 }
-
 // Estimate AO3 requests for a job (can be improved for series, etc.)
 function estimateAO3Requests(job) {
 	// For AO3 series, estimate 1 + N works; for single fic, 1
@@ -115,6 +110,7 @@ function estimateAO3Requests(job) {
 
 async function processQueueJob(job) {
 	try {
+		pollQueue.currentPhase = { jobId: job.id, phase: 'mark-processing', ts: Date.now() };
 		await job.update({ status: 'processing' });
 		// Use the original requester's user context for the rec
 		// Try to get the username from the first subscriber, fallback to 'Unknown User'
@@ -134,14 +130,14 @@ async function processQueueJob(job) {
 		clearAO3Cookies();
 
 		const startTime = Date.now();
-		
-		// NEW ARCHITECTURE: URL-only processing 
+		// NEW ARCHITECTURE: URL-only processing
 		// User metadata (notes, manual fields) is handled by Sam command handlers upfront
 		// Jack only processes URLs and fetches AO3/site metadata
 		const siteInfo = detectSiteAndExtractIDs(job.fic_url);
-		
+
 		let result;
 		if (siteInfo.site !== 'ao3') {
+			pollQueue.currentPhase = { jobId: job.id, phase: 'non-ao3-route', ts: Date.now(), url: job.fic_url };
 			// Route to general fanfiction processor
 			result = await processFicJob({
 				url: job.fic_url,
@@ -150,21 +146,23 @@ async function processQueueJob(job) {
 				site: siteInfo.site
 			});
 		} else if (siteInfo.isSeriesUrl) {
+			pollQueue.currentPhase = { jobId: job.id, phase: 'ao3-series-route', ts: Date.now(), url: job.fic_url };
 			// Series URL: Route to batch series processor
 			const existingSeries = await Series.findOne({ where: { url: job.fic_url } });
 			const isUpdate = !!existingSeries;
-			
+
 			result = await batchSeriesRecommendationJob({
 				url: job.fic_url,
 				user,
 				isUpdate
 			});
 		} else if (siteInfo.isWorkUrl) {
+			pollQueue.currentPhase = { jobId: job.id, phase: 'ao3-work-route', ts: Date.now(), url: job.fic_url };
 			// Work URL: Route to single work processor
 			// Use model field constant to avoid mismatches
 			const existingRec = await Recommendation.findOne({ where: { [RecommendationFields.ao3ID]: siteInfo.ao3ID } });
 			const isUpdate = !!existingRec;
-			
+
 			result = await processAO3Job({
 				ao3ID: siteInfo.ao3ID,
 				user,
@@ -184,12 +182,14 @@ async function processQueueJob(job) {
 			error: result && result.error ? result.error : null,
 			recommendationId: result && result.recommendation && result.recommendation.id ? result.recommendation.id : (result && result.id ? result.id : null)
 		});
+		pollQueue.currentPhase = { jobId: job.id, phase: 'result-logged', ts: Date.now(), error: !!(result && result.error) };
 		await handleJobResult(job, result, siteInfo);
-		
+
 	} catch (error) {
 		console.error('[QueueWorker] Job processing failed:', error);
+		try { pollQueue.currentPhase = { jobId: job.id, phase: 'job-error', ts: Date.now(), message: error.message }; } catch {}
 		await job.update({ status: 'error', error_message: error.message || 'Processing failed' });
-		await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+		// Set status to error for Sam to handle. Do not destroy subscribers.
 	}
 }
 async function handleJobResult(job, result, siteInfo) {
@@ -211,8 +211,7 @@ async function handleJobResult(job, result, siteInfo) {
 				console.log(`[QueueWorker] Marked job ${job.id} as nOTP; subscribers retained for modmail notification.`);
 			} else {
 				await job.update({ status: 'error', error_message: result.error });
-				// Clean up subscribers on generic errors
-				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+				// Set error and leave subscribers intact for Sam to notify/cleanup
 			}
 			return;
 		}
@@ -220,7 +219,6 @@ async function handleJobResult(job, result, siteInfo) {
 		// Handle successful processing
 		let resultPayload;
 		let finalStatus = 'done'; // Default status for regular jobs
-		
 		if (siteInfo.isSeriesUrl) {
 			// Series result
 			resultPayload = {
@@ -237,7 +235,7 @@ async function handleJobResult(job, result, siteInfo) {
 			if (!result.seriesId && !(result.seriesRecord && result.seriesRecord.id)) {
 				console.warn(`[QueueWorker] Job ${job.id} series processing returned no seriesId; marking error`, { url: job.fic_url });
 				await job.update({ status: 'error', error_message: 'Series processing returned no seriesId' });
-				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+				// Set status to error for Sam to handle. Do not destroy subscribers.
 				return;
 			}
 		} else {
@@ -250,11 +248,10 @@ async function handleJobResult(job, result, siteInfo) {
 			if (!resultPayload.id) {
 				console.warn(`[QueueWorker] Job ${job.id} work processing created no recommendation; marking error`, { url: job.fic_url });
 				await job.update({ status: 'error', error_message: 'Work processing created no recommendation' });
-				await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+				// Set status to error for Sam to handle. Do not destroy subscribers.
 				return;
 			}
 		}
-
 		console.log(`[QueueWorker] Job ${job.id} success`, { url: job.fic_url, finalStatus, payload: resultPayload });
 		await job.update({ 
 			status: finalStatus, 
@@ -262,8 +259,6 @@ async function handleJobResult(job, result, siteInfo) {
 			error_message: null, 
 			validation_reason: null 
 		});
-
-		// Suppress notification if instant_candidate and within threshold
 		let thresholdMs = 3000; // default 3 seconds
 		const thresholdConfig = await Config.findOne({ where: { key: 'instant_queue_suppress_threshold_ms' } });
 		if (thresholdConfig && !isNaN(Number(thresholdConfig.value))) {
@@ -272,17 +267,14 @@ async function handleJobResult(job, result, siteInfo) {
 		const elapsed = Date.now() - new Date(job.submitted_at).getTime();
 		if (job.instant_candidate && elapsed < thresholdMs) {
 			// Clean up subscribers silently
-			await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
+			// Keep subscribers for Sam to process notifications
 			return;
 		}
-
 		// Clean up subscribers after notification
-		await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
-
+		// Keep subscribers for Sam to process notifications
 	} catch (error) {
 		console.error('[QueueWorker] Error handling job result:', error);
 		await job.update({ status: 'error', error_message: error.message || 'Result handling failed' });
-		await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
 	}
 }
 
@@ -330,6 +322,7 @@ async function pollQueue() {
 				// Mark AO3 slot as used for this job
 				markAO3Requests(numRequests);
 				console.log(`[QueueWorker] Finished job ${job.id} at ${new Date().toISOString()}`);
+				pollQueue.currentPhase = { jobId: job.id, phase: 'post-job-delay', ts: Date.now() };
 				// Vary delay range (12–20s normal, 20–30s rare)
 				// Use a weighted random: 75% chance 12–20s, 25% chance 20–30s
 				let delayMs;
@@ -377,6 +370,7 @@ async function pollQueue() {
 						await new Promise(res => setTimeout(res, delayMs));
 					}
 					console.log(`[QueueWorker] Finished delay after job ${job.id} at ${new Date().toISOString()}`);
+					pollQueue.currentPhase = { jobId: job.id, phase: 'delay-finished', ts: Date.now() };
 				}
 
 				// Handle AO3 cooldown after consecutive AO3-related errors
@@ -419,11 +413,13 @@ async function pollQueue() {
 
 			} else {
 				// No pending jobs, wait before polling again (randomize 4–7s)
+				pollQueue.currentPhase = { jobId: null, phase: 'idle', ts: Date.now() };
 				const idleDelay = 4000 + Math.floor(Math.random() * 3000);
 				await new Promise(res => setTimeout(res, idleDelay));
 			}
 		} catch (err) {
 			console.error('[QueueWorker] Polling error:', err);
+			try { pollQueue.currentPhase = { jobId: null, phase: 'poll-error', ts: Date.now(), message: err.message }; } catch {}
 			await new Promise(res => setTimeout(res, 10000));
 		}
 	}
@@ -443,3 +439,20 @@ setInterval(() => {
 // Also run once at startup
 console.log('[QueueWorker] Running initial cleanup of old queue jobs...');
 cleanupOldQueueJobs();
+// Heartbeat: emit current phase every 60s for observability
+setInterval(() => {
+	try {
+		const p = pollQueue.currentPhase || { phase: 'unknown' };
+		const since = p.ts ? (Date.now() - p.ts) : null;
+		const sinceText = since != null ? `${since}ms ago` : 'n/a';
+		console.log('[QueueWorker][Heartbeat]', {
+			phase: p.phase,
+			jobId: p.jobId || null,
+			url: p.url || undefined,
+			error: p.error || false,
+			since: sinceText
+		});
+	} catch (e) {
+		console.log('[QueueWorker][Heartbeat] emit failed:', e.message);
+	}
+}, 60 * 1000);
