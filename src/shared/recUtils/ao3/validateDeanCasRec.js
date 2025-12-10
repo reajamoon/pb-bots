@@ -140,16 +140,23 @@ function isQualifier(tag) {
  */
 
 export function validateDeanCasRec(fandomTags, relationshipTags, freeformTags = []) {
-  // 1. Must have Supernatural fandom (allow common aliases)
+  // 1. Must have Supernatural fandom (allow common variants) OR explicit Dean/Cas pairing
   const fandomArray = Array.isArray(fandomTags) ? fandomTags : [];
+  const relArray = Array.isArray(relationshipTags) ? relationshipTags : [];
+  const freeArray = Array.isArray(freeformTags) ? freeformTags : [];
+
   const hasMainlineSPN = fandomArray.some(tag => isSupernaturalFandomTag(tag) && !isSPNRpfTag(tag));
   const hasSPNRpf = fandomArray.some(isSPNRpfTag);
-  const relArray = Array.isArray(relationshipTags) ? relationshipTags : [];
 
-  // Allow RPF-only fandom if the relationship explicitly matches Dean/Cas
-  const hasExplicitDeanCas = relArray.some(isDeanCasExactShip);
+  // Consider both relationship tags and, as a fallback, freeform tags for ship aliases like 'destiel'
+  const freeformHasShipAlias = freeArray.some(t => SHIP_ALIASES.includes(normalizeTag(t)));
+  const hasExplicitDeanCas = relArray.some(isDeanCasExactShip) || freeformHasShipAlias;
 
-  if (!hasMainlineSPN && !(hasSPNRpf && hasExplicitDeanCas)) {
+  // Accept if:
+  // - Mainline Supernatural fandom is present; OR
+  // - Explicit Dean/Cas pairing is present (relationship or freeform alias); OR
+  // - SPN RPF fandom with explicit Dean/Cas pairing
+  if (!(hasMainlineSPN || hasExplicitDeanCas || (hasSPNRpf && hasExplicitDeanCas))) {
     return { valid: false, reason: 'Missing Supernatural fandom tag.' };
   }
   // 2. If no relationship tags, treat as gen (allowed)
