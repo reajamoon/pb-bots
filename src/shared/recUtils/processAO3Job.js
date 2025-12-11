@@ -184,6 +184,19 @@ async function processAO3Job(payload) {
     metadata.tags = metadata.freeform_tags.slice();
   }
 
+  // Debug: summarize tag groups after normalization (audit parsing completeness)
+  if (process.env.REC_EMBED_DEBUG) {
+    try {
+      console.debug('[processAO3Job] AO3 tag summary (post-normalize)', {
+        ao3ID,
+        type,
+        fandomCount: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags.length : (Array.isArray(metadata.fandom) ? metadata.fandom.length : 0),
+        relationshipCount: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags.length : 0,
+        freeformCount: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags.length : 0
+      });
+    } catch {}
+  }
+
   // Ensure required fields
   if (!metadata || !metadata.title || !user || !user.id || !user.username) {
     console.error('[processAO3Job] Missing required fields:', { metadata, user });

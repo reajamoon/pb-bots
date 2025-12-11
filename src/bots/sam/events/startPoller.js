@@ -152,21 +152,24 @@ async function notifyQueueSubscribers(client) {
                     try {
                         const rec = await Recommendation.findOne({ where: { url: job.fic_url } });
                         if (rec) {
-                            // Guard: ensure AO3 parsed or member tags present before posting
+                            // Gate on AO3 parsing presence: require fandom_tags populated in DB
                             const hasFandomTags = Array.isArray(rec.fandom_tags) && rec.fandom_tags.length > 0;
-                            let hasMemberTags = false;
-                            if (Array.isArray(rec.userMetadata)) {
-                                for (const m of rec.userMetadata) {
-                                    if (m && Array.isArray(m.additional_tags) && m.additional_tags.length) { hasMemberTags = true; break; }
-                                }
-                            }
-                            if (!hasFandomTags && !hasMemberTags) {
-                                console.warn('[Poller] Recommendation missing parse indicators (no fandom_tags and no member tags). Skipping post and marking for refresh:', rec.id);
+                            if (!hasFandomTags) {
+                                console.warn('[Poller] Recommendation missing fandom_tags. Skipping post and marking for refresh:', rec.id);
                                 try {
                                     const { queueRecommendationRefresh } = await import('../../../shared/recUtils/queueUtils.js');
                                     await queueRecommendationRefresh(rec.url);
                                 } catch {}
                                 continue;
+                            }
+                            if (process.env.REC_EMBED_DEBUG) {
+                                try {
+                                    console.debug('[sam:poller] Gate check (fandom_tags only)', {
+                                        id: rec.id,
+                                        hasFandomTags,
+                                        fandomCount: rec.fandom_tags ? rec.fandom_tags.length : 0
+                                    });
+                                } catch {}
                             }
                             if (process.env.REC_EMBED_DEBUG) {
                                 try {
