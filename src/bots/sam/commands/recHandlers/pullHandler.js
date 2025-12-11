@@ -41,6 +41,17 @@ export default async function handlePull(interaction) {
         return await interaction.editReply({ content: `No recommendation found with ID ${rawId}.` });
       }
       const recWithSeries = await fetchRecWithSeries(rec.id, true);
+      if (process.env.REC_EMBED_DEBUG) {
+        try {
+          console.debug('[sam:pullHandler] Pre-embed rec audit', {
+            id: recWithSeries.id,
+            hasSeries: !!recWithSeries.series,
+            tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+            tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+            userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+          });
+        } catch {}
+      }
       embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id });
       entityType = 'rec';
     }

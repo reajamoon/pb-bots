@@ -168,6 +168,17 @@ async function notifyQueueSubscribers(client) {
                                 } catch {}
                                 continue;
                             }
+                            if (process.env.REC_EMBED_DEBUG) {
+                                try {
+                                    console.debug('[sam:poller] Pre-embed rec audit', {
+                                        id: rec.id,
+                                        hasSeries: !!rec.series,
+                                        tagsType: Array.isArray(rec.tags) ? 'array' : typeof rec.tags,
+                                        tagsLen: Array.isArray(rec.tags) ? rec.tags.length : (typeof rec.tags === 'string' ? rec.tags.length : 0),
+                                        userMetaCount: Array.isArray(rec.userMetadata) ? rec.userMetadata.length : 0
+                                    });
+                                } catch {}
+                            }
                             const embed = createRecEmbed(rec);
                             await thread.send({ embeds: [embed] });
                         } else {

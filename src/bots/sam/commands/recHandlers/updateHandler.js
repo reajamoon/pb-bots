@@ -294,6 +294,17 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                     const ageMs = Date.now() - new Date(lastUpdated).getTime();
                     if (ageMs <= oneDayMs) {
                         const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                        if (process.env.REC_EMBED_DEBUG) {
+                            try {
+                                console.debug('[sam:updateHandler] Pre-embed rec audit', {
+                                    id: recWithSeries.id,
+                                    hasSeries: !!recWithSeries.series,
+                                    tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+                                    tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+                                    userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+                                });
+                            } catch {}
+                        }
                         const embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
                         try {
                             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
@@ -398,6 +409,17 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                         const inRecChannel = recChannelCfg && recChannelCfg.value && interaction.channelId === recChannelCfg.value;
                         if (inRecChannel) {
                             const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                            if (process.env.REC_EMBED_DEBUG) {
+                                try {
+                                    console.debug('[sam:updateHandler] Pre-embed rec audit', {
+                                        id: recWithSeries.id,
+                                        hasSeries: !!recWithSeries.series,
+                                        tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+                                        tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+                                        userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+                                    });
+                                } catch {}
+                            }
                             const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
                             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
                             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
@@ -513,6 +535,17 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                 const inRecChannel = recChannelCfg && recChannelCfg.value && interaction.channelId === recChannelCfg.value;
                 if (inRecChannel) {
                     const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                    if (process.env.REC_EMBED_DEBUG) {
+                        try {
+                            console.debug('[sam:updateHandler] Pre-embed rec audit', {
+                                id: recWithSeries.id,
+                                hasSeries: !!recWithSeries.series,
+                                tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+                                tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+                                userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+                            });
+                        } catch {}
+                    }
                     const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
                     // Avoid duplicate embeds if we already have a tracked message for this queue/user
                     if (!existingSub || !existingSub.channel_id || !existingSub.message_id) {
@@ -669,6 +702,17 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
             if (hasUpdates) {
                 // Return updated recommendation with embed
                 const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
+                if (process.env.REC_EMBED_DEBUG) {
+                    try {
+                        console.debug('[sam:updateHandler] Pre-embed rec audit', {
+                            id: recWithSeries.id,
+                            hasSeries: !!recWithSeries.series,
+                            tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+                            tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+                            userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+                        });
+                    } catch {}
+                }
                 const embed = createRecEmbed(recWithSeries, {
                     // Tie footer to owner if a new note was supplied
                     preferredUserId: newNotes ? interaction.user.id : undefined

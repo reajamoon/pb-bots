@@ -280,6 +280,17 @@ export default async function handleSearchRecommendations(interaction) {
         if (recWithSeries) {
             // Always use rec embed for individual work search results
             // The rec embed will include series information if the work belongs to a series
+            if (process.env.REC_EMBED_DEBUG) {
+                try {
+                    console.debug('[sam:searchHandler] Pre-embed rec audit', {
+                        id: recWithSeries.id,
+                        hasSeries: !!recWithSeries.series,
+                        tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+                        tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+                        userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+                    });
+                } catch {}
+            }
             searchEmbed = createRecEmbed(recWithSeries);
         }
         try {

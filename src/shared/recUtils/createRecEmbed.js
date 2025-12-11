@@ -107,7 +107,16 @@ function processTagsForEmbed(rec) {
         }
     }
 
-    // Collect only the intended sources: freeform via Recommendation.tags
+    // Collect intended sources: Recommendation.tags and member-added additional_tags
+    if (process.env.REC_EMBED_DEBUG) {
+        try {
+            console.debug('[createRecEmbed] Tag sources:', {
+                tagsType: Array.isArray(rec.tags) ? 'array' : typeof rec.tags,
+                tagsLen: Array.isArray(rec.tags) ? rec.tags.length : (typeof rec.tags === 'string' ? rec.tags.length : 0),
+                userMetaCount: Array.isArray(rec.userMetadata) ? rec.userMetadata.length : 0
+            });
+        } catch {}
+    }
     add(rec.tags);
     if (Array.isArray(rec.userMetadata)) {
         for (const m of rec.userMetadata) add(m && m.additional_tags);

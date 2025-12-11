@@ -181,6 +181,17 @@ async function handleRandomRecommendation(interaction) {
                 }
             } else {
                 // For individual work recommendations (even if part of a series)
+                if (process.env.REC_EMBED_DEBUG) {
+                    try {
+                        console.debug('[sam:randomHandler] Pre-embed rec audit', {
+                            id: recWithSeries.id,
+                            hasSeries: !!recWithSeries.series,
+                            tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+                            tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+                            userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+                        });
+                    } catch {}
+                }
                 embed = createRecEmbed(recWithSeries);
             }
         } catch (err) {

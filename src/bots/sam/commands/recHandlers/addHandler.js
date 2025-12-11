@@ -384,6 +384,17 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
         });
         // Post a clean embed now and record it for poller to edit later
         const recWithSeries = await fetchRecWithSeries(existingRec.id, true);
+        if (process.env.REC_EMBED_DEBUG) {
+          try {
+            console.debug('[sam:addHandler] Pre-embed rec audit', {
+              id: recWithSeries.id,
+              hasSeries: !!recWithSeries.series,
+              tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+              tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+              userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+            });
+          } catch {}
+        }
         const embedNow = createRecEmbed(recWithSeries, {
           overrideNotes: notes || '',
           preferredUserId: interaction.user.id,
@@ -429,6 +440,17 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
       } else {
         // No refresh needed; send a single embed now with the user’s note override
         const recWithSeries = await fetchRecWithSeries(existingRec.id, true);
+        if (process.env.REC_EMBED_DEBUG) {
+          try {
+            console.debug('[sam:addHandler] Pre-embed rec audit', {
+              id: recWithSeries.id,
+              hasSeries: !!recWithSeries.series,
+              tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
+              tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
+              userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
+            });
+          } catch {}
+        }
         const embed = createRecEmbed(recWithSeries, {
           overrideNotes: notes || '',
           preferredUserId: interaction.user.id,
