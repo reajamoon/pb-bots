@@ -52,6 +52,11 @@ export default (sequelize) => {
             allowNull: true,
             defaultValue: []
         },
+        relationship_tags: {
+            type: DataTypes.JSONB, // Array of relationship/ship tags
+            allowNull: true,
+            defaultValue: []
+        },
         rating: {
             type: DataTypes.STRING,
             allowNull: true

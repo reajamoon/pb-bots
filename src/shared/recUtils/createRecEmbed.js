@@ -87,8 +87,9 @@ function getSiteLinkContent(url) {
 // ================== TAG PROCESSING ==================
 
 /**
- * Only use AO3 freeform tags from Recommendation.tags and
- * member-added tags from UserFicMetadata.additional_tags.
+ * Use AO3 freeform tags from Recommendation.freeform_tags (preferred)
+ * and legacy Recommendation.tags, plus member-added tags from
+ * UserFicMetadata.additional_tags.
  * No fandom/character filtering — keep this builder simple.
  */
 function processTagsForEmbed(rec) {
@@ -106,7 +107,7 @@ function processTagsForEmbed(rec) {
         }
     }
 
-    // Collect only the intended sources
+    // Collect only the intended sources: freeform via Recommendation.tags
     add(rec.tags);
     if (Array.isArray(rec.userMetadata)) {
         for (const m of rec.userMetadata) add(m && m.additional_tags);

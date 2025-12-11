@@ -179,6 +179,11 @@ async function processAO3Job(payload) {
   const normalizeMetadata = normalizeMetadataModule.default || normalizeMetadataModule;
   metadata = normalizeMetadata(metadata, 'ao3');
 
+  // Ensure metadata.tags is populated from AO3 freeform tags when absent
+  if ((!Array.isArray(metadata.tags) || metadata.tags.length === 0) && Array.isArray(metadata.freeform_tags)) {
+    metadata.tags = metadata.freeform_tags.slice();
+  }
+
   // Ensure required fields
   if (!metadata || !metadata.title || !user || !user.id || !user.username) {
     console.error('[processAO3Job] Missing required fields:', { metadata, user });
@@ -237,7 +242,10 @@ async function processAO3Job(payload) {
         author: (metadata.authors && metadata.authors[0]) || metadata.author || 'Unknown Author',
         authors: metadata.authors || (metadata.author ? [metadata.author] : ['Unknown Author']),
         summary: metadata.summary,
-        tags: Array.isArray(metadata.tags) ? metadata.tags : [],
+        // Legacy tags field: prefer AO3 freeform_tags when tags is empty
+        tags: Array.isArray(metadata.tags) && metadata.tags.length > 0
+          ? metadata.tags
+          : (Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : []),
         // Persist AO3 tag groups
         fandom_tags: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags : (Array.isArray(metadata.fandom) ? metadata.fandom : []),
         relationship_tags: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags : [],
@@ -322,9 +330,9 @@ async function buildUpdateFields(existingRec, metadata, seriesId, notPrimaryWork
   if (existingRec.summary !== metadata.summary && !lockedFields.has('summary')) {
     updateFields.summary = metadata.summary;
   }
-
-  // Tags comparison
-  const newTags = Array.isArray(metadata.tags) ? metadata.tags : [];
+  const newTags = (Array.isArray(metadata.tags) && metadata.tags.length > 0)
+    ? metadata.tags
+    : (Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags : []);
   const oldTags = Array.isArray(existingRec.tags) ? existingRec.tags : [];
   if (JSON.stringify(oldTags) !== JSON.stringify(newTags) && !lockedFields.has('tags')) {
     updateFields.tags = newTags;
