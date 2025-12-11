@@ -1,3 +1,20 @@
+'use strict';
+
+/** @type {import('sequelize-cli').Migration} */
+module.exports = {
+  async up(queryInterface, Sequelize) {
+    await queryInterface.addColumn('recommendations', 'relationship_tags', {
+      type: Sequelize.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      comment: 'Array of relationship/ship tags'
+    });
+  },
+
+  async down(queryInterface, Sequelize) {
+    await queryInterface.removeColumn('recommendations', 'relationship_tags');
+  }
+};
 /**
  * Migration: add relationship_tags column to recommendations
  */
