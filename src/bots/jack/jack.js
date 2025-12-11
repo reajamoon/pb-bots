@@ -66,12 +66,25 @@ async function cleanupOldQueueJobs() {
 		console.log('[QueueWorker] Cleanup: No old completed jobs to remove.');
 	}
 
-	// Consider 'pending' jobs stuck if older than 45 minutes, 'processing' if older than 90 minutes
-	const pendingCutoff = new Date(now.getTime() - 45 * 60 * 1000);
-	const processingCutoff = new Date(now.getTime() - 90 * 60 * 1000);
-	const stuckPendingJobs = await ParseQueue.findAll({ where: { status: 'pending', updated_at: { [Op.lt]: pendingCutoff } } });
-	const stuckProcessingJobs = await ParseQueue.findAll({ where: { status: 'processing', updated_at: { [Op.lt]: processingCutoff } } });
-	const stuckJobs = [...stuckPendingJobs, ...stuckProcessingJobs];
+	// Stuck thresholds: env-driven with sensible defaults
+	const pendingMinutes = parseInt(process.env.PARSEQUEUE_PENDING_STUCK_MIN, 10);
+	const processingMinutes = parseInt(process.env.PARSEQUEUE_PROCESSING_STUCK_MIN, 10);
+	const seriesProcessingMinutes = parseInt(process.env.PARSEQUEUE_SERIES_PROCESSING_STUCK_MIN, 10);
+	const pendingCutoffMinutes = !isNaN(pendingMinutes) && pendingMinutes > 0 ? pendingMinutes : 1440; // default 24h for pending
+	const processingCutoffMinutes = !isNaN(processingMinutes) && processingMinutes > 0 ? processingMinutes : 90;
+	const seriesProcessingCutoffMinutes = !isNaN(seriesProcessingMinutes) && seriesProcessingMinutes > 0 ? seriesProcessingMinutes : 120;
+	const pendingCutoff = new Date(now.getTime() - pendingCutoffMinutes * 60 * 1000);
+	const processingCutoff = new Date(now.getTime() - processingCutoffMinutes * 60 * 1000);
+	const processingSeriesCutoff = new Date(now.getTime() - seriesProcessingCutoffMinutes * 60 * 1000);
+
+	// For pending, measure time since enqueue using submitted_at, not updated_at
+	const stuckPendingJobs = await ParseQueue.findAll({ where: { status: 'pending', submitted_at: { [Op.lt]: pendingCutoff } } });
+	// Processing non-series (work jobs)
+	const stuckProcessingJobsWork = await ParseQueue.findAll({ where: { status: 'processing', updated_at: { [Op.lt]: processingCutoff }, batch_type: { [Op.not]: 'series' } } });
+	// Processing series jobs (longer cutoff)
+	const stuckProcessingJobsSeries = await ParseQueue.findAll({ where: { status: 'processing', updated_at: { [Op.lt]: processingSeriesCutoff }, batch_type: 'series' } });
+
+	const stuckJobs = [...stuckPendingJobs, ...stuckProcessingJobsWork, ...stuckProcessingJobsSeries];
 	const errorJobs = [];
 	const allJobs = [...stuckJobs, ...errorJobs];
 	if (allJobs.length === 0) return;
@@ -80,7 +93,7 @@ async function cleanupOldQueueJobs() {
 	const allJobIds = allJobs.map(j => j.id);
 	const allSubscribers = await ParseQueueSubscriber.findAll({ where: { queue_id: allJobIds } });
 	if (stuckJobs.length > 0) {
-		console.log(`[QueueWorker] Cleanup: Found ${stuckJobs.length} stuck 'pending' or 'processing' jobs older than 15 minutes.`);
+		console.log(`[QueueWorker] Cleanup: Found ${stuckJobs.length} stuck jobs. Cutoffs => pending: ${pendingCutoffMinutes}m, processing(work): ${processingCutoffMinutes}m, processing(series): ${seriesProcessingCutoffMinutes}m`);
 	} else {
 		console.log('[QueueWorker] Cleanup: No stuck pending/processing jobs to remove.');
 	}
@@ -88,7 +101,7 @@ async function cleanupOldQueueJobs() {
 		// Mark stuck jobs as error and preserve subscribers for Sam to DM via poller
 		try {
 			const existingResult = job.result && typeof job.result === 'object' ? job.result : {};
-			await job.update({ status: job.status, error_message: job.error_message, result: { ...existingResult, cleanupPingTs: Date.now() } });
+			await job.update({ status: 'error', error_message: 'stuck: marked by cleanup', result: { ...existingResult, cleanupPingTs: Date.now() } });
 			console.log(`[QueueWorker] Cleanup: Marked stuck job id=${job.id} as error for DM (prev status: ${job.status}, url: ${job.fic_url})`);
 		} catch (e) {
 			console.error('[QueueWorker] Failed to mark stuck job as error:', job.id, e);
