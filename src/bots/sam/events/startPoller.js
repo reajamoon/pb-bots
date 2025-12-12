@@ -70,7 +70,7 @@ async function notifyQueueSubscribers(client) {
             // Also mention any subscribers (if present and not duplicate)
             let mentionList = users.filter(u => u.queueNotifyTag !== false).map(u => `<@${u.discordId}>`).filter(m => m !== submitterMention);
             let allMentions = submitterMention;
-            if (mentionList.length) allMentions += (allMentions ? ' ' : '') + mentionList.join(' ');
+            if (mentionList.length) allMentions += (allMentions ? ', ' : '') + mentionList.join(', ');
             if (allMentions) {
                 contentMsg += `\n**Submitted by:** ${allMentions}`;
             } else {
@@ -133,7 +133,7 @@ async function notifyQueueSubscribers(client) {
                     const users = userIds.length ? await User.findAll({ where: { discordId: userIds } }) : [];
                     let mentionList = users.filter(u => u.queueNotifyTag !== false).map(u => `<@${u.discordId}>`).filter(m => m !== submitterMention);
                     let allMentions = submitterMention;
-                    if (mentionList.length) allMentions += (allMentions ? ' ' : '') + mentionList.join(' ');
+                    if (mentionList.length) allMentions += (allMentions ? ', ' : '') + mentionList.join(', ');
                     if (allMentions) {
                         threadSummary += `\n**Submitted by:** ${allMentions}`;
                     } else {
