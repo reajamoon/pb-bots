@@ -693,11 +693,10 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                 }
             }
 
+            // In manual_only mode, member-provided tags should NOT overwrite Recommendation.tags.
+            // They belong in UserFicMetadata.additional_tags only. Skip updating rec.tags here.
             if (newTags.length > 0) {
-                if (!isFieldLocked('tags')) {
-                    updateFields.tags = newTags;
-                    hasUpdates = true;
-                } else {
+                if (isFieldLocked('tags')) {
                     blockedFields.push('tags');
                 }
             }
