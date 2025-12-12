@@ -91,6 +91,24 @@ export function relationshipTags($) {
     return tags;
 }
 
+export function relationshipTagLinks($) {
+    const links = [];
+    const dd = excludeChapters($, 'dd.relationship.tags');
+    const source = dd.length ? dd : (() => {
+        const dt = $("dl.meta.group dt").filter((i, el) => /relationships?/i.test($(el).text()));
+        if (dt.length) return dt.first().next('dd');
+        return excludeChapters($, 'dd.tags');
+    })();
+    source.find('a.tag').each((i, el) => {
+        const text = $(el).text().trim();
+        const href = $(el).attr('href') || '';
+        const rawSlug = href.replace(/^.*\/tags\//, '').replace(/\/works.*$/, '').replace(/\?.*$/, '');
+        const slug = decodeURIComponent(rawSlug).toLowerCase();
+        if (text) links.push({ text: decodeHtmlEntities(text), href, slug });
+    });
+    return links;
+}
+
 export function characterTags($) {
     let tags = parseTagList($, excludeChapters($, 'dd.character.tags'));
     if (tags.length === 0) {
@@ -125,6 +143,24 @@ export function fandomTags($) {
         }
     }
     return tags;
+}
+
+export function fandomTagLinks($) {
+    const links = [];
+    const dd = excludeChapters($, 'dd.fandom.tags');
+    const source = dd.length ? dd : (() => {
+        const dt = $("dl.meta.group dt").filter((i, el) => /fandoms?/i.test($(el).text()));
+        if (dt.length) return dt.first().next('dd');
+        return excludeChapters($, 'dd.tags');
+    })();
+    source.find('a.tag').each((i, el) => {
+        const text = $(el).text().trim();
+        const href = $(el).attr('href') || '';
+        const rawSlug = href.replace(/^.*\/tags\//, '').replace(/\/works.*$/, '').replace(/\?.*$/, '');
+        const slug = decodeURIComponent(rawSlug).toLowerCase();
+        if (text) links.push({ text: decodeHtmlEntities(text), href, slug });
+    });
+    return links;
 }
 
 export function requiredTags($) {

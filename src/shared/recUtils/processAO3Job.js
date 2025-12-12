@@ -146,7 +146,7 @@ async function processAO3Job(payload) {
           freeformSample: Array.isArray(freeformTags) ? freeformTags.slice(0, 5) : []
         });
       } catch {}
-      const validation = validateDeanCasRec(fandomTags, relationshipTags, freeformTags);
+      const validation = validateDeanCasRec(fandomTags, relationshipTags, freeformTags, metadata.__cheerioRoot || null);
       
       if (!validation.valid) {
         // Defensive: re-check override just in case it was created during requeue

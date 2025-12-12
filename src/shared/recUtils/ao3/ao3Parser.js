@@ -151,6 +151,8 @@ async function parseAO3Metadata(html, url, includeRawHtml = false) {
                 for (const key of tagFields) {
                     if (!Array.isArray(metadata[key])) metadata[key] = [];
                 }
+                // Attach Cheerio root for downstream slug-based validations (non-serialized usage only)
+                metadata.__cheerioRoot = $;
                 // Collections block: handle like meta/stats, with warnings
         const collectionsBlock = $('dd.collections').first();
         const collections = [];

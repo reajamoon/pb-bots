@@ -139,18 +139,48 @@ function isQualifier(tag) {
  * @returns {{ valid: boolean, reason: string|null }}
  */
 
-export function validateDeanCasRec(fandomTags, relationshipTags, freeformTags = []) {
+export async function validateDeanCasRec(fandomTags, relationshipTags, freeformTags = [], cheerioRootForLinks = null) {
   // 1. Must have Supernatural fandom (allow common variants) OR explicit Dean/Cas pairing
   const fandomArray = Array.isArray(fandomTags) ? fandomTags : [];
   const relArray = Array.isArray(relationshipTags) ? relationshipTags : [];
   const freeArray = Array.isArray(freeformTags) ? freeformTags : [];
 
-  const hasMainlineSPN = fandomArray.some(tag => isSupernaturalFandomTag(tag) && !isSPNRpfTag(tag));
-  const hasSPNRpf = fandomArray.some(isSPNRpfTag);
+  // Prefer canonical slug validation when Cheerio root is available
+  let hasMainlineSPN = false;
+  let hasSPNRpf = false;
+  try {
+    if (cheerioRootForLinks) {
+      const { fandomTagLinks } = await import('./parseTagList.js');
+      const links = fandomTagLinks(cheerioRootForLinks);
+      const norm = s => String(s || '').toLowerCase().replace(/\+/g, ' ');
+      const MAIN_SPN_SLUGS = new Set([
+        'supernatural (tv 2005)',
+        'supernatural - all media types'
+      ]);
+      hasMainlineSPN = Array.isArray(links) && links.some(l => MAIN_SPN_SLUGS.has(norm(l.slug)) || /\bsupernatural\b/.test(norm(l.slug)));
+      hasSPNRpf = Array.isArray(links) && links.some(l => norm(l.slug) === 'spn rpf' || norm(l.slug).includes('supernatural rpf'));
+    }
+  } catch {}
+  if (!hasMainlineSPN && !hasSPNRpf) {
+    hasMainlineSPN = fandomArray.some(tag => isSupernaturalFandomTag(tag) && !isSPNRpfTag(tag));
+    hasSPNRpf = fandomArray.some(isSPNRpfTag);
+  }
 
   // Consider both relationship tags and, as a fallback, freeform tags for ship aliases like 'destiel'
   const freeformHasShipAlias = freeArray.some(t => SHIP_ALIASES.includes(normalizeTag(t)));
-  const hasExplicitDeanCas = relArray.some(isDeanCasExactShip) || freeformHasShipAlias;
+  let hasExplicitDeanCas = relArray.some(isDeanCasExactShip) || freeformHasShipAlias;
+  try {
+    if (cheerioRootForLinks) {
+      const { relationshipTagLinks } = await import('./parseTagList.js');
+      const links = relationshipTagLinks(cheerioRootForLinks);
+      const norm = s => String(s || '').toLowerCase().replace(/\+/g, ' ');
+      const REL_SPN_SLUGS = new Set([
+        'castiel*s*dean winchester',
+        'dean winchester*s*castiel'
+      ]);
+      hasExplicitDeanCas = hasExplicitDeanCas || (Array.isArray(links) && links.some(l => REL_SPN_SLUGS.has(norm(l.slug))));
+    }
+  } catch {}
 
   // Accept if:
   // - Mainline Supernatural fandom is present; OR
