@@ -170,10 +170,14 @@ async function notifyQueueSubscribers(client) {
                                 return foundByUrl ? await fetchRecWithSeries(foundByUrl.id, true) : null;
                             })();
                         if (rec) {
-                            // Gate on AO3 parsing presence: require fandom_tags populated in DB
+                            // Gate on AO3 parsing presence:
+                            // Prefer fandom_tags, but allow when relationship shows Dean/Cas (canonical or alias)
                             const hasFandomTags = Array.isArray(rec.fandom_tags) && rec.fandom_tags.length > 0;
-                            if (!hasFandomTags) {
-                                console.warn('[Poller] Recommendation missing fandom_tags. Skipping post and marking for refresh:', rec.id);
+                            const rel = Array.isArray(rec.relationship_tags) ? rec.relationship_tags.map(t => String(t).toLowerCase().replace(/\s+/g,' ').trim()) : [];
+                            const deanCasAliases = new Set(['castiel/dean winchester','dean winchester/castiel','destiel','dean/cas','cas/dean','deancas']);
+                            const hasDeanCas = rel.some(t => deanCasAliases.has(t));
+                            if (!hasFandomTags && !hasDeanCas) {
+                                console.warn('[Poller] Recommendation missing fandom_tags and no Dean/Cas relationship. Skipping post and marking for refresh:', rec.id);
                                 try {
                                     const { queueRecommendationRefresh } = await import('../../../shared/recUtils/queueUtils.js');
                                     await queueRecommendationRefresh(rec.url);
@@ -185,6 +189,7 @@ async function notifyQueueSubscribers(client) {
                                     console.debug('[sam:poller] Gate check (fandom_tags only)', {
                                         id: rec.id,
                                         hasFandomTags,
+                                        hasDeanCas,
                                         fandomCount: rec.fandom_tags ? rec.fandom_tags.length : 0
                                     });
                                 } catch {}
