@@ -167,8 +167,28 @@ export function createRecEmbed(rec, options = {}) {
     const { preferredUserId, userId, overrideNotes, includeAdditionalTags } = options;
     const targetUserId = preferredUserId || userId || null;
 
+    // Normalize common snake_case vs camelCase fields for robustness
+    const norm = {
+        title: rec.title || rec.work_title || 'Untitled',
+        url: rec.url || rec.work_url || '',
+        rating: rec.rating || rec.work_rating || null,
+        status: rec.status || rec.work_status || 'Unknown',
+        publishedDate: rec.publishedDate || rec.published_date || null,
+        chapters: rec.chapters || rec.chapter_count || null,
+        wordCount: rec.wordCount || rec.word_count || null,
+        hits: rec.hits ?? rec.hit_count ?? null,
+        kudos: rec.kudos ?? rec.kudos_count ?? null,
+        bookmarks: rec.bookmarks ?? rec.bookmark_count ?? null,
+        summary: rec.summary || rec.work_summary || null,
+        authors: Array.isArray(rec.authors) ? rec.authors : (Array.isArray(rec.author_list) ? rec.author_list : null),
+        author: rec.author || rec.author_name || null,
+        series: rec.series || rec.work_series || null,
+        part: rec.part || rec.series_part || null,
+        archiveWarnings: Array.isArray(rec.archiveWarnings) ? rec.archiveWarnings : (Array.isArray(rec.archive_warnings) ? rec.archive_warnings : null),
+    };
+
     // Build author description line
-    let author = Array.isArray(rec.authors) ? rec.authors.filter(Boolean) : [];
+    let author = Array.isArray(norm.authors) ? norm.authors.filter(Boolean) : [];
     // Dedupe and cap to prevent pathological duplicates from bad parses
     if (author.length) {
         const seen = new Set();
@@ -179,26 +199,26 @@ export function createRecEmbed(rec, options = {}) {
             return true;
         });
     }
-    author = author.length ? author.join(', ') : (rec.author || 'Unknown Author');
+    author = author.length ? author.join(', ') : (norm.author || 'Unknown Author');
     if (author.length > 200) author = author.slice(0, 197) + '...';
     const authorLine = `**By:** ${author}`;
     
     // Add summary if available, separated by newlines
     let description = authorLine;
-        if (rec.summary) {
-            let summaryText = decodeHtmlEntities(rec.summary);
+        if (norm.summary) {
+            let summaryText = decodeHtmlEntities(norm.summary);
             if (summaryText.length > 1024) summaryText = summaryText.substring(0, 1024);
             description += `\n\n>>> ${summaryText}`;
         }
 
     const embed = new EmbedBuilder()
-        .setTitle(rec.title || 'Untitled')
-        .setURL(rec.url || '')
+        .setTitle(norm.title)
+        .setURL(norm.url)
         .setDescription(description)
-        .setColor(getRatingColor(rec.rating));
+        .setColor(getRatingColor(norm.rating));
 
     // Story Link, Rating, Status row (inline group)
-    if (rec.url) {
+    if (norm.url) {
         let linkContent;
         // Handle deleted stories - show "Deleted" text and add backup link if available
         if (rec.deleted) {
@@ -207,36 +227,33 @@ export function createRecEmbed(rec, options = {}) {
                 linkContent += ` • [📎 Backup Available](${rec.attachmentUrl})`;
             }
         } else {
-            linkContent = getSiteLinkContent(rec.url).replace(/\[(.+)\]/, `[$1](${rec.url})`);
+            linkContent = getSiteLinkContent(norm.url).replace(/\[(.+)\]/, `[$1](${norm.url})`);
         }
         embed.addFields({ name: '🔗 Story Link', value: linkContent, inline: true });
     }
-    embed.addFields({ name: 'Rating', value: formatRatingWithEmoji(rec.rating), inline: true });
-    embed.addFields({ name: 'Status', value: rec.status || 'Unknown', inline: true });
+    embed.addFields({ name: 'Rating', value: formatRatingWithEmoji(norm.rating), inline: true });
+    embed.addFields({ name: 'Status', value: norm.status, inline: true });
 
     // Published date, Chapters, Words row (inline group)
-    if (rec.publishedDate) {
-        embed.addFields({ name: 'Published', value: formatDate(rec.publishedDate), inline: true });
+    if (norm.publishedDate) {
+        embed.addFields({ name: 'Published', value: formatDate(norm.publishedDate), inline: true });
     }
-    if (rec.chapters) {
-        embed.addFields({ name: 'Chapters', value: rec.chapters.toString(), inline: true });
+    if (norm.chapters) {
+        embed.addFields({ name: 'Chapters', value: norm.chapters.toString(), inline: true });
     }
-    embed.addFields({ name: 'Words', value: formatWordCount(rec.wordCount), inline: true });
+    embed.addFields({ name: 'Words', value: formatWordCount(norm.wordCount), inline: true });
 
     // Archive Warnings
-    const warningsInput = Array.isArray(rec.archiveWarnings)
-        ? rec.archiveWarnings
-        : (Array.isArray(rec.archive_warnings) ? rec.archive_warnings : null);
-    const formattedWarnings = formatArchiveWarnings(warningsInput);
+    const formattedWarnings = formatArchiveWarnings(norm.archiveWarnings);
     if (formattedWarnings) {
         embed.addFields({ name: 'Archive Warnings', value: formattedWarnings, inline: false });
     }
 
     // Series (if this work is part of a series)
-    if (rec.series && rec.series.name && rec.series.url) {
-        let seriesText = `[${rec.series.name}](${rec.series.url})`;
-        if (rec.part) {
-            seriesText = `Part ${rec.part} of ${seriesText}`;
+    if (norm.series && norm.series.name && norm.series.url) {
+        let seriesText = `[${norm.series.name}](${norm.series.url})`;
+        if (norm.part) {
+            seriesText = `Part ${norm.part} of ${seriesText}`;
         }
         embed.addFields({ name: '📚 Series', value: seriesText, inline: false });
     }
@@ -260,10 +277,10 @@ export function createRecEmbed(rec, options = {}) {
     }
 
     // Engagement stats (Hits, Kudos, Bookmarks)
-    if (rec.hits || rec.kudos || rec.bookmarks) {
-        embed.addFields({ name: 'Hits', value: formatNumber(rec.hits) || 'N/A', inline: true });
-        embed.addFields({ name: 'Kudos', value: formatNumber(rec.kudos) || 'N/A', inline: true });
-        embed.addFields({ name: 'Bookmarks', value: formatNumber(rec.bookmarks) || 'N/A', inline: true });
+    if (norm.hits || norm.kudos || norm.bookmarks) {
+        embed.addFields({ name: 'Hits', value: formatNumber(norm.hits) || 'N/A', inline: true });
+        embed.addFields({ name: 'Kudos', value: formatNumber(norm.kudos) || 'N/A', inline: true });
+        embed.addFields({ name: 'Bookmarks', value: formatNumber(norm.bookmarks) || 'N/A', inline: true });
     }
 
     // Recommender Notes and footer attribution
