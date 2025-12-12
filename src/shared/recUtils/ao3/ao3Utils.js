@@ -334,7 +334,7 @@ async function getLoggedInAO3Page(ficUrl) {
             logBrowserEvent('[AO3] Using main login form.');
             await page.type(MAIN_SELECTOR, username);
             await page.type('#user_password', password);
-            await page.waitForTimeout(500);
+            await new Promise(res => setTimeout(res, 500));
             // Submit the nearest form ancestor instead of relying on a global container
             try {
                 const submitted = await page.evaluate(() => {
@@ -380,7 +380,7 @@ async function getLoggedInAO3Page(ficUrl) {
                 logBrowserEvent('[AO3] Using small login form.');
                 await page.type(SMALL_SELECTOR, username);
                 await page.type('#user_session_password_small', password);
-                await page.waitForTimeout(500);
+                await new Promise(res => setTimeout(res, 500));
                 // Submit the nearest form ancestor for the small login inputs
                 try {
                     const submitted = await page.evaluate(() => {
