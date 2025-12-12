@@ -518,7 +518,17 @@ async function getLoggedInAO3Page(ficUrl) {
         }
         markAO3Requests(1);
     }
-    await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded' });
+    try {
+        await page.goto('https://archiveofourown.org/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    } catch (navErr) {
+        logBrowserEvent('[AO3] Initial goto timeout, retrying without waitUntil: ' + (navErr && navErr.message ? navErr.message : ''));
+        try {
+            await page.goto('https://archiveofourown.org/', { timeout: 60000 });
+        } catch (navErr2) {
+            logBrowserEvent('[AO3] Second goto attempt failed: ' + (navErr2 && navErr2.message ? navErr2.message : ''));
+            throw navErr2;
+        }
+    }
     if (ficUrl) await bypassStayLoggedInInterstitial(page, ficUrl);
     return { browser, page };
 }
