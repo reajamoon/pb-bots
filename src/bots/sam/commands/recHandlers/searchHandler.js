@@ -241,13 +241,13 @@ export default async function handleSearchRecommendations(interaction) {
         
         // Create series embed and return
         const seriesEmbed = createSeriesEmbed(series);
-        // Post to fic_queue_channel
+        // Post to rec_tools_channel if configured; otherwise interaction channel
         try {
             const { Config } = await import('../../../../models/index.js');
-            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            const toolsCfg = await Config.findOne({ where: { key: 'rec_tools_channel' } });
             let targetChannel = null;
-            if (queueCfg && queueCfg.value) {
-                targetChannel = interaction.client.channels.cache.get(queueCfg.value) || await interaction.client.channels.fetch(queueCfg.value).catch(() => null);
+            if (toolsCfg && toolsCfg.value) {
+                targetChannel = interaction.client.channels.cache.get(toolsCfg.value) || await interaction.client.channels.fetch(toolsCfg.value).catch(() => null);
             }
             if (!targetChannel) targetChannel = interaction.channel;
             if (targetChannel) {
@@ -257,7 +257,7 @@ export default async function handleSearchRecommendations(interaction) {
                 await interaction.editReply({ content: `Found series S${seriesId}.`, embeds: [seriesEmbed], components: [] });
             }
         } catch (e) {
-            console.warn('[rec search] Failed to post series embed to fic_queue_channel, falling back to interaction:', e);
+            console.warn('[rec search] Failed to post series embed to rec_tools_channel, falling back to interaction:', e);
             await interaction.editReply({ content: `Found series S${seriesId}.`, embeds: [seriesEmbed], components: [] });
         }
         return;
@@ -307,10 +307,10 @@ export default async function handleSearchRecommendations(interaction) {
         }
         try {
             const { Config } = await import('../../../../models/index.js');
-            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+            const toolsCfg = await Config.findOne({ where: { key: 'rec_tools_channel' } });
             let targetChannel = null;
-            if (queueCfg && queueCfg.value) {
-                targetChannel = interaction.client.channels.cache.get(queueCfg.value) || await interaction.client.channels.fetch(queueCfg.value).catch(() => null);
+            if (toolsCfg && toolsCfg.value) {
+                targetChannel = interaction.client.channels.cache.get(toolsCfg.value) || await interaction.client.channels.fetch(toolsCfg.value).catch(() => null);
             }
             if (!targetChannel) targetChannel = interaction.channel;
             if (targetChannel) {
@@ -320,7 +320,7 @@ export default async function handleSearchRecommendations(interaction) {
                 await interaction.editReply({ content: `Found 1 fic matching your search.`, embeds: [searchEmbed], components: [] });
             }
         } catch (e) {
-            console.warn('[rec search] Failed to post single-result to fic_queue_channel, falling back to interaction:', e);
+            console.warn('[rec search] Failed to post single-result to rec_tools_channel, falling back to interaction:', e);
             await interaction.editReply({ content: `Found 1 fic matching your search.`, embeds: [searchEmbed], components: [] });
         }
         return;
