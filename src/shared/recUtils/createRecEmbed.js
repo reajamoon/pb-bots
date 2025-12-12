@@ -224,7 +224,10 @@ export function createRecEmbed(rec, options = {}) {
     embed.addFields({ name: 'Words', value: formatWordCount(rec.wordCount), inline: true });
 
     // Archive Warnings
-    const formattedWarnings = formatArchiveWarnings(rec.archiveWarnings);
+    const warningsInput = Array.isArray(rec.archiveWarnings)
+        ? rec.archiveWarnings
+        : (Array.isArray(rec.archive_warnings) ? rec.archive_warnings : null);
+    const formattedWarnings = formatArchiveWarnings(warningsInput);
     if (formattedWarnings) {
         embed.addFields({ name: 'Archive Warnings', value: formattedWarnings, inline: false });
     }
