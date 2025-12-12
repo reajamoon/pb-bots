@@ -13,7 +13,10 @@ function decodeHtmlEntities(str) {
         .replace(/&#x2F;/g, '/')
         .replace(/&#x60;/g, '`')
         .replace(/&#x3D;/g, '=')
+    // Non-breaking space variants
+    .replace(/&nbsp;/g, ' ')
         .replace(/&#xA0;/g, ' ')
+    .replace(/\u00A0/g, ' ')
         .replace(/&#x2014;/g, '-')
         .replace(/&#x2019;/g, "'")
         .replace(/&#x201C;/g, '"')
