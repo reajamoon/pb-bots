@@ -237,7 +237,9 @@ export function createRecEmbed(rec, options = {}) {
     }
 
     // Tags (optionally include extra tags passed in)
-    const recForTags = { ...rec };
+    // Convert Sequelize model instance to plain object so fields like `tags` are accessible
+    const recPlain = (rec && typeof rec.get === 'function') ? rec.get({ plain: true }) : rec;
+    const recForTags = { ...recPlain };
     if (includeAdditionalTags && Array.isArray(includeAdditionalTags) && includeAdditionalTags.length) {
         const extra = Array.isArray(includeAdditionalTags) ? includeAdditionalTags : [];
         recForTags.userMetadata = Array.isArray(rec.userMetadata) ? rec.userMetadata.map(m => ({ ...m })) : [];
