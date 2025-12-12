@@ -184,10 +184,11 @@ export function createRecEmbed(rec, options = {}) {
     
     // Add summary if available, separated by newlines
     let description = authorLine;
-    if (rec.summary) {
-        const summaryText = rec.summary.length > 400 ? rec.summary.substring(0, 400) + '...' : rec.summary;
-        description += `\n\n>>> ${summaryText}`;
-    }
+        if (rec.summary) {
+            let summaryText = decodeHtmlEntities(rec.summary);
+            if (summaryText.length > 1024) summaryText = summaryText.substring(0, 1024);
+            description += `\n\n>>> ${summaryText}`;
+        }
 
     const embed = new EmbedBuilder()
         .setTitle(rec.title || 'Untitled')

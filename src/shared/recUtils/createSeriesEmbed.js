@@ -1,5 +1,6 @@
 import Discord from 'discord.js';
 const { EmbedBuilder } = Discord;
+import decodeHtmlEntities from './decodeHtmlEntities.js';
 import { getAo3RatingColor } from './ao3/ao3TagColors.js';
 import { formatRatingWithEmoji, formatArchiveWarnings } from './ao3Emojis.js';
 import { detectSiteAndExtractIDs } from './processUserMetadata.js';
@@ -227,10 +228,11 @@ export function createSeriesEmbed(series, options = {}) {
     author = author || 'Unknown Author';
     const authorLine = `**Series by:** ${author}`;
 
-    // Add summary if available, separated by newlines
+    // Add summary if available: decode HTML entities and cap at 1024 chars
     let description = authorLine;
     if (series.summary) {
-        const summaryText = series.summary.length > 400 ? series.summary.substring(0, 400) + '...' : series.summary;
+        let summaryText = decodeHtmlEntities(series.summary);
+        if (summaryText.length > 1024) summaryText = summaryText.substring(0, 1024);
         description += `\n\n>>> ${summaryText}`;
     }
 
