@@ -9,6 +9,18 @@ import { buildSearchPaginationRow } from '../../../../shared/recUtils/searchPagi
 import { createTagSearchConditions } from '../../../../utils/tagUtils.js';
 
 export default async function handleSearchRecommendations(interaction) {
+    // Restrict command to configured channel if set
+    try {
+        const { Config } = await import('../../../../models/index.js');
+        const cfg = await Config.findOne({ where: { key: 'rec_tools_channel' } });
+        const allowedId = cfg && cfg.value ? cfg.value : null;
+        if (allowedId && interaction.channelId !== allowedId) {
+            return await interaction.reply({
+                content: 'This command is only available in card-catalog channel.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    } catch {}
     if (Date.now() - interaction.createdTimestamp > 14 * 60 * 1000) {
         return await interaction.reply({
             content: 'That interaction took too long to process. Please try the command again.',

@@ -371,16 +371,10 @@ async function notifyQueueSubscribers(client) {
                 const { fetchRecWithSeries } = await import('../../../models/fetchRecWithSeries.js');
                 recWithSeries = await fetchRecWithSeries(job.result.id, true);
                 if (recWithSeries) {
-                    // Parse guards for individual recs: require AO3 parse indicators or member tags
+                    // Presence-only guard: allow if fandom_tags exist; otherwise proceed (no member tag requirement)
                     const hasFandomTags = Array.isArray(recWithSeries.fandom_tags) && recWithSeries.fandom_tags.length > 0;
-                    let hasMemberTags = false;
-                    if (Array.isArray(recWithSeries.userMetadata)) {
-                        for (const m of recWithSeries.userMetadata) {
-                            if (m && Array.isArray(m.additional_tags) && m.additional_tags.length) { hasMemberTags = true; break; }
-                        }
-                    }
-                    if (!hasFandomTags && !hasMemberTags) {
-                        console.warn('[Poller] Recommendation missing parse indicators (no fandom_tags and no member tags). Skipping post and marking for refresh:', recWithSeries.id);
+                    if (!hasFandomTags) {
+                        console.warn('[Poller] Recommendation missing fandom_tags. Skipping post and marking for refresh:', recWithSeries.id);
                         try {
                             const { queueRecommendationRefresh } = await import('../../../shared/recUtils/queueUtils.js');
                             if (recWithSeries.url) await queueRecommendationRefresh(recWithSeries.url);
@@ -399,8 +393,10 @@ async function notifyQueueSubscribers(client) {
                             if (m && Array.isArray(m.additional_tags) && m.additional_tags.length) { seriesHasMemberTags = true; break; }
                         }
                     }
-                    if (!seriesOk && !seriesHasMemberTags) {
-                        console.warn('[Poller] Series missing parse indicators and member tags. Skipping post and marking for refresh:', recWithSeries && recWithSeries.id);
+                    // Presence-only guard: if core fields missing, still allow if fandom_tags exist; else refresh
+                    const seriesHasFandomTags = Array.isArray(recWithSeries.fandom_tags) && recWithSeries.fandom_tags.length > 0;
+                    if (!seriesOk && !seriesHasFandomTags) {
+                        console.warn('[Poller] Series missing parse indicators (no core fields and no fandom_tags). Skipping post and marking for refresh:', recWithSeries && recWithSeries.id);
                         try {
                             const { queueSeriesRefresh } = await import('../../../shared/recUtils/queueUtils.js');
                             const seriesUrl = recWithSeries && recWithSeries.series && recWithSeries.series.url ? recWithSeries.series.url : null;
