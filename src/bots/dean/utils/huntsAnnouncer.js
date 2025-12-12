@@ -21,12 +21,16 @@ function buildDeanAnnouncer(interactionOrChannel) {
         if (fetched && fetched.isTextBased()) channel = fetched;
       } catch {}
     }
-    // Hard fallback: use configured channel ID when no context available
+    // Configured fallback: use fic queue channel (bot channel) when no context available
     if ((!channel || !channel.send) && interactionOrChannel?.client) {
       try {
-        const hardId = '1446674019242869010';
-        const fetchedHard = await interactionOrChannel.client.channels.fetch(hardId).catch(() => null);
-        if (fetchedHard && fetchedHard.isTextBased()) channel = fetchedHard;
+        const { Config } = await import('../../../models/index.js');
+        const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+        const fallbackId = queueCfg && queueCfg.value ? queueCfg.value : null;
+        if (fallbackId) {
+          const fetched = await interactionOrChannel.client.channels.fetch(fallbackId).catch(() => null);
+          if (fetched && fetched.isTextBased()) channel = fetched;
+        }
       } catch {}
     }
     if (channel?.send) {
