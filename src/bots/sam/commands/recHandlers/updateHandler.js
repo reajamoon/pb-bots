@@ -52,10 +52,10 @@ export default async function handleUpdateRecommendation(interaction) {
         const level = requester && requester.permissionLevel ? String(requester.permissionLevel).toLowerCase() : 'member';
         const isSuperadmin = level === 'superadmin';
         if (isSuperadmin) {
-            const puppetUser = interaction.options.getUser?.('puppetUser');
+            const puppetUser = interaction.options.getUser?.('puppetuser') || interaction.options.getUser?.('puppetUser');
             if (puppetUser && puppetUser.id) puppetUserId = puppetUser.id;
             if (!puppetUserId) {
-                const puppetIdStr = interaction.options.getString?.('puppetUserId');
+                const puppetIdStr = interaction.options.getString?.('puppetuserid') || interaction.options.getString?.('puppetUserId');
                 if (puppetIdStr && String(puppetIdStr).trim()) puppetUserId = String(puppetIdStr).trim();
             }
         }

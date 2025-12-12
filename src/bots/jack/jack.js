@@ -139,8 +139,7 @@ async function processQueueJob(job) {
 			if (userRecord) userMap.set(userRecord.discordId, userRecord);
 		}
 
-		// Clear AO3 cookies at startup
-		clearAO3Cookies();
+		// Do not clear AO3 cookies per job; cookies are cleared once at startup
 
 		const startTime = Date.now();
 		// NEW ARCHITECTURE: URL-only processing
