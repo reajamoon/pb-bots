@@ -23,10 +23,10 @@ export default async function handlePull(interaction) {
       const isSuperadmin = level === 'superadmin';
       if (isSuperadmin) {
         // Accept as user option or string ID
-        const puppetUser = interaction.options.getUser?.('puppetUser');
+        const puppetUser = interaction.options.getUser?.('puppetuser') || interaction.options.getUser?.('puppetUser');
         if (puppetUser && puppetUser.id) puppetUserId = puppetUser.id;
         if (!puppetUserId) {
-          const puppetIdStr = interaction.options.getString?.('puppetUserId');
+          const puppetIdStr = interaction.options.getString?.('puppetuserid') || interaction.options.getString?.('puppetUserId');
           if (puppetIdStr && String(puppetIdStr).trim()) puppetUserId = String(puppetIdStr).trim();
         }
       }
