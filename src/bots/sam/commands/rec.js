@@ -99,6 +99,10 @@ export default {
                     option.setName('tags')
                         .setDescription('Recommendation tags (comma-separated)')
                         .setRequired(false))
+                .addUserOption(option =>
+                    option.setName('puppetuser')
+                        .setDescription('Superadmin: attribute notes/footer to this user')
+                        .setRequired(false))
                 .addBooleanOption(option =>
                     option.setName('manual_only')
                         .setDescription('Skip fetch metadata and only update provided fields.')
@@ -219,7 +223,11 @@ export default {
                 .addStringOption(option =>
                     option.setName('id')
                         .setDescription('Recommendation ID (e.g., 123) or Series ID (e.g., S456)')
-                        .setRequired(true)))
+                        .setRequired(true))
+                .addUserOption(option =>
+                    option.setName('puppetuser')
+                        .setDescription('Superadmin: attribute notes/footer to this user')
+                        .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('resetqueue')
