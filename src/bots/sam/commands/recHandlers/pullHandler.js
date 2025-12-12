@@ -14,6 +14,23 @@ export default async function handlePull(interaction) {
   try {
     await interaction.deferReply();
     const rawId = interaction.options.getString('id');
+    // Optional: puppet user override for note/footer attribution (superadmin-only)
+    let puppetUserId = null;
+    try {
+      const { User } = await import('../../../../models/index.js');
+      const requester = await User.findOne({ where: { discordId: interaction.user.id } });
+      const level = requester && requester.permissionLevel ? String(requester.permissionLevel).toLowerCase() : 'member';
+      const isSuperadmin = level === 'superadmin';
+      if (isSuperadmin) {
+        // Accept as user option or string ID
+        const puppetUser = interaction.options.getUser?.('puppetUser');
+        if (puppetUser && puppetUser.id) puppetUserId = puppetUser.id;
+        if (!puppetUserId) {
+          const puppetIdStr = interaction.options.getString?.('puppetUserId');
+          if (puppetIdStr && String(puppetIdStr).trim()) puppetUserId = String(puppetIdStr).trim();
+        }
+      }
+    } catch {}
     if (!rawId || !rawId.trim()) {
       return await interaction.editReply({ content: 'Please provide an ID like 123 (rec) or S456 (series).' });
     }
@@ -29,7 +46,7 @@ export default async function handlePull(interaction) {
         return await interaction.editReply({ content: `No series found with ID ${rawId}.` });
       }
       const seriesWithMeta = await fetchSeriesWithUserMetadata(series.id, true);
-      embed = createSeriesEmbed(seriesWithMeta, { preferredUserId: interaction.user.id });
+      embed = createSeriesEmbed(seriesWithMeta, { preferredUserId: puppetUserId || interaction.user.id });
       entityType = 'series';
     } else {
       const recPk = parseInt(rawId, 10);
@@ -52,7 +69,7 @@ export default async function handlePull(interaction) {
           });
         } catch {}
       }
-      embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id });
+      embed = createRecEmbed(recWithSeries, { preferredUserId: puppetUserId || interaction.user.id });
       entityType = 'rec';
     }
 

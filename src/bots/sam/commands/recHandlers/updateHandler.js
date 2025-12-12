@@ -44,6 +44,23 @@ export default async function handleUpdateRecommendation(interaction) {
     // Defer reply since this operation may take time
     await interaction.deferReply();
 
+    // Optional: puppet user override for note/footer attribution (superadmin-only)
+    let puppetUserId = null;
+    try {
+        const { User } = await import('../../../../models/index.js');
+        const requester = await User.findOne({ where: { discordId: interaction.user.id } });
+        const level = requester && requester.permissionLevel ? String(requester.permissionLevel).toLowerCase() : 'member';
+        const isSuperadmin = level === 'superadmin';
+        if (isSuperadmin) {
+            const puppetUser = interaction.options.getUser?.('puppetUser');
+            if (puppetUser && puppetUser.id) puppetUserId = puppetUser.id;
+            if (!puppetUserId) {
+                const puppetIdStr = interaction.options.getString?.('puppetUserId');
+                if (puppetIdStr && String(puppetIdStr).trim()) puppetUserId = String(puppetIdStr).trim();
+            }
+        }
+    } catch {}
+
     // Extract identifier from interaction options
     const identifier = interaction.options.getString('identifier');
     
@@ -144,7 +161,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                 try {
                     await saveUserMetadata({
                         url: normalizedUrl,
-                        user: interaction.user,
+                        user: puppetUserId ? { id: puppetUserId } : interaction.user,
                         notes: newNotesTrim || '',
                         additionalTags: newTags || [],
                         manualFields
@@ -270,7 +287,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
 
         await saveUserMetadata({
             url: urlToUse,
-            user: interaction.user,
+            user: puppetUserId ? { id: puppetUserId } : interaction.user,
             notes: newNotesTrim || '',
             additionalTags: newTags || [],
             manualFields
@@ -305,7 +322,10 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                                 });
                             } catch {}
                         }
-                        const embed = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
+                        const embed = createRecEmbed(recWithSeries, {
+                            preferredUserId: puppetUserId || interaction.user.id,
+                            overrideNotes: (typeof newNotesTrim === 'string' && newNotesTrim.length) ? newNotesTrim : undefined
+                        });
                         try {
                             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
                             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
@@ -420,7 +440,10 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                                     });
                                 } catch {}
                             }
-                            const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
+                            const embedNow = createRecEmbed(recWithSeries, {
+                                preferredUserId: puppetUserId || interaction.user.id,
+                                overrideNotes: (typeof newNotesTrim === 'string' && newNotesTrim.length) ? newNotesTrim : undefined
+                            });
                             const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
                             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
                             let targetChannel = null;
@@ -546,7 +569,10 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                             });
                         } catch {}
                     }
-                    const embedNow = createRecEmbed(recWithSeries, { preferredUserId: interaction.user.id, overrideNotes: newNotesTrim });
+                    const embedNow = createRecEmbed(recWithSeries, {
+                        preferredUserId: puppetUserId || interaction.user.id,
+                        overrideNotes: (typeof newNotesTrim === 'string' && newNotesTrim.length) ? newNotesTrim : undefined
+                    });
                     // Avoid duplicate embeds if we already have a tracked message for this queue/user
                     if (!existingSub || !existingSub.channel_id || !existingSub.message_id) {
                         const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
@@ -714,8 +740,8 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                     } catch {}
                 }
                 const embed = createRecEmbed(recWithSeries, {
-                    // Tie footer to owner if a new note was supplied
-                    preferredUserId: newNotes ? interaction.user.id : undefined
+                    // Tie footer to owner if a new note was supplied; respect puppet override
+                    preferredUserId: puppetUserId || (newNotes ? interaction.user.id : undefined)
                 });
 
                 // Ensure UserFicMetadata reflects manual-only notes/tags immediately
@@ -723,7 +749,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                     const { ao3ID } = detectSiteAndExtractIDs(urlToUse);
                     await updateUserMetadata({
                         identifier: ao3ID,
-                        userID: interaction.user.id,
+                        userID: puppetUserId || interaction.user.id,
                         type: 'ao3ID',
                         notes: newNotes,
                         additionalTags: newTags && newTags.length ? newTags : undefined,

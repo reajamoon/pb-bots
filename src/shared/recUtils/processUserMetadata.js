@@ -65,7 +65,18 @@ async function saveUserMetadata(options) {
       metadataRecord.url = url;
     }
 
-    await UserFicMetadata.upsert(metadataRecord);
+    // Avoid relying on composite UNIQUE (NULLs don't collide in Postgres). Do manual find+update.
+    const whereClause = { userID: metadataRecord.userID };
+    if (metadataRecord.ao3ID !== undefined) whereClause.ao3ID = metadataRecord.ao3ID;
+    if (metadataRecord.seriesId !== undefined) whereClause.seriesId = metadataRecord.seriesId;
+    if (metadataRecord.url) whereClause.url = metadataRecord.url;
+
+    const existing = await UserFicMetadata.findOne({ where: whereClause });
+    if (existing) {
+      await existing.update(metadataRecord);
+    } else {
+      await UserFicMetadata.create(metadataRecord);
+    }
   } catch (err) {
     console.error('[saveUserMetadata] Error saving user metadata:', err);
     throw err;
