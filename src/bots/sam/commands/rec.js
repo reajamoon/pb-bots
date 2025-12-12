@@ -222,10 +222,6 @@ export default {
                         .setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand
-                .setName('add_ao3share')
-                .setDescription('Add a new fanfiction recommendation by pasting AO3 share HTML'))
-        .addSubcommand(subcommand =>
-            subcommand
                 .setName('resetqueue')
                 .setDescription('Reset stuck fic metadata jobs (mods/admins only)'))
         .addSubcommand(subcommand =>
