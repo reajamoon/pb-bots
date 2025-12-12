@@ -262,17 +262,15 @@ async function parseAO3Metadata(html, url, includeRawHtml = false) {
             }
         }
         // 3. Abandoned tag
-        const abandonedTag = 'Abandoned Work - Unfinished and Discontinued';
-        let freeformTagsArr = [];
-        if (Array.isArray(metadata.freeform_tags)) {
-            freeformTagsArr = metadata.freeform_tags.map(t => t.trim().toLowerCase());
-        } else if (Array.isArray(metadata.tags)) {
-            freeformTagsArr = metadata.tags.map(t => t.trim().toLowerCase());
-        }
         let statusFromAbandoned = null;
-        if (freeformTagsArr.includes(abandonedTag.toLowerCase())) {
-            statusFromAbandoned = 'Abandoned';
-        }
+        try {
+            const { freeformTagLinks } = await import('./parseTagList.js');
+            const links = freeformTagLinks($);
+            const abandonedSlug = 'abandoned-work-unfinished-and-discontinued';
+            if (Array.isArray(links) && links.some(l => (l.slug || '').toLowerCase() === abandonedSlug)) {
+                statusFromAbandoned = 'Abandoned';
+            }
+        } catch {}
         // 4. Completed date field
         let statusFromCompleted = null;
         if (typeof metadata.stats.completed !== 'undefined') {

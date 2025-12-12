@@ -47,6 +47,26 @@ export function freeformTags($) {
     return tags;
 }
 
+// Returns detailed link info for freeform tags to validate canonical slugs
+export function freeformTagLinks($) {
+    const links = [];
+    const dd = excludeChapters($, 'dd.freeform.tags');
+    const source = dd.length ? dd : (() => {
+        const dt = $("dl.meta.group dt").filter((i, el) => /additional\s+tags/i.test($(el).text()));
+        if (dt.length) {
+            return dt.first().next('dd');
+        }
+        return excludeChapters($, 'dd.tags');
+    })();
+    source.find('a.tag').each((i, el) => {
+        const text = $(el).text().trim();
+        const href = $(el).attr('href') || '';
+        const slug = href.replace(/^.*\/tags\//, '').replace(/\/works.*$/, '').replace(/\?.*$/, '');
+        if (text) links.push({ text: decodeHtmlEntities(text), href, slug });
+    });
+    return links;
+}
+
 export function archiveWarnings($) {
     let tags = parseTagList($, excludeChapters($, 'dd.warning.tags'));
     if (tags.length === 0) {
