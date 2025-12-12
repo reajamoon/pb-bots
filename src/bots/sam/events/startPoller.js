@@ -465,6 +465,7 @@ async function notifyQueueSubscribers(client) {
                 });
 
                 // First, update any tracked original command replies for subscribers
+                let editedTrackedCount = 0;
                 for (const sub of subscribers) {
                     if (sub.channel_id && sub.message_id && embed) {
                         try {
@@ -473,6 +474,7 @@ async function notifyQueueSubscribers(client) {
                                 const targetMsg = await targetChannel.messages.fetch(sub.message_id).catch(() => null);
                                 if (targetMsg && targetMsg.edit) {
                                     await targetMsg.edit({ content: null, embeds: [embed] });
+                                    editedTrackedCount++;
                                 }
                             }
                         } catch (e) {
@@ -494,9 +496,9 @@ async function notifyQueueSubscribers(client) {
                     }
                 }
 
-                // If no tracked subscriber message exists, send the embed publicly; otherwise skip to avoid duplicates
+                // If no tracked subscriber message exists OR none were successfully edited, send publicly
                 const hasTracked = subscribers.some(s => !!s.channel_id && !!s.message_id);
-                if (!hasTracked) {
+                if (!hasTracked || editedTrackedCount === 0) {
                     if (embed) {
                         await channel.send({ embeds: [embed] });
                     } else {
@@ -585,8 +587,9 @@ async function notifyQueueSubscribers(client) {
                 
                 console.log(`[Poller] Processing series-done job: job id ${job.id}, url: ${job.fic_url}, subscribers: [${subscribers.map(s => s.user_id).join(', ')}]`);
                 
-                // Prefer editing tracked subscriber messages; only post publicly if none exist
+                // Prefer editing tracked subscriber messages; if none exist or edits fail, post publicly
                 const hasTracked = subscribers.some(s => !!s.channel_id && !!s.message_id);
+                let editedTrackedCount = 0;
                 if (hasTracked && embed) {
                     for (const sub of subscribers) {
                         if (sub.channel_id && sub.message_id) {
@@ -596,6 +599,7 @@ async function notifyQueueSubscribers(client) {
                                     const targetMsg = await targetChannel.messages.fetch(sub.message_id).catch(() => null);
                                     if (targetMsg && targetMsg.edit) {
                                         await targetMsg.edit({ content: null, embeds: [embed] });
+                                        editedTrackedCount++;
                                     }
                                 }
                             } catch (e) {
@@ -603,7 +607,8 @@ async function notifyQueueSubscribers(client) {
                             }
                         }
                     }
-                } else {
+                }
+                if (!hasTracked || editedTrackedCount === 0) {
                     if (embed) {
                         await channel.send({ embeds: [embed] });
                     } else {
