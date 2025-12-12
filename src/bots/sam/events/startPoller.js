@@ -150,7 +150,25 @@ async function notifyQueueSubscribers(client) {
                     }
                     // Try to include a compact summary embed for context
                     try {
-                        const rec = await Recommendation.findOne({ where: { url: job.fic_url } });
+                        // Fetch a complete Sequelize instance (work + series + user metadata)
+                        const { fetchRecWithSeries } = await import('../../../models/fetchRecWithSeries.js');
+                        // Prefer AO3ID-based resolution for robustness; fallback to URL.
+                        const rec = job.result && job.result.id
+                            ? await fetchRecWithSeries(job.result.id, true)
+                            : await (async () => {
+                                try {
+                                    // Prefer AO3ID lookup extracted from URL; fallback to URL match
+                                    const { detectSiteAndExtractIDs } = await import('../../../shared/recUtils/processUserMetadata.js');
+                                    const { ao3ID } = detectSiteAndExtractIDs(job.fic_url) || {};
+                                    if (ao3ID) {
+                                        const { RecommendationFields } = await import('../../../models/index.js');
+                                        const found = await Recommendation.findOne({ where: { [RecommendationFields.ao3ID]: ao3ID } });
+                                        return found ? await fetchRecWithSeries(found.id, true) : null;
+                                    }
+                                } catch {}
+                                const foundByUrl = await Recommendation.findOne({ where: { url: job.fic_url } });
+                                return foundByUrl ? await fetchRecWithSeries(foundByUrl.id, true) : null;
+                            })();
                         if (rec) {
                             // Gate on AO3 parsing presence: require fandom_tags populated in DB
                             const hasFandomTags = Array.isArray(rec.fandom_tags) && rec.fandom_tags.length > 0;

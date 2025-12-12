@@ -28,6 +28,7 @@ async function processAO3Job(payload) {
     user,
     isUpdate = false,
     type = 'work',
+    batch_type = null,
     notPrimaryWork = false,
     part = null
   } = payload;
@@ -190,6 +191,7 @@ async function processAO3Job(payload) {
       console.debug('[processAO3Job] AO3 tag summary (post-normalize)', {
         ao3ID,
         type,
+        batch_type,
         fandomCount: Array.isArray(metadata.fandom_tags) ? metadata.fandom_tags.length : (Array.isArray(metadata.fandom) ? metadata.fandom.length : 0),
         relationshipCount: Array.isArray(metadata.relationship_tags) ? metadata.relationship_tags.length : 0,
         freeformCount: Array.isArray(metadata.freeform_tags) ? metadata.freeform_tags.length : 0

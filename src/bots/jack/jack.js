@@ -180,7 +180,8 @@ async function processQueueJob(job) {
 				ao3ID: siteInfo.ao3ID,
 				user,
 				isUpdate,
-				type: 'work'
+				type: 'work',
+				batch_type: job.batch_type || null
 			});
 		} else {
 			throw new Error('Invalid URL format');
@@ -192,6 +193,7 @@ async function processQueueJob(job) {
 			site: siteInfo.site,
 			isSeries: !!siteInfo.isSeriesUrl,
 			isWork: !!siteInfo.isWorkUrl,
+			batch_type: job.batch_type || null,
 			error: result && result.error ? result.error : null,
 			recommendationId: result && result.recommendation && result.recommendation.id ? result.recommendation.id : (result && result.id ? result.id : null)
 		});
