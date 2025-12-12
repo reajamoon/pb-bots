@@ -334,14 +334,28 @@ async function getLoggedInAO3Page(ficUrl) {
             logBrowserEvent('[AO3] Using main login form.');
             await page.type(MAIN_SELECTOR, username);
             await page.type('#user_password', password);
+            await page.waitForTimeout(500);
+            // Submit the nearest form ancestor instead of relying on a global container
             try {
-                await Promise.all([
-                    page.click('#loginform input[name="commit"]'),
-                    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT })
-                ]);
+                const submitted = await page.evaluate(() => {
+                    const userInput = document.querySelector('#user_login');
+                    const form = userInput ? userInput.closest('form') : null;
+                    const submitBtn = form && (form.querySelector('input[type="submit"],button[type="submit"],button[name="commit"],input[name="commit"]'));
+                    if (submitBtn) { submitBtn.click(); return true; }
+                    if (form) { form.submit(); return true; }
+                    return false;
+                });
+                if (!submitted) {
+                    // Fallback to known selector if nearest form submission failed
+                    await Promise.all([
+                        page.click('#loginform input[name="commit"]'),
+                        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT })
+                    ]).catch(() => {});
+                } else {
+                    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT }).catch(() => {});
+                }
             } catch (navErr) {
-                logBrowserEvent('[AO3] Navigation after main login submit failed, retrying once: ' + (navErr && navErr.message ? navErr.message : ''));
-                // Retry once with a fresh wait
+                logBrowserEvent('[AO3] Navigation after main login submit failed, retrying: ' + (navErr && navErr.message ? navErr.message : ''));
                 await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
             }
         } else {
@@ -366,13 +380,27 @@ async function getLoggedInAO3Page(ficUrl) {
                 logBrowserEvent('[AO3] Using small login form.');
                 await page.type(SMALL_SELECTOR, username);
                 await page.type('#user_session_password_small', password);
+                await page.waitForTimeout(500);
+                // Submit the nearest form ancestor for the small login inputs
                 try {
-                    await Promise.all([
-                        page.click('#small_login input[name="commit"]'),
-                        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT })
-                    ]);
+                    const submitted = await page.evaluate(() => {
+                        const userInput = document.querySelector('#user_session_login_small');
+                        const form = userInput ? userInput.closest('form') : null;
+                        const submitBtn = form && (form.querySelector('input[type="submit"],button[type="submit"],button[name="commit"],input[name="commit"]'));
+                        if (submitBtn) { submitBtn.click(); return true; }
+                        if (form) { form.submit(); return true; }
+                        return false;
+                    });
+                    if (!submitted) {
+                        await Promise.all([
+                            page.click('#small_login input[name="commit"]'),
+                            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT })
+                        ]).catch(() => {});
+                    } else {
+                        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT }).catch(() => {});
+                    }
                 } catch (navErr) {
-                    logBrowserEvent('[AO3] Navigation after small login submit failed, retrying once: ' + (navErr && navErr.message ? navErr.message : ''));
+                    logBrowserEvent('[AO3] Navigation after small login submit failed, retrying: ' + (navErr && navErr.message ? navErr.message : ''));
                     await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
                 }
             } else {
