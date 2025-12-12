@@ -146,7 +146,15 @@ async function processAO3Job(payload) {
           freeformSample: Array.isArray(freeformTags) ? freeformTags.slice(0, 5) : []
         });
       } catch {}
-      const validation = validateDeanCasRec(fandomTags, relationshipTags, freeformTags, metadata.__cheerioRoot || null);
+      // Prefer parser-provided canonical validation signals when available
+      // NOTE: Validation uses canonical tag slugs/text extracted from the DOM.
+      // We do NOT overwrite metadata.freeform_tags/relationship_tags/fandom_tags during validation.
+      let validation = null;
+      if (metadata.validation && (metadata.validation.hasMainlineSPN || metadata.validation.hasExplicitDeanCas || (metadata.validation.hasSPNRpf && metadata.validation.hasExplicitDeanCas))) {
+        validation = { valid: true, reason: null };
+      } else {
+        validation = validateDeanCasRec(fandomTags, relationshipTags, freeformTags, metadata.__cheerioRoot || null);
+      }
       
       if (!validation.valid) {
         // Defensive: re-check override just in case it was created during requeue

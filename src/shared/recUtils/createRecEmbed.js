@@ -1,6 +1,7 @@
 import Discord from 'discord.js';
 const { EmbedBuilder } = Discord;
 import { getAo3RatingColor } from './ao3/ao3TagColors.js';
+import decodeHtmlEntities from './decodeHtmlEntities.js';
 import { formatRatingWithEmoji, formatArchiveWarnings } from './ao3Emojis.js';
 import { detectSiteAndExtractIDs } from './processUserMetadata.js';
 

@@ -150,15 +150,23 @@ export async function validateDeanCasRec(fandomTags, relationshipTags, freeformT
   let hasSPNRpf = false;
   try {
     if (cheerioRootForLinks) {
-      const { fandomTagLinks } = await import('./parseTagList.js');
+      const { fandomTagLinks, normalizeFandomSlugToText } = await import('./parseTagList.js');
       const links = fandomTagLinks(cheerioRootForLinks);
-      const norm = s => String(s || '').toLowerCase().replace(/\+/g, ' ');
+      const normSlug = s => {
+        let raw = String(s || '');
+        try { raw = decodeURIComponent(raw); } catch {}
+        return raw.toLowerCase().replace(/\s+/g, ' ').replace(/\+/g, ' ').trim();
+      };
       const MAIN_SPN_SLUGS = new Set([
         'supernatural (tv 2005)',
         'supernatural - all media types'
       ]);
-      hasMainlineSPN = Array.isArray(links) && links.some(l => MAIN_SPN_SLUGS.has(norm(l.slug)) || /\bsupernatural\b/.test(norm(l.slug)));
-      hasSPNRpf = Array.isArray(links) && links.some(l => norm(l.slug) === 'spn rpf' || norm(l.slug).includes('supernatural rpf'));
+      hasMainlineSPN = Array.isArray(links) && links.some(l => {
+        const slugNorm = normSlug(l.slug);
+        const textNorm = normalizeTag(normalizeFandomSlugToText(l.slug));
+        return MAIN_SPN_SLUGS.has(slugNorm) || /\bsupernatural\b/.test(slugNorm) || /\bsupernatural\b/.test(textNorm);
+      });
+      hasSPNRpf = Array.isArray(links) && links.some(l => normSlug(l.slug) === 'spn rpf' || normSlug(l.slug).includes('supernatural rpf'));
     }
   } catch {}
   if (!hasMainlineSPN && !hasSPNRpf) {
@@ -171,14 +179,27 @@ export async function validateDeanCasRec(fandomTags, relationshipTags, freeformT
   let hasExplicitDeanCas = relArray.some(isDeanCasExactShip) || freeformHasShipAlias;
   try {
     if (cheerioRootForLinks) {
-      const { relationshipTagLinks } = await import('./parseTagList.js');
+      const { relationshipTagLinks, normalizeRelationshipSlugToText } = await import('./parseTagList.js');
       const links = relationshipTagLinks(cheerioRootForLinks);
-      const norm = s => String(s || '').toLowerCase().replace(/\+/g, ' ');
+      const normSlug = s => {
+        let raw = String(s || '');
+        try { raw = decodeURIComponent(raw); } catch {}
+        return raw.toLowerCase().replace(/\s+/g, ' ').replace(/\+/g, ' ').trim();
+      };
+      const normText = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
       const REL_SPN_SLUGS = new Set([
         'castiel*s*dean winchester',
         'dean winchester*s*castiel'
       ]);
-      hasExplicitDeanCas = hasExplicitDeanCas || (Array.isArray(links) && links.some(l => REL_SPN_SLUGS.has(norm(l.slug))));
+      const REL_TEXT_ALIASES = new Set(SHIP_ALIASES.map(a => a.toLowerCase()));
+      hasExplicitDeanCas = hasExplicitDeanCas || (
+        Array.isArray(links) && links.some(l => {
+          const slug = normSlug(l.slug);
+          const text = normText(l.text);
+          const canonText = normText(normalizeRelationshipSlugToText(l.slug));
+          return REL_SPN_SLUGS.has(slug) || REL_TEXT_ALIASES.has(text) || REL_TEXT_ALIASES.has(canonText);
+        })
+      );
     }
   } catch {}
 

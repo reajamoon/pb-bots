@@ -6,7 +6,8 @@ import {
     characterTags,
     categoryTags,
     fandomTags,
-    requiredTags
+    requiredTags,
+    extractCanonicalValidation
 } from './parseTagList.js';
 import decodeHtmlEntities from '../decodeHtmlEntities.js';
 import fs from 'fs';
@@ -151,8 +152,17 @@ async function parseAO3Metadata(html, url, includeRawHtml = false) {
                 for (const key of tagFields) {
                     if (!Array.isArray(metadata[key])) metadata[key] = [];
                 }
-                // Attach Cheerio root for downstream slug-based validations (non-serialized usage only)
-                metadata.__cheerioRoot = $;
+                // Canonical validation via tag links (cheerio-first)
+                // NOTE: This block derives validation-only signals from AO3's canonical tag links.
+                // It does NOT modify any tag arrays. Storage/display keeps author-visible tag text.
+                const canon = extractCanonicalValidation($);
+                metadata.validation = {
+                    hasMainlineSPN: !!canon.hasMainlineSPN,
+                    hasSPNRpf: !!canon.hasSPNRpf,
+                    hasExplicitDeanCas: !!canon.hasExplicitDeanCas,
+                    fandomCanonicalTexts: canon.fandomCanonicalTexts || [],
+                    relationshipCanonicalTexts: canon.relationshipCanonicalTexts || []
+                };
                 // Collections block: handle like meta/stats, with warnings
         const collectionsBlock = $('dd.collections').first();
         const collections = [];

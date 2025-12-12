@@ -109,6 +109,24 @@ export function relationshipTagLinks($) {
     return links;
 }
 
+    // Normalize an AO3 canonical relationship slug to display text
+    // e.g., 'Castiel*s*Dean%20Winchester' -> 'Castiel/Dean Winchester'
+    export function normalizeRelationshipSlugToText(slug) {
+        if (!slug) return '';
+        let raw = String(slug);
+        try { raw = decodeURIComponent(raw); } catch {}
+        return raw.replace(/\+|%20/g, ' ').replace(/\*s\*/g, '/').trim();
+    }
+
+    // Normalize an AO3 canonical fandom slug to display text
+    // e.g., 'Supernatural%20(TV%202005)' -> 'Supernatural (TV 2005)'
+    export function normalizeFandomSlugToText(slug) {
+        if (!slug) return '';
+        let raw = String(slug);
+        try { raw = decodeURIComponent(raw); } catch {}
+        return raw.replace(/\+|%20/g, ' ').trim();
+    }
+
 export function characterTags($) {
     let tags = parseTagList($, excludeChapters($, 'dd.character.tags'));
     if (tags.length === 0) {
@@ -119,6 +137,46 @@ export function characterTags($) {
         }
     }
     return tags;
+}
+
+// Extract canonical validation signals directly from the AO3 DOM via cheerio
+// Returns { hasMainlineSPN: boolean, hasSPNRpf: boolean, hasExplicitDeanCas: boolean,
+//           fandomCanonicalTexts: string[], relationshipCanonicalTexts: string[] }
+export function extractCanonicalValidation($) {
+    const fandomLinks = fandomTagLinks($) || [];
+    const relationshipLinks = relationshipTagLinks($) || [];
+    const normSlug = s => {
+        let raw = String(s || '');
+        try { raw = decodeURIComponent(raw); } catch {}
+        return raw.toLowerCase().replace(/\+|%20/g, ' ').trim();
+    };
+    const normText = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const MAIN_SPN_SLUGS = new Set([
+        'supernatural (tv 2005)',
+        'supernatural - all media types'
+    ]);
+    const REL_SPN_SLUGS = new Set([
+        'castiel*s*dean winchester',
+        'dean winchester*s*castiel'
+    ]);
+    const SHIP_TEXT_ALIASES = new Set([
+        'castiel/dean winchester',
+        'dean winchester/castiel',
+        'destiel',
+        'dean/cas',
+        'cas/dean',
+        'deancas'
+    ]);
+
+    const hasMainlineSPN = fandomLinks.some(l => MAIN_SPN_SLUGS.has(normSlug(l.slug)) || /\bsupernatural\b/.test(normSlug(l.slug)) || /\bsupernatural\b/.test(normText(l.text)));
+    const hasSPNRpf = fandomLinks.some(l => normSlug(l.slug) === 'spn rpf' || normSlug(l.slug).includes('supernatural rpf'));
+
+    const hasExplicitDeanCas = relationshipLinks.some(l => REL_SPN_SLUGS.has(normSlug(l.slug)) || SHIP_TEXT_ALIASES.has(normText(l.text)) || SHIP_TEXT_ALIASES.has(normText(normalizeRelationshipSlugToText(l.slug))));
+
+    const fandomCanonicalTexts = fandomLinks.map(l => normalizeFandomSlugToText(l.slug));
+    const relationshipCanonicalTexts = relationshipLinks.map(l => normalizeRelationshipSlugToText(l.slug));
+
+    return { hasMainlineSPN, hasSPNRpf, hasExplicitDeanCas, fandomCanonicalTexts, relationshipCanonicalTexts };
 }
 
 export function categoryTags($) {
