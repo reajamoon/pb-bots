@@ -153,7 +153,7 @@ async function processAO3Job(payload) {
       if (metadata.validation && (metadata.validation.hasMainlineSPN || metadata.validation.hasExplicitDeanCas || (metadata.validation.hasSPNRpf && metadata.validation.hasExplicitDeanCas))) {
         validation = { valid: true, reason: null };
       } else {
-        validation = validateDeanCasRec(fandomTags, relationshipTags, freeformTags, metadata.__cheerioRoot || null);
+        validation = await validateDeanCasRec(fandomTags, relationshipTags, freeformTags, metadata.__cheerioRoot || null);
       }
       
       if (!validation.valid) {
