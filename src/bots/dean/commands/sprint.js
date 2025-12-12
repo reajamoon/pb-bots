@@ -340,7 +340,7 @@ export async function execute(interaction) {
         const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
         const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
         const announce = makeDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce });
+        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
       } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
       return interaction.editReply({ content: msg });
     } else if (subName === 'add') {
@@ -382,7 +382,7 @@ export async function execute(interaction) {
         const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
         const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
         const announce = makeDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce });
+        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
       } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
       return interaction.editReply({ content: msg });
     } else if (subName === 'show') {
