@@ -22,6 +22,14 @@ const data = new SlashCommandBuilder()
         opt.setName('value')
           .setDescription('Value (e.g., true/false)')
           .setRequired(true))
+  )
+  .addSubcommand(sub =>
+    sub.setName('get')
+      .setDescription('Get the current value for a config key')
+      .addStringOption(opt =>
+        opt.setName('key')
+          .setDescription('Config key to read (e.g., intro_channel_id)')
+          .setRequired(true))
   );
 
 async function execute(interaction) {
@@ -37,27 +45,37 @@ async function execute(interaction) {
     }
 
     const sub = interaction.options.getSubcommand();
-    if (sub !== 'set') {
-      return await interaction.editReply({ content: 'Unsupported subcommand.' });
+
+    if (sub === 'get') {
+      const key = interaction.options.getString('key').trim();
+      const existing = await Config.findOne({ where: { key } });
+      if (!existing) {
+        return await interaction.editReply({ content: `No config found for key: ${key}` });
+      }
+      return await interaction.editReply({ content: `${key}=${existing.value}` });
     }
 
-    const key = interaction.options.getString('key').trim();
-    const value = interaction.options.getString('value').trim();
+    if (sub === 'set') {
+      const key = interaction.options.getString('key').trim();
+      const value = interaction.options.getString('value').trim();
 
-    // Upsert into Config table
-    const existing = await Config.findOne({ where: { key } });
-    if (existing) {
-      await existing.update({ value });
-    } else {
-      await Config.create({ key, value });
+      // Upsert into Config table
+      const existing = await Config.findOne({ where: { key } });
+      if (existing) {
+        await existing.update({ value });
+      } else {
+        await Config.create({ key, value });
+      }
+
+      // Clear caches if relevant
+      if (key === 'global_modlocked_fields' || key === 'bots_respect_global_modlocks') {
+        clearGlobalModlockedFieldsCache();
+      }
+
+      return await interaction.editReply({ content: `Config updated: ${key}=${value}` });
     }
 
-    // Clear caches if relevant
-    if (key === 'global_modlocked_fields' || key === 'bots_respect_global_modlocks') {
-      clearGlobalModlockedFieldsCache();
-    }
-
-    return await interaction.editReply({ content: `Config updated: ${key}=${value}` });
+    return await interaction.editReply({ content: 'Unsupported subcommand.' });
   } catch (err) {
     console.error('[config command] Error:', err);
     try {

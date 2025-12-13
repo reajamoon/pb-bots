@@ -3,6 +3,7 @@ import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
 import registerDeanCommands from './registerCommands.js';
 import onReady from './events/ready.js';
 import onInteractionCreate from './events/interactionCreate.js';
+import onGuildMemberAdd from './events/guildMemberAdd.js';
 import { initEmojiStore } from '../../shared/emojiStore.js';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { join, dirname } from 'path';
@@ -17,6 +18,7 @@ if (!token) {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
   ],
@@ -57,6 +59,7 @@ try {
 // Delegate ready handling to modular event file
 onReady(client);
 onInteractionCreate(client);
+onGuildMemberAdd(client);
 
 process.on('uncaughtException', (err) => {
   console.error('[dean] uncaughtException:', err && err.stack ? err.stack : err);
