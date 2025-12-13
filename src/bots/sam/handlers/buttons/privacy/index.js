@@ -4,4 +4,5 @@ export { default as handleToggleBirthdayMentions } from './toggleBirthdayMention
 export { default as handleToggleBirthdayLists } from './toggleBirthdayLists.js';
 export { default as handleTogglePrivacyModeFull } from './togglePrivacyModeFull.js';
 export { default as handleTogglePrivacyModeAgeHidden } from './togglePrivacyModeAgeHidden.js';
+export { default as handleTogglePrivacyModeYearHidden } from './togglePrivacyModeYearHidden.js';
 export { default as handleToggleBirthdayHidden } from './toggleBirthdayHidden.js';

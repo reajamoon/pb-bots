@@ -263,7 +263,7 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
         }
     // ROW 3 FIELDS: Birthday > Zodiac Sign > Chinese Zodiac (the fun stuff)
         // Privacy Mode (Full): hide ALL birthday + zodiac + age-related profile fields.
-        const privacyModeFull = dbUser.birthdayAgePrivacy === true;
+        const privacyModeFull = dbUser.birthdayPrivacyFull === true;
     // Birthday (only if set and not hidden)
         if (!privacyModeFull && dbUser.birthday && !dbUser.birthdayHidden) {
             row3Fields.push({

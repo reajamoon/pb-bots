@@ -92,6 +92,12 @@ export async function handlePrivacyButtons(interaction) {
         await handleTogglePrivacyModeFull(interaction);
     }
 
+    // Toggle Privacy Mode (Year Hidden) - hides age + Chinese zodiac
+    else if (interaction.customId.includes('toggle_privacy_mode_year_hidden_privacy_settings_')) {
+        const { handleTogglePrivacyModeYearHidden } = await import('./privacy/index.js');
+        await handleTogglePrivacyModeYearHidden(interaction);
+    }
+
     // Toggle Privacy Mode (Age Hidden) - hides only age, shows birthday/zodiac
     else if (interaction.customId.includes('toggle_privacy_mode_age_hidden_privacy_settings_')) {
         const { handleTogglePrivacyModeAgeHidden } = await import('./privacy/index.js');

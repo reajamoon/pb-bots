@@ -112,6 +112,12 @@ export default (sequelize) => {
             defaultValue: false,
             allowNull: false
         },
+        birthdayPrivacyFull: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false,
+            comment: 'Privacy Mode (Full): hide birthday, age, and zodiac info from the profile display'
+        },
         profileBlocked: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,

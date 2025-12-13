@@ -47,27 +47,11 @@ export default async function handleTogglePrivacyModeFull(interaction) {
             }
         });
 
-        const currentValue = user.birthdayAgePrivacy === true;
-        const isPrivacyModeStrict = user.birthdayYearHidden === true;
-        if (isPrivacyModeStrict) {
-            await interaction.reply({
-                content: `**Privacy Mode (Full) is Locked in Privacy Mode (Strict)**\n\n` +
-                       `🔒 Privacy Mode (Full) is locked ON because you set your birthday without birth year (Privacy Mode Strict).\n\n` +
-                       `**To make Privacy Mode (Full) toggleable:**\n` +
-                       `• Update your birthday to include birth year (like 12/25/2001)\n` +
-                       `• This will exit Privacy Mode (Strict) and make the toggle available\n\n` +
-                       `**To stay in Privacy Mode (Strict):**\n` +
-                       `• Keep your current setting - age and Chinese zodiac stay hidden\n` +
-                       `• You can still change mentions and daily list settings\n\n` +
-                       'Use the Birthday Settings button on your profile to change other settings.',
-                flags: ephemeralFlag
-            });
-            return;
-        }
+        const currentValue = user.birthdayPrivacyFull === true;
 
         const newValue = !currentValue;
         await User.update(
-            { birthdayAgePrivacy: newValue },
+            { birthdayPrivacyFull: newValue },
             { where: { discordId: interaction.user.id } }
         );
 

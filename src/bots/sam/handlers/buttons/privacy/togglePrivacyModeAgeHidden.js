@@ -49,7 +49,8 @@ export default async function handleTogglePrivacyModeAgeHidden(interaction) {
         });
 
         const currentValue = user.birthdayAgeOnly === true;
-        const isPrivacyModeStrict = user.birthdayYearHidden === true;
+        const birthYear = user.birthday ? parseInt(String(user.birthday).split('-')[0], 10) : null;
+        const isPrivacyModeStrict = user.birthdayYearHidden === true && birthYear === 1900;
         if (isPrivacyModeStrict) {
             await interaction.reply({
                 content: `**Privacy Mode (Age Hidden) is Locked in Privacy Mode (Strict)**\n\n` +

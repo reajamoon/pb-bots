@@ -8,6 +8,8 @@
     "privacyModeFullOff": "Privacy Mode (Full): OFF",
     "privacyModeAgeHiddenOn": "Privacy Mode (Age Hidden): ON",
     "privacyModeAgeHiddenOff": "Privacy Mode (Age Hidden): OFF",
+    "privacyModeYearHiddenOn": "Privacy Mode (Year Hidden): ON",
+    "privacyModeYearHiddenOff": "Privacy Mode (Year Hidden): OFF",
     "profileBirthdayHidden": "Profile Birthday: HIDDEN",
     "profileBirthdayVisible": "Profile Birthday: VISIBLE",
     "closeSettings": "Close Settings"
