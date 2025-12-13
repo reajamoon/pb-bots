@@ -5,8 +5,8 @@
   "type": "module",
   "main": "src/bots/sam/sam.js",
   "scripts": {
-    "start": "echo \"ERROR: Use PM2 to start the bot (npm run deploy or pm2 start ecosystem.config.js)\" && exit 1",
-    "dev": "echo \"ERROR: Use PM2 for development. Do not run nodemon directly.\" && exit 1",
+    "start": "echo \"ERROR: Use PM2 to start bots (npm run deploy:all or ./start-bots.sh).\" && exit 1",
+    "dev": "echo \"ERROR: Use PM2 for development (npm run deploy:all).\" && exit 1",
     "test": "jest",
     "db:migrate": "node migration-runner.mjs db:migrate",
     "migrate": "node migration-runner.mjs db:migrate",
