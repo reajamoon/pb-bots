@@ -1,19 +1,18 @@
 import Discord from 'discord.js';
 const { StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
-import { buildButtonId } from '../../../../shared/utils/buttonId.js';
+import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
 
 /**
  * Handler for showing the timezone display preference menu.
  * @param {Object} interaction - Discord interaction object
  */
 export async function handleTimezoneDisplay(interaction) {
-    // Extract profile owner ID if present (new format)
-    const profileOwnerId = interaction.customId.includes('_') ? interaction.customId.split('_')[2] : null;
-    // Show timezone display preference menu
-    const menuParts = interaction.customId.split('_');
-    const messageId = menuParts.length >= 4 ? menuParts[3] : '';
+    // Robustly extract the original profile card message ID.
+    // The timezone_display button customId includes it as the last segment.
+    const messageId = getProfileMessageId(interaction, interaction.customId);
+
     const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`timezone_display_select_${messageId}`)
+        .setCustomId(messageId ? `timezone_display_select_${messageId}` : 'timezone_display_select')
         .setPlaceholder('Choose how to display your timezone')
         .addOptions([
             {
@@ -49,13 +48,10 @@ export async function handleTimezoneDisplay(interaction) {
         ]);
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
-    // Use centralized builder for Back to Profile Settings button
-    const backButtonCustomId = await buildButtonId({
-        action: 'back_to_profile_settings',
-        context: 'profile_settings',
-        primaryId: interaction.user.id,
-        secondaryId: messageId || ''
-    });
+    // Back goes to Profile Settings (this keeps message tracking intact)
+    const backButtonCustomId = messageId
+        ? `profile_settings_${interaction.user.id}_${messageId}`
+        : `profile_settings_${interaction.user.id}`;
     const backButton = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()

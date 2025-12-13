@@ -1,6 +1,7 @@
 import Discord from 'discord.js';
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = Discord;
 import { buildButtonId } from '../../../../shared/utils/buttonId.js';
+import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
 
 /**
  * Handler for the back to profile settings button, reconstructs the profile settings menu.
@@ -8,9 +9,9 @@ import { buildButtonId } from '../../../../shared/utils/buttonId.js';
  */
 export async function handleBackToProfileSettings(interaction) {
     const { customId, user, message, client } = interaction;
-    const parsed = customId.includes('_') ? customId.split('_') : [];
-    const targetUserId = parsed.length >= 3 ? parsed[2] : user.id;
-    let originalMessageId = parsed.length >= 4 ? parsed[3] : (message?.id || null);
+    // Only use a messageId if it is explicitly propagated in the customId.
+    // Do NOT fall back to the ephemeral message id, because it cannot be fetched and breaks dual updates.
+    const originalMessageId = getProfileMessageId(interaction, customId);
     // Validate the messageId if provided
     let validatedMessageId = null;
     if (originalMessageId) {
@@ -22,8 +23,6 @@ export async function handleBackToProfileSettings(interaction) {
         } catch (error) {
             // If not valid, treat as new session
         }
-    } else {
-        validatedMessageId = message?.id || null;
     }
     // Build custom IDs with validated message tracking
     const buildButtonCustomId = async (action) => {
@@ -31,7 +30,7 @@ export async function handleBackToProfileSettings(interaction) {
             action,
             context: 'profile_settings',
             primaryId: user.id,
-            secondaryId: validatedMessageId
+            secondaryId: validatedMessageId || ''
         });
     };
     // Recreate the Profile Settings menu (ephemeral only)

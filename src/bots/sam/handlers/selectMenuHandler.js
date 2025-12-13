@@ -3,6 +3,7 @@ import logger from '../../../shared/utils/logger.js';
 import Discord from 'discord.js';
 const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
+import { getProfileMessageId } from '../../../shared/utils/messageTracking.js';
 
 /**
  * Handle select menu interactions
@@ -25,14 +26,8 @@ async function handleSelectMenu(interaction) {
                     'hidden': 'Hidden (timezone won\'t show on profile)'
                 };
 
-                // Extract message ID from the select menu custom ID first
-                let messageIdForButton = null;
-                if (interaction.customId.includes('_')) {
-                    const parts = interaction.customId.split('_');
-                    if (parts.length >= 4) {
-                        messageIdForButton = parts[3];
-                    }
-                }
+                // Extract original profile message ID from the select menu custom ID
+                const messageIdForButton = getProfileMessageId(interaction, interaction.customId);
 
                 // Create back button to return to Profile Settings with proper message tracking
                 const backButton = new ActionRowBuilder()
@@ -54,14 +49,7 @@ async function handleSelectMenu(interaction) {
                 });
 
                 // Try to update the original profile message if we can extract the message ID
-                // Extract message ID from the select menu custom ID: timezone_display_select_messageId
-                let originalMessageId = null;
-                if (interaction.customId.includes('_')) {
-                    const parts = interaction.customId.split('_');
-                    if (parts.length >= 4) {
-                        originalMessageId = parts[3];
-                    }
-                }
+                const originalMessageId = messageIdForButton;
 
                 // Update the original profile if we found the message ID
                 if (originalMessageId) {

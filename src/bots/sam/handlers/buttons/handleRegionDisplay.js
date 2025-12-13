@@ -2,16 +2,33 @@ import Discord from 'discord.js';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = Discord;
 import { buildButtonId } from '../../../../shared/utils/buttonId.js';
 import { User } from '../../../../models/index.js';
+import logger from '../../../../shared/utils/logger.js';
+import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
+import { performDualUpdate } from '../../../../shared/utils/dualUpdate.js';
 
 /**
  * Handler for toggling region display in the profile.
  * @param {Object} interaction - Discord interaction object
  */
 export async function handleRegionDisplay(interaction) {
-    const { customId, user, message } = interaction;
-    const parsed = customId.includes('_') ? customId.split('_') : [];
-    const targetUserId = parsed.length >= 3 ? parsed[2] : user.id;
-    let originalMessageId = parsed.length >= 4 ? parsed[3] : (message?.id || null);
+    const { customId, user } = interaction;
+    // Extract original profile card message ID (if present in the customId)
+    let originalMessageId = getProfileMessageId(interaction, customId);
+    // Validate that the messageId points to a real profile card message for this user
+    if (originalMessageId) {
+        try {
+            const originalMessage = await interaction.channel.messages.fetch(originalMessageId);
+            const originalEmbed = originalMessage?.embeds?.[0];
+            const userIdField = originalEmbed?.fields?.find(field => field.name === 'User ID');
+            if (!userIdField || userIdField.value !== user.id) {
+                logger.warn('[RegionDisplay] originalMessageId did not match user profile; disabling dual update', { originalMessageId, userId: user.id });
+                originalMessageId = null;
+            }
+        } catch (error) {
+            logger.warn('[RegionDisplay] Could not fetch original profile message; disabling dual update', { originalMessageId, error: error?.message });
+            originalMessageId = null;
+        }
+    }
 
     try {
         const dbUser = await User.findByPk(user.id);
@@ -42,15 +59,11 @@ export async function handleRegionDisplay(interaction) {
             })
             .setTimestamp();
         // Back button
-        let propagatedMessageId = originalMessageId;
-        if (!propagatedMessageId && message?.id) {
-            propagatedMessageId = message.id;
-        }
         const backButtonCustomId = await buildButtonId({
             action: 'back_to_profile_settings',
             context: 'profile_settings',
             primaryId: user.id,
-            secondaryId: propagatedMessageId
+            secondaryId: originalMessageId || ''
         });
         const backButton = new ActionRowBuilder()
             .addComponents(
@@ -65,12 +78,12 @@ export async function handleRegionDisplay(interaction) {
             embeds: [confirmEmbed],
             components: [backButton]
         };
-        if (interaction.isButton && interaction.isButton() && message && message.flags?.has('Ephemeral')) {
-            await interaction.update(ephemeralResponse);
-            // Optionally update the original profile message in the background if needed
-        } else {
-            await interaction.reply({ ...ephemeralResponse, flags: 64 });
-        }
+        await performDualUpdate(
+            interaction,
+            { ...ephemeralResponse, flags: 64 },
+            originalMessageId,
+            'region display toggle'
+        );
     } catch (error) {
         console.error('Error handling region display toggle:', error);
         const errorEmbed = new EmbedBuilder()
@@ -81,22 +94,16 @@ export async function handleRegionDisplay(interaction) {
         const backButton = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
-                    .setCustomId(originalMessageId ? `back_to_profile_settings_${user.id}_${originalMessageId}` : 'back_to_profile_settings')
+                    .setCustomId(originalMessageId ? `profile_settings_${user.id}_${originalMessageId}` : `profile_settings_${user.id}`)
                     .setLabel('← Back to Profile Settings')
                     .setStyle(ButtonStyle.Secondary)
                     .setEmoji('⚙️')
             );
-        if (message && message.flags?.has('Ephemeral')) {
-            await interaction.update({
-                embeds: [errorEmbed],
-                components: [backButton]
-            });
-        } else {
-            await interaction.reply({
-                embeds: [errorEmbed],
-                components: [backButton],
-                flags: 64
-            });
-        }
+        await performDualUpdate(
+            interaction,
+            { embeds: [errorEmbed], components: [backButton], flags: 64 },
+            originalMessageId,
+            'region display toggle (error)'
+        );
     }
 }
