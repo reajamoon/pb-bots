@@ -354,7 +354,7 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
             row4Fields.push({ name: '\u200B', value: '\u200B', inline: true });
         }
     // Age (calculated from birthday if available and year was provided, unless age is hidden)
-        if (dbUser.birthday && !dbUser.birthdayAgePrivacy && !dbUser.birthdayYearHidden && !dbUser.birthdayAgeOnly) {
+        if (!privacyModeFull && dbUser.birthday && !dbUser.birthdayAgePrivacy && !dbUser.birthdayYearHidden && !dbUser.birthdayAgeOnly) {
             // Parse birthday from YYYY-MM-DD format (classic)
             const [year, month, day] = dbUser.birthday.split('-').map(Number);
 

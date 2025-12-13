@@ -5,6 +5,7 @@ import logger from '../../../../shared/utils/logger.js';
 import { validateRegion } from '../../../../shared/utils/regionValidator.js';
 import { updateOriginalProfile } from '../../utils/updateOriginalProfile.js';
 import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
+import { recordSettingPoke } from '../../../../shared/hunts/pokedIt.js';
 
 /**
  * Handle region modal submission
@@ -105,6 +106,12 @@ export async function handleRegionModal(interaction, originalMessageId = null) {
             discriminator: interaction.user.discriminator || '0',
             avatar: interaction.user.avatar,
             region: validation.normalizedRegion
+        });
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'profile.set_region',
+            interaction,
         });
 
         const responseMessage = `🌍 **Region set successfully!**\n\n` +

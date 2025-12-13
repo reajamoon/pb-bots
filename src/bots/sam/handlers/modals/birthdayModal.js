@@ -4,6 +4,7 @@ import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
 import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
+import { recordSettingPoke } from '../../../../shared/hunts/pokedIt.js';
 
 /**
  * Handle birthday modal submission
@@ -111,6 +112,12 @@ export async function handleBirthdayModal(interaction, originalMessageId = null)
             discriminator: interaction.user.discriminator || '0',
             avatar: interaction.user.avatar,
             ...updateData
+        });
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'profile.set_birthday',
+            interaction,
         });
 
         const displayDate = isPrivacyMode

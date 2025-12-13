@@ -4,6 +4,7 @@ import { parsePrivacySettingsCustomId } from '../../../../../shared/utils/messag
 import { buildPrivacySettingsMenu } from './privacyMenu.js';
 import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
+import { recordSettingPoke } from '../../../../../shared/hunts/pokedIt.js';
 import Discord from 'discord.js';
 const { InteractionFlags } = Discord;
 
@@ -54,6 +55,12 @@ export default async function handleToggleBirthdayLists(interaction) {
             { birthdayAnnouncements: !currentValue },
             { where: { discordId: interaction.user.id } }
         );
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'privacy.toggle_birthday_lists',
+            interaction,
+        });
 
         // Get updated user data and build refreshed menu
         const updatedUser = await User.findOne({ where: { discordId: interaction.user.id } });

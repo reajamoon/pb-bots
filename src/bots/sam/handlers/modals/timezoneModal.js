@@ -7,6 +7,7 @@ import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js
 import { validateTimezone } from '../../../../shared/utils/timezoneValidator.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
 import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
+import { recordSettingPoke } from '../../../../shared/hunts/pokedIt.js';
 
 /**
  * Handle timezone modal submission
@@ -121,6 +122,12 @@ export async function handleTimezoneModal(interaction, originalMessageId = null)
             discriminator: interaction.user.discriminator || '0',
             avatar: interaction.user.avatar,
             timezone: validation.normalizedTimezone
+        });
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'profile.set_timezone',
+            interaction,
         });
 
         // Try to show current time in their timezone for confirmation

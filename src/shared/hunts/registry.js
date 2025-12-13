@@ -118,6 +118,16 @@ export const HUNTS = [
     visibility: 'public',
   },
   {
+    key: 'i_poked_it',
+    name: 'I poked it.',
+    description: 'Toggled or set every Profile and Privacy setting at least once.',
+    category: 'profile',
+    points: 50,
+    rarity: 'legendary',
+    announcer: 'sam',
+    visibility: 'public',
+  },
+  {
     key: 'hunters_network_join',
     name: "Hunter's Network",
     description: 'Connected to the Hunter’s Network (join a team sprint).',

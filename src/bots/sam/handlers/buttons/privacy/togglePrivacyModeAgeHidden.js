@@ -4,6 +4,7 @@ import { parsePrivacySettingsCustomId } from '../../../../../shared/utils/messag
 import { buildPrivacySettingsMenu } from './privacyMenu.js';
 import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
+import { recordSettingPoke } from '../../../../../shared/hunts/pokedIt.js';
 import Discord from 'discord.js';
 const { InteractionFlags, EmbedBuilder } = Discord;
 
@@ -72,6 +73,12 @@ export default async function handleTogglePrivacyModeAgeHidden(interaction) {
             { birthdayAgeOnly: newValue },
             { where: { discordId: interaction.user.id } }
         );
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'privacy.toggle_privacy_mode_age_hidden',
+            interaction,
+        });
 
         if (bypassDualUpdate) {
             const warningEmbed = new EmbedBuilder()

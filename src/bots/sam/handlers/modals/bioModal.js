@@ -4,6 +4,7 @@ import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { generateProfileCard, createProfileButtons } from '../../utils/profileCard.js';
 import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
+import { recordSettingPoke } from '../../../../shared/hunts/pokedIt.js';
 
 /**
  * Handle bio modal submission
@@ -35,6 +36,12 @@ export async function handleBioModal(interaction, originalMessageId = null) {
             { bio: bioInput },
             { where: { discordId: interaction.user.id } }
         );
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'profile.set_bio',
+            interaction,
+        });
 
         const responseMessage = `📝 **Bio updated successfully!**\n\n` +
                               `Your bio has been saved and will appear on your profile.\n\n` +

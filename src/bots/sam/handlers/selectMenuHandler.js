@@ -4,6 +4,7 @@ import Discord from 'discord.js';
 const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
 import { getProfileMessageId } from '../../../shared/utils/messageTracking.js';
+import { recordSettingPoke } from '../../../shared/hunts/pokedIt.js';
 
 /**
  * Handle select menu interactions
@@ -17,6 +18,12 @@ async function handleSelectMenu(interaction) {
                     { timezoneDisplay: selectedOption },
                     { where: { discordId: interaction.user.id } }
                 );
+
+                await recordSettingPoke({
+                    userId: interaction.user.id,
+                    settingKey: 'profile.timezone_display',
+                    interaction,
+                });
 
                 const optionNames = {
                     'iana': 'Full Name (e.g., America/New_York)',

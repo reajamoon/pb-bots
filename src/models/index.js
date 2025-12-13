@@ -20,6 +20,7 @@ import ProjectMemberModel from './ProjectMember.js';
 import WordcountModel from './Wordcount.js';
 import HuntModel from './Hunt.js';
 import HuntProgressModel from './HuntProgress.js';
+import UserSettingPokeModel from './UserSettingPoke.js';
 
 // Determine connection settings
 const rawDatabaseUrl = process.env.DATABASE_URL || '';
@@ -65,6 +66,7 @@ const ProjectMember = ProjectMemberModel(sequelize);
 const Wordcount = WordcountModel(sequelize);
 const Hunt = HuntModel(sequelize);
 const HuntProgress = HuntProgressModel(sequelize);
+const UserSettingPoke = UserSettingPokeModel(sequelize);
 
 // ModmailRelay associations
 ModmailRelay.belongsTo(User, { foreignKey: 'user_id', targetKey: 'discordId', as: 'user', constraints: false });
@@ -133,6 +135,7 @@ export {
     Wordcount
     , Hunt
     , HuntProgress
+    , UserSettingPoke
 };
 
 // Convenience re-exports for model helpers

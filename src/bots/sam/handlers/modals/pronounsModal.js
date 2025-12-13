@@ -4,6 +4,7 @@ import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { updateOriginalProfile } from '../../utils/updateOriginalProfile.js';
 import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
+import { recordSettingPoke } from '../../../../shared/hunts/pokedIt.js';
 
 /**
  * Handle pronouns modal submission
@@ -60,6 +61,12 @@ export async function handlePronounsModal(interaction, originalMessageId = null)
             discriminator: interaction.user.discriminator || '0',
             avatar: interaction.user.avatar,
             ...updateData
+        });
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'profile.set_pronouns',
+            interaction,
         });
 
         const responseMessage = pronounsInput ?

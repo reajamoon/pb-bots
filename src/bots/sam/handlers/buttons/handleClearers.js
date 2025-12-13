@@ -2,6 +2,7 @@ import Discord from 'discord.js';
 const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 import { User } from '../../../../models/index.js';
 import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
+import { recordSettingPoke } from '../../../../shared/hunts/pokedIt.js';
 import { updateOriginalProfile } from '../../utils/updateOriginalProfile.js';
 import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
 
@@ -21,15 +22,19 @@ export async function handleClearers(interaction) {
   try {
     if (customId.includes('clear_bio')) {
       await User.update({ bio: null }, { where: { discordId: userId } });
+      await recordSettingPoke({ userId, settingKey: 'profile.clear_bio', interaction });
       await interaction.update({ content: '🗑️ Bio cleared.', components: [buildBackButton()], embeds: [] });
     } else if (customId.includes('clear_timezone')) {
       await User.update({ timezone: null }, { where: { discordId: userId } });
+      await recordSettingPoke({ userId, settingKey: 'profile.clear_timezone', interaction });
       await interaction.update({ content: '🗑️ Timezone cleared.', components: [buildBackButton()], embeds: [] });
     } else if (customId.includes('clear_region')) {
       await User.update({ region: null }, { where: { discordId: userId } });
+      await recordSettingPoke({ userId, settingKey: 'profile.clear_region', interaction });
       await interaction.update({ content: '🗑️ Region cleared.', components: [buildBackButton()], embeds: [] });
     } else if (customId.includes('clear_birthday')) {
       await User.update({ birthday: null, birthdayYearHidden: false, birthdayAgePrivacy: false }, { where: { discordId: userId } });
+      await recordSettingPoke({ userId, settingKey: 'profile.clear_birthday', interaction });
       await interaction.update({ content: '🗑️ Birthday cleared.', components: [buildBackButton()], embeds: [] });
     } else {
       return; // not a clearer action

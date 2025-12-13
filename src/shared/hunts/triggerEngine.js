@@ -253,6 +253,21 @@ export const TRIGGERS = {
       }
     },
   ],
+
+  // Sam profile: poked all settings
+  'sam.profile.iPokedIt': [
+    async ({ userId, announce, interaction, channel }) => {
+      const res = await awardHunt(userId, 'i_poked_it');
+      if (res.unlocked) {
+        const meta = getHuntMeta('i_poked_it');
+        const ephemeral = meta?.visibility === 'ephemeral';
+        if (meta?.visibility !== 'silent') {
+          const ann = await resolveAnnouncer(meta?.announcer || 'sam', { interaction, channel, announce });
+          await ann(meta?.announcer || 'sam', userId, res.hunt, { ephemeral });
+        }
+      }
+    },
+  ],
   // Dean team sprint: someone joined, award both host and joiner
   'dean.team.joined': [
     async ({ userId, hostId, announce, interaction, channel }) => {

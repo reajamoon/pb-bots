@@ -5,6 +5,7 @@ import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
 import { performDualUpdate } from '../../../../shared/utils/dualUpdate.js';
+import { recordSettingPoke } from '../../../../shared/hunts/pokedIt.js';
 
 /**
  * Handler for toggling region display in the profile.
@@ -41,6 +42,12 @@ export async function handleRegionDisplay(interaction) {
         // Toggle region display setting
         const newRegionDisplay = !dbUser.regionDisplay;
         await dbUser.update({ regionDisplay: newRegionDisplay });
+
+        await recordSettingPoke({
+            userId: interaction.user.id,
+            settingKey: 'profile.toggle_region_display',
+            interaction,
+        });
         // Confirmation message
         const statusText = newRegionDisplay ? 'shown' : 'hidden';
         const description = newRegionDisplay

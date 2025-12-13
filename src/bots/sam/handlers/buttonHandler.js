@@ -168,6 +168,7 @@ async function handleButton(interaction) {
             customId === 'toggle_birthday_lists' || customId.startsWith('toggle_birthday_lists_') ||
             customId === 'toggle_birthday_announcements' ||
             customId === 'toggle_privacy_mode_full' || customId.startsWith('toggle_privacy_mode_full_') ||
+            customId === 'toggle_privacy_mode_year_hidden' || customId.startsWith('toggle_privacy_mode_year_hidden_') ||
             customId === 'toggle_privacy_mode_age_hidden' || customId.startsWith('toggle_privacy_mode_age_hidden_') ||
             customId === 'toggle_birthday_hidden' || customId.startsWith('toggle_birthday_hidden_')) {
             // logger.info(`[ButtonHandler] Routing to handlePrivacyButtons for customId=${customId}`);
