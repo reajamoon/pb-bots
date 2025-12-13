@@ -33,14 +33,13 @@ export async function buildPrivacySettingsMenu(userData, userId, messageId = nul
     const birthdayHidden = userData.birthdayHidden === true;
     const isPrivacyModeStrict = userData.birthdayYearHidden === true;
 
-    // Strictly require validatedMessageId or messageId (must be original profile card message ID)
-    let effectiveMsgId = validatedMessageId || messageId;
-    if (!effectiveMsgId || !/^\d{17,19}$/.test(effectiveMsgId)) {
-        logger.error('[PrivacyMenu] Missing or invalid original profile card message ID for menu builder', { validatedMessageId, messageId });
-        throw new Error('PrivacyMenu: Missing or invalid original profile card message ID');
+    // Prefer validatedMessageId; if none is available, run untracked (menu still works, but no dual update)
+    const effectiveMsgId = validatedMessageId || messageId;
+    const hasTrackedMessageId = effectiveMsgId && /^\d{17,19}$/.test(effectiveMsgId);
+    if (!hasTrackedMessageId) {
+        logger.warn('[PrivacyMenu] Building untracked privacy menu (no original profile message ID)', { validatedMessageId, messageId });
     }
-    logger.debug('[PrivacyMenu] Using effectiveMsgId for encoding (should be original profile card message ID)', { effectiveMsgId });
-    const encodedMsgId = encodeMessageId(effectiveMsgId);
+    const encodedMsgId = hasTrackedMessageId ? encodeMessageId(effectiveMsgId) : null;
     const row1 = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()

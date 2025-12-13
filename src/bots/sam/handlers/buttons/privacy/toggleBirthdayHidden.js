@@ -1,7 +1,6 @@
 // Handler for toggling birthday hidden privacy setting
 import { User } from '../../../../../models/index.js';
 import { parsePrivacySettingsCustomId } from '../../../../../shared/utils/messageTracking.js';
-import { getProfileMessageId } from '../../../utils/profileMessageTracker.js';
 import { buildPrivacySettingsMenu } from './privacyMenu.js';
 import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
@@ -14,17 +13,13 @@ export default async function handleToggleBirthdayHidden(interaction) {
     const ephemeralFlag = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
     try {
         logger.debug('[toggleBirthdayHidden] Interaction received', { user: interaction.user.id, customId: interaction.customId });
-        // Always extract the original profile card message ID from the customId only
+        // Extract the original profile card message ID (if present). In untracked contexts, this will be null.
         let originalMessageId = null;
         const parsed = parsePrivacySettingsCustomId(interaction.customId);
-        if (parsed && parsed.messageId && /^\d{17,19}$/.test(parsed.messageId)) {
+        if (parsed?.messageId && /^\d{17,19}$/.test(parsed.messageId)) {
             originalMessageId = parsed.messageId;
         }
-        if (!originalMessageId) {
-            logger.error('[toggleBirthdayHidden] Missing or invalid original profile card message ID', { customId: interaction.customId });
-            throw new Error('toggleBirthdayHidden: Missing or invalid original profile card message ID');
-        }
-        logger.debug('[toggleBirthdayHidden] Extracted original profile card message ID', { originalMessageId, customId: interaction.customId });
+        logger.debug('[toggleBirthdayHidden] Parsed original profile card message ID', { originalMessageId, customId: interaction.customId });
         // Robust messageId validation (fetch and check ownership)
         if (originalMessageId) {
             try {
@@ -76,7 +71,7 @@ export default async function handleToggleBirthdayHidden(interaction) {
         // Get updated user data and build refreshed menu
         const updatedUser = await User.findOne({ where: { discordId: interaction.user.id } });
         logger.debug('[toggleBirthdayHidden] Fetched updated user', { updatedUser: updatedUser ? updatedUser.id : null });
-        const { components, embeds } = buildPrivacySettingsMenu(updatedUser, interaction.user.id, originalMessageId, originalMessageId, interaction);
+        const { components, embeds } = await buildPrivacySettingsMenu(updatedUser, interaction.user.id, originalMessageId, originalMessageId, interaction);
         logger.debug('[toggleBirthdayHidden] Built menu options', { components, embeds });
 
         // Use shared dual update system

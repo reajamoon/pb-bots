@@ -1,4 +1,5 @@
 
+import logger from './logger.js';
 import { updateOriginalProfile } from '../../bots/sam/utils/updateOriginalProfile.js';
 
 
@@ -20,6 +21,16 @@ function extractMessageIdFromCustomId(customId) {
         // Check if it's a valid Discord snowflake (18-19 digits)
         if (/^\d{17,19}$/.test(potentialMessageId)) {
             return potentialMessageId;
+        }
+
+        // Attempt base64 decode (some flows encode message IDs)
+        try {
+            const decoded = Buffer.from(potentialMessageId, 'base64').toString();
+            if (/^\d{17,19}$/.test(decoded)) {
+                return decoded;
+            }
+        } catch {
+            // ignore
         }
     }
 

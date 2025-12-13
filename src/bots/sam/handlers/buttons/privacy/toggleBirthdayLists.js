@@ -1,7 +1,6 @@
 // Handler for toggling birthday lists privacy setting
 import { User } from '../../../../../models/index.js';
 import { parsePrivacySettingsCustomId } from '../../../../../shared/utils/messageTracking.js';
-import { getProfileMessageId } from '../../../utils/profileMessageTracker.js';
 import { buildPrivacySettingsMenu } from './privacyMenu.js';
 import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
@@ -13,18 +12,13 @@ export default async function handleToggleBirthdayLists(interaction) {
     // This ensures compatibility across discord.js versions and prevents undefined errors.
     const ephemeralFlag = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
     try {
-        // Always extract the original profile card message ID from the customId only
         let originalMessageId = null;
         const parsed = parsePrivacySettingsCustomId(interaction.customId);
-        if (parsed && parsed.messageId && /^\d{17,19}$/.test(parsed.messageId)) {
+        if (parsed?.messageId && /^\d{17,19}$/.test(parsed.messageId)) {
             originalMessageId = parsed.messageId;
         }
-        if (!originalMessageId) {
-            logger.error('[toggleBirthdayLists] Missing or invalid original profile card message ID', { customId: interaction.customId });
-            throw new Error('toggleBirthdayLists: Missing or invalid original profile card message ID');
-        }
-        logger.debug('[toggleBirthdayLists] Extracted original profile card message ID', { originalMessageId, customId: interaction.customId });
-        // Robust messageId validation (fetch and check ownership)
+        logger.debug('[toggleBirthdayLists] Parsed original profile card message ID', { originalMessageId, customId: interaction.customId });
+        // Robust messageId validation (fetch and check ownership). If it fails, fall back to untracked.
         if (originalMessageId) {
             try {
                 const originalMessage = await interaction.channel.messages.fetch(originalMessageId);
@@ -64,7 +58,7 @@ export default async function handleToggleBirthdayLists(interaction) {
         // Get updated user data and build refreshed menu
         const updatedUser = await User.findOne({ where: { discordId: interaction.user.id } });
         logger.debug('[toggleBirthdayLists] Propagating original profile message ID to menu builder', { originalMessageId });
-        const { components, embeds } = buildPrivacySettingsMenu(updatedUser, interaction.user.id, originalMessageId, originalMessageId, interaction);
+        const { components, embeds } = await buildPrivacySettingsMenu(updatedUser, interaction.user.id, originalMessageId, originalMessageId, interaction);
         // Use shared dual update system
         const dualUpdateSuccess = await performDualUpdate(
             interaction,

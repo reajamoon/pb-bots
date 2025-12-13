@@ -1,6 +1,6 @@
 import Discord from 'discord.js';
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } = Discord;
-const EPHEMERAL_FLAG = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags, InteractionFlags } = Discord;
+const EPHEMERAL_FLAG = InteractionFlags?.Ephemeral ?? 64;
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { parsePrivacySettingsCustomId, getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
@@ -15,8 +15,10 @@ export async function handlePrivacyButtons(interaction) {
     const { getProfileOwnerIdFromInteraction } = await import('../../../../shared/utils/messageTracking.js');
     const trackedData = parsePrivacySettingsCustomId(interaction.customId);
     const profileOwnerId = getProfileOwnerIdFromInteraction(interaction);
-    // Use robust tracker for message ID
-    const originalMessageId = getProfileMessageId(interaction, interaction.customId);
+    // Prefer message ID decoded from trackedData; only fall back to interaction.message.id when it is a real profile card
+    let originalMessageId = trackedData?.messageId && /^\d{17,19}$/.test(trackedData.messageId)
+        ? trackedData.messageId
+        : getProfileMessageId(interaction, interaction.customId);
 
     // Debug logging for all privacy button interactions
     logger.info(`[PrivacyButtons] Received interaction: customId=${interaction.customId}, userId=${interaction.user.id}`);
@@ -37,9 +39,20 @@ export async function handlePrivacyButtons(interaction) {
     if (interaction.customId === 'privacy_settings' ||
         (interaction.customId.startsWith('privacy_settings_') && !interaction.customId.startsWith('privacy_settings_done_'))) {
 
-        // Try to parse message tracking from custom ID
-        const trackedData = parsePrivacySettingsCustomId(interaction.customId);
-        const originalMessageId = getProfileMessageId(interaction, interaction.customId);
+        // Validate originalMessageId - if it is not a real profile card message, run untracked
+        let validatedMessageId = null;
+        if (originalMessageId && /^\d{17,19}$/.test(originalMessageId)) {
+            try {
+                const originalMessage = await interaction.channel.messages.fetch(originalMessageId);
+                const originalEmbed = originalMessage.embeds[0];
+                const userIdField = originalEmbed?.fields?.find(field => field.name === 'User ID');
+                if (userIdField && userIdField.value === interaction.user.id) {
+                    validatedMessageId = originalMessageId;
+                }
+            } catch {
+                validatedMessageId = null;
+            }
+        }
 
         const user = await User.findOrCreate({
             where: { discordId: interaction.user.id },
@@ -51,7 +64,7 @@ export async function handlePrivacyButtons(interaction) {
             }
         });
         const userData = user[0];
-        const { components, embeds } = buildPrivacySettingsMenu(userData, interaction.user.id, originalMessageId);
+        const { components, embeds } = await buildPrivacySettingsMenu(userData, interaction.user.id, validatedMessageId);
         // If this is a new interaction (not updating an ephemeral menu), reply ephemeral
         if (!interaction.message || !interaction.message.flags?.has('Ephemeral')) {
             await interaction.reply({ components, embeds, flags: EPHEMERAL_FLAG });
@@ -88,7 +101,8 @@ export async function handlePrivacyButtons(interaction) {
     // Privacy settings done - close the privacy menu (robust navigation logic)
     else if (
         interaction.customId === 'privacy_settings_done' ||
-        interaction.customId.startsWith('privacy_settings_done_')
+        interaction.customId.startsWith('privacy_settings_done_') ||
+        interaction.customId.startsWith('done_privacy_settings_')
     ) {
         await handleInteractionNavigation(interaction, {
             type: 'close',

@@ -1,6 +1,6 @@
 // Handler for toggling age-hidden privacy mode
 import { User } from '../../../../../models/index.js';
-import { getProfileMessageId, parsePrivacySettingsCustomId } from '../../../../../shared/utils/messageTracking.js';
+import { parsePrivacySettingsCustomId } from '../../../../../shared/utils/messageTracking.js';
 import { buildPrivacySettingsMenu } from './privacyMenu.js';
 import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
@@ -15,7 +15,7 @@ export default async function handleTogglePrivacyModeAgeHidden(interaction) {
         // Extract the original profile card message ID from the customId only
         let originalMessageId = null;
         const parsed = parsePrivacySettingsCustomId(interaction.customId);
-        if (parsed && parsed.messageId && /^\d{17,19}$/.test(parsed.messageId)) {
+        if (parsed?.messageId && /^\d{17,19}$/.test(parsed.messageId)) {
             originalMessageId = parsed.messageId;
         }
         let bypassDualUpdate = false;
@@ -82,7 +82,7 @@ export default async function handleTogglePrivacyModeAgeHidden(interaction) {
 
         // Get updated user data and build refreshed menu
         const updatedUser = await User.findOne({ where: { discordId: interaction.user.id } });
-        const { components, embeds } = buildPrivacySettingsMenu(updatedUser, interaction.user.id, originalMessageId, originalMessageId, interaction);
+        const { components, embeds } = await buildPrivacySettingsMenu(updatedUser, interaction.user.id, originalMessageId, originalMessageId, interaction);
 
         // Use shared dual update system
         await performDualUpdate(
