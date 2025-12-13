@@ -262,8 +262,10 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
             row2Fields.push({ name: '\u200B', value: '\u200B', inline: true });
         }
     // ROW 3 FIELDS: Birthday > Zodiac Sign > Chinese Zodiac (the fun stuff)
+        // Privacy Mode (Full): hide ALL birthday + zodiac + age-related profile fields.
+        const privacyModeFull = dbUser.birthdayAgePrivacy === true;
     // Birthday (only if set and not hidden)
-        if (dbUser.birthday && !dbUser.birthdayHidden) {
+        if (!privacyModeFull && dbUser.birthday && !dbUser.birthdayHidden) {
             row3Fields.push({
                 name: 'Birthday',
                 value: formatBirthdayForStats(dbUser.birthday, dbUser.timezone),
@@ -273,7 +275,7 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
             row3Fields.push({ name: '\u200B', value: '\u200B', inline: true });
         }
     // Zodiac Sign (calculated from birthday)
-        if (dbUser.birthday) {
+        if (!privacyModeFull && dbUser.birthday && !dbUser.birthdayHidden) {
             const [year, month, day] = dbUser.birthday.split('-').map(Number);
             row3Fields.push({
                 name: 'Zodiac Sign',
@@ -284,7 +286,7 @@ async function generateServerStats(discordUser, dbUser, client, interaction = nu
             row3Fields.push({ name: '\u200B', value: '\u200B', inline: true });
         }
     // Chinese Zodiac (calculated from birthday year)
-        if (dbUser.birthday && !dbUser.birthdayYearHidden) {
+        if (!privacyModeFull && dbUser.birthday && !dbUser.birthdayHidden && !dbUser.birthdayYearHidden) {
             const [year, month, day] = dbUser.birthday.split('-').map(Number);
             // Only show Chinese zodiac if a real year was provided (not a placeholder like 1900)
             // If you see 1900, it's a privacy thing.
