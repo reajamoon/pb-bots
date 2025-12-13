@@ -106,10 +106,17 @@ function buildPrivacySettingsCustomId(userId, messageId) {
 function parsePrivacySettingsCustomId(customId) {
     try {
         const parts = customId.split('_');
-        let privacyIdx = parts.indexOf('privacy');
-        let settingsIdx = parts.indexOf('settings');
-        // Find the start of the privacy_settings block
-        if (privacyIdx === -1 || settingsIdx !== privacyIdx + 1) {
+        // Find the start of the privacy_settings block.
+        // Important: actions can contain the word 'privacy' (e.g. toggle_privacy_mode_full),
+        // so we must find a contiguous 'privacy' + 'settings' pair.
+        let privacyIdx = -1;
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (parts[i] === 'privacy' && parts[i + 1] === 'settings') {
+                privacyIdx = i;
+                break;
+            }
+        }
+        if (privacyIdx === -1) {
             return null;
         }
         // userId and encodedMessageId follow privacy_settings (skip action prefix)
@@ -178,15 +185,21 @@ function buildProfileSettingsCustomId(userId, messageId) {
 function parseProfileSettingsCustomId(customId) {
     try {
         const parts = customId.split('_');
-        let profileIdx = parts.indexOf('profile');
-        let settingsIdx = parts.indexOf('settings');
-        // Find the start of the profile_settings block
-        if (profileIdx === -1 || settingsIdx !== profileIdx + 1) {
+        // Find the start of the profile_settings block.
+        // Actions can contain the word 'profile', so require contiguous 'profile' + 'settings'.
+        let settingsStartIdx = -1;
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (parts[i] === 'profile' && parts[i + 1] === 'settings') {
+                settingsStartIdx = i;
+                break;
+            }
+        }
+        if (settingsStartIdx === -1) {
             return null;
         }
         // userId and messageId follow profile_settings
-        const userId = parts[settingsIdx + 1];
-        const messageId = parts[settingsIdx + 2];
+        const userId = parts[settingsStartIdx + 2];
+        const messageId = parts[settingsStartIdx + 3];
         return {
             userId,
             messageId
