@@ -3,12 +3,11 @@ const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = Discord;
 import { User } from '../../../../models/index.js';
 import maybeTriggerProfileSetupComplete from '../../../../shared/hunts/checkProfileSetup.js';
 import { updateOriginalProfile } from '../../utils/updateOriginalProfile.js';
-import { parseButtonId } from '../../../../shared/utils/buttonId.js';
+import { getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
 
 export async function handleClearers(interaction) {
   const customId = interaction.customId || '';
-  const parsed = parseButtonId(customId);
-  const originalMessageId = parsed?.secondaryId && /^\d{17,19}$/.test(parsed.secondaryId) ? parsed.secondaryId : null;
+  const originalMessageId = getProfileMessageId(interaction, customId);
   const userId = interaction.user.id;
 
   const buildBackButton = (msgId = originalMessageId) => new ActionRowBuilder().addComponents(

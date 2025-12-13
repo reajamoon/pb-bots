@@ -1,15 +1,13 @@
 import Discord from 'discord.js';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = Discord;
-import { buildModalCustomId } from '../../../../shared/utils/messageTracking.js';
-import { parseButtonId } from '../../../../shared/utils/buttonId.js';
+import { buildModalCustomId, getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
 
 /**
  * Handler for the set timezone button, shows the timezone modal.
  * @param {Object} interaction - Discord interaction object
  */
 export async function handleTimezone(interaction) {
-    const parsed = parseButtonId(interaction.customId);
-    const originalMessageId = parsed?.secondaryId && /^\d{17,19}$/.test(parsed.secondaryId) ? parsed.secondaryId : null;
+    const originalMessageId = getProfileMessageId(interaction, interaction.customId);
     const modalCustomId = buildModalCustomId('timezone', originalMessageId);
 
     const modal = new ModalBuilder()

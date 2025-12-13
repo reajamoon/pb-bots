@@ -23,8 +23,8 @@ export async function handleBackToProfileSettings(interaction) {
             logger.warn(`[BackToProfileSettings] Could not validate message ${originalMessageId}, treating as new session: ${error.message}`);
         }
     } else {
-        validatedMessageId = interaction.message?.id || null;
-        logger.info(`[BackToProfileSettings] No originalMessageId provided, fallback to interaction.message.id: ${validatedMessageId}`);
+        validatedMessageId = null;
+        logger.info('[BackToProfileSettings] No originalMessageId provided; running untracked session');
     }
     // Build custom IDs with validated message tracking
     const buildButtonCustomId = (action) => {

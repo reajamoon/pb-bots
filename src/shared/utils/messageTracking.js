@@ -19,10 +19,22 @@ function getProfileMessageId(interaction, customId) {
         const last = parts[parts.length - 1];
         if (/^\d{17,19}$/.test(last)) {
             messageId = last;
+        } else if (/^[A-Za-z0-9+/=]+$/.test(last) && last.length > 16) {
+            // Some flows include a base64-encoded messageId
+            try {
+                const decoded = decodeMessageId(last);
+                if (/^\d{17,19}$/.test(decoded)) {
+                    messageId = decoded;
+                }
+            } catch {
+                // ignore
+            }
         }
     }
-    // Fallback: try to parse from interaction.message.id if valid
-    if (!messageId && interaction.message && interaction.message.id && /^\d{17,19}$/.test(interaction.message.id)) {
+    // Fallback: try to parse from interaction.message.id if valid.
+    // IMPORTANT: never use ephemeral message IDs as the "original profile" message.
+    const isEphemeralMessage = Boolean(interaction?.message?.flags?.bitfield & 64);
+    if (!messageId && !isEphemeralMessage && interaction.message && interaction.message.id && /^\d{17,19}$/.test(interaction.message.id)) {
         messageId = interaction.message.id;
     }
     // Log for debugging
