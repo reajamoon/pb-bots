@@ -1,62 +1,105 @@
-# SamBot (PB’s Fic Librarian, Tor Valen Stan, Probably Possessed)
+# PB Bots (Profound Bond)
 
-Heya! If you’re reading this, you probably already know the deal. Destiel, Supernatural, and Profound Bond server chaos. SamBot’s been our fic librarian since 2017. If he starts acting weird just blame the leviathans.
+Heya! Welcome to the codebase for the Profound Bond Discord bots. If you are a PB member and you are here to peek behind the curtain, you are in the right place.
 
-## What Sam Actually Does
+This repo runs four separate processes under PM2:
+- Sam - the main community bot (the Bunker Library, profiles, birthdays, moderation utilities)
+- Jack - background queue worker (fic metadata fetch + parsing)
+- Dean - sprints + projects
+- Cas - modmail relay and small utilities
 
-- **Fic recs:** `/rec` is your ticket to the library. Add fics, update them, search with multiple filters, pull random recs, and browse the collection.
-- **Profile stuff:** Birthday, pronouns, timezone, region, bio—set it up, hide it, show it off, whatever.
-- **Birthday hype:** He'll ping you on your birthday (unless you're hiding from the calendar).
-- **Help menus:** Lost? Type `/profile help` or `/rec help` and Sam will walk you through. He's kind of a know-it-all.
-- **Privacy controls:** You can control what shows on your profile, disable others using the command to pull your profile, or delete your profile entirely. Sam is pretty good with secrets.
-- **Live updates:** Change something? It updates instantly. If it doesn't for some reason (server issues or whatever) just pull a new profile with `/profile` and it'll show the changes.
-- **Queue system:** All fic metadata fetches go through a smart queue system (handled by Jack) to prevent conflicts and ensure reliable parsing.
-- **Moderation tools:** Complete mod utilities for content validation, rec management, and queue administration.
-
-## Project Overview
-
-- **Multi Bot Architecture:** Sam handles Discord interactions while Jack processes the fic metadata queue in the background. All features are split into dedicated command, handler, event, model, and utility modules. See `docs/bot-architecture-overview.md` for details.
-- **Queue System:** All fic metadata fetching goes through a robust, deduplicated queue system with rate limiting and notification features.
-- **Sam Winchester's Voice:** All member-facing text uses Sam's voice—dry wit, practical, and a little snarky. See `docs/sam-voice-guidelines.md`. These guidelines exist for my own reference but also to kind of explain my Sam headcanons and characterizations I use for Sambot.
-- **Database:** Uses SQLite for development and PostgreSQL for production. Database files are ignored via `.gitignore` for security.
-- **Process Management:** Uses PM2 for deployment. Both Sam and Jack run as separate PM2 processes. Use `./start-bots.sh` to start both, or run them individually with their respective ecosystem config files.
-
-## Deployment
-
-See `docs/deployment.md` for PM2 commands and operational details.
-
-## Documentation
-
-- [Profile System](docs/profile-system.md)
-- [Rec System](docs/rec-system.md)
-- [Sprint & Projects Guide (Dean)](docs/sprint-and-projects-guide.md)
-- [Bot Architecture Overview](docs/bot-architecture-overview.md)
-- [Fic Parsing Queue System](docs/fic-parsing-queue-implementation.md)
-- [Sam's Voice Guidelines](docs/sam-voice-guidelines.md)
-- [Changelog](CHANGELOG.md)
-- [Maintenance Workflow](docs/maintenance.md)
-- And many more in the /docs project folder. You can find project planning documents, technical spec docs, and other roadmarkers I've left for myself and folks who might want to try to build a similar project.
-
-## Project Status & Issues
-
-This is a single developer project. The source is public for transparency, feature tracking, and documentation. If you’re a member and want to see how things work, poke around! If you want to base your own project on it, go wild! I’m not currently accepting outside contributions. If you really think we'd work well together hit me up on discord and let's talk. You can submit issues or feature requests if you spot a bug or have an idea.
-
-## Extending the Bot
-
-See `docs/extending.md` for guidance on adding commands, features, and using the queue.
-
-## Security Best Practices
-
-See `docs/security.md` for security recommendations and configuration tips.
-
-## In-Jokes & Personality
-
-Sambot is basically Sam Winchester trapped in Discord. He’s snarky, helpful, and a  giant nerd. If he recs the same super angsty omegaverse fic for the hundredth time, just let him cook.
+If Sam starts acting weird, it is probably leviathans. or some aggressive rate limiting to be as nice to AO3's servers as we possibly can (read about that [here](./docs/)).
 
 ## Already Here?
 
-`/rec` for fics, `/profile` for profile stuff, ping a mod if you need backup. Sam’s always lurking.
+- `/rec` for fic recs and the library
+- `/profile` for profile stuff
+- If something is on fire, you can DM Cas and he'll pass a message to mods for you.
 
 ## Not Here Yet?
 
-Join us, give the dev a cookie: [discord.gg/profoundbond](https://discord.gg/profoundbond)
+Join us, give the dev a cookie: https://discord.gg/profoundbond
+
+## What This Project Is
+
+PB is Discord's flagship Supernatural community for adult fans of Destiel, and the bots lean into that. Dean, Cas, and Sam are all written to sound in-character in all their member-facing interactions by developer and server-owner Cryptomoon/Reajamoon.
+
+## In-Jokes & Personality
+
+Sam is snarky, helpful, and a giant nerd about organization. If he recs the same super angsty fic for the hundredth time, just let him cook.
+Dean is the server's sprint master and also welcomes new members to the fold. Why did Crypto give him a whistle again?
+Cas is happy to give a hug when a member needs it and is always listening for member prayers (modmail), but don't cross him - he is still a stone cold badass.
+
+If you are writing member-facing text, please follow the voice guides:
+- `docs/sam-voice-guidelines.md`
+- `docs/dean-voice-guidelines.md`
+- `docs/cas-voice-guidelines.md`
+
+## Architecture (Short Version)
+
+- Node.js + discord.js v14
+- Sequelize ORM
+- Development DB - SQLite fallback at `./database/bot.sqlite`
+- Production DB - Postgres via `DATABASE_URL`
+- Fic metadata fetches are queued - Sam enqueues, Jack processes, and Sam notifies via a poller
+
+If you want the code-level walkthrough, start with `docs/bot-architecture-overview.md`.
+
+## Run The Bots (Contributor Stuff)
+
+This repo intentionally disables `npm start` and `npm run dev`.
+
+### Start all bots
+
+```bash
+npm run deploy:all
+```
+
+Or:
+
+```bash
+./start-bots.sh
+```
+
+### Start an individual bot
+
+```bash
+npm run deploy:sam
+npm run deploy:jack
+npm run deploy:dean
+npm run deploy:cas
+```
+
+See `docs/deployment.md` for operational details.
+
+## Repo Layout
+
+- `src/bots/` - bot entrypoints and bot-specific code
+- `src/shared/` - shared utilities (logging, message tracking, rec parsing utilities)
+- `src/models/` - Sequelize models + association setup
+- `migrations/` - database migrations (immutable history)
+- `scripts/` - maintenance scripts and slash command deploy/clear utilities
+- `docs/` - technical documentation and project notes
+- `tests/` - Jest tests
+
+## Documentation Index
+
+- `docs/profile-system.md`
+- `docs/rec-system.md`
+- `docs/fic-metadata-queue.md`
+- `docs/message-tracking-utility.md`
+- `docs/sprint-and-projects-guide.md`
+- `docs/security.md`
+- `docs/extending.md`
+- `CHANGELOG.md`
+
+## Bot Readmes
+
+- Sam: `src/bots/sam/README.md`
+- Jack: `src/bots/jack/README.md`
+- Dean: `src/bots/dean/README.md`
+- Cas: `src/bots/cas/README.md`
+
+## Project Status
+
+This is primarily a single-developer project. If you are onboarding to tackle a small task, start with the bot README for the area you are touching, then skim the related docs in `docs/`.

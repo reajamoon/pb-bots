@@ -1,20 +1,24 @@
 # Sam Bot Architecture Overview
 
-## Dual Bot System
+## Multi-Bot System
 
-As of now, we're running on a dual bot system:
+As of now, we're running a multi-bot system:
 
-- **Sam** (`src/bots/sam/`): The main Discord bot that handles everything you see and interact with—slash commands, buttons, all the UI stuff
-- **Jack** (`src/bots/jack/`): Background worker that does the heavy lifting of fetching and parsing fic metadata
+- **Sam** (`src/bots/sam/`): Main Discord bot (slash commands, buttons, UI)
+- **Jack** (`src/bots/jack/`): Background worker for fic metadata fetching/parsing (queue)
+- **Dean** (`src/bots/dean/`): Sprint + project tooling bot
+- **Cas** (`src/bots/cas/`): Modmail relay bot (and a few small utilities)
 
 Basically, Sam stays responsive for Discord stuff while Jack grinds away at parsing AO3 pages in the background. No more laggy interactions when someone's queuing up a bunch of fics.
 
 ## Process Management
 
-Both bots run as separate PM2 processes:
-- Sam: `pm2 start ecosystem.sam.config.cjs`  
+Bots run as separate PM2 processes:
+- Sam: `pm2 start ecosystem.sam.config.cjs`
+- Dean: `pm2 start ecosystem.dean.config.cjs`
+- Cas: `pm2 start ecosystem.cas.config.cjs`
 - Jack: `pm2 start ecosystem.jack.config.cjs`
-- Both: `./start-bots.sh`
+- All: `./start-bots.sh` (or `npm run deploy:all`)
 
 ## How They Talk to Each Other
 
@@ -46,8 +50,8 @@ root/
           selectMenus/  # Modular select menu handlers
         utils/          # Sam-specific utilities
       jack/             # Jack queue worker (background processing)
-      dean/             # Dean bot (placeholder for future)
-      cas/              # Cas bot (placeholder for future)
+      dean/             # Dean bot (sprints/projects)
+      cas/              # Cas bot (modmail relay)
     shared/
       recUtils/         # Shared recommendation utilities
       text/            # Shared text and message utilities
@@ -196,4 +200,4 @@ All buttons use standardized format: `[action]_[context]_[primaryId]_[secondaryI
 
 ---
 
-*This overview reflects the current dual-bot architecture as of November 2025. For specific implementation details, see the individual documentation files in `/docs`.*
+*This overview reflects the current multi-bot architecture as of December 2025. For specific implementation details, see the individual documentation files in `/docs`.*

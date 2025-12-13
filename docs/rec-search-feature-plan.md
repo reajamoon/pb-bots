@@ -84,10 +84,11 @@ This planning document is now archived. The search feature has been **fully impl
 
 ## File Structure
 
-- `src/commands/rec.js` – Slash command routing
-- `src/commands/rec/searchHandler.js` – Search logic and pagination
-- `src/utils/recUtils/createRecommendationEmbed.js` – Embed builder
-- `src/utils/recUtils/pagination.js` – Pagination helpers
+- `src/bots/sam/commands/rec.js` – Slash command routing
+- `src/bots/sam/commands/recHandlers/searchHandler.js` – Search logic
+- `src/bots/sam/commands/recHandlers/searchPaginationHandler.js` – Search pagination button handler
+- `src/shared/recUtils/createSearchResultsEmbed.js` – Search results embed builder
+- `src/shared/recUtils/searchPagination.js` – Pagination helpers
 
 ## Next Steps
 

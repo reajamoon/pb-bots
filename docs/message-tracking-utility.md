@@ -2,8 +2,8 @@
 
 ## Overview
 All Discord customId encoding, decoding, building, and parsing is handled by centralized utilities:
-- `src/utils/messageTracking.js` (primary)
-- `src/utils/buttonId.js` (for standardized button format)
+- `src/shared/utils/messageTracking.js` (primary)
+- `src/shared/utils/buttonId.js` (for standardized button format)
 Legacy `profileMessageTracker.js` is fully deprecated. All modules now use these utilities for profile, privacy, modal, button, and select menu interactions.
 
 ## Key Functions
@@ -26,7 +26,7 @@ Legacy `profileMessageTracker.js` is fully deprecated. All modules now use these
 ## Usage Patterns
 - Always use the centralized utilities for building and parsing customIds for buttons, modals, and select menus.
 - For profile and privacy interactions, use the standardized builders and parsers for robust message tracking and dual update logic.
-- All handlers should import from `src/utils/messageTracking.js` and `src/utils/buttonId.js` only.
+- All handlers should import from `src/shared/utils/messageTracking.js` and `src/shared/utils/buttonId.js`.
 
 ## Best Practices & Common Pitfalls
 - **Always propagate the original profile message ID (not ephemeral menu message ID) in all menu builders and button customIds.**
@@ -42,8 +42,8 @@ Legacy `profileMessageTracker.js` is fully deprecated. All modules now use these
 
 ## Example
 ```js
-const { getProfileMessageId, buildModalCustomId } = require('../../utils/messageTracking');
-const { buildButtonId } = require('../../utils/buttonId');
+import { getProfileMessageId, buildModalCustomId } from '../../shared/utils/messageTracking.js';
+import { buildButtonId } from '../../shared/utils/buttonId.js';
 const messageId = getProfileMessageId(interaction, interaction.customId); // Must be original profile message ID
 const modalCustomId = buildModalCustomId('bio', messageId);
 const buttonCustomId = buildButtonId({ action: 'set_bio', context: 'profile_settings', primaryId: userId, secondaryId: messageId });

@@ -173,4 +173,4 @@ The rec system is **fully implemented and operational**. Key achievements:
 - **User Experience:** Better notifications and you can actually see what's happening
 
 ---
-For help text style, see `docs/sam-voice-guidelines.md`. For technical details, see the handler and utility modules in `src/commands/rec/` and `src/utils/rec/`.
+For help text style, see `docs/sam-voice-guidelines.md`. For technical details, see `src/bots/sam/commands/rec.js`, `src/bots/sam/commands/recHandlers/`, and the shared parsing/embed utilities in `src/shared/recUtils/`.

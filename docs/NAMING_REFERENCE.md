@@ -236,41 +236,26 @@ This document serves as the single source of truth for all variable names, field
 ## File Structure Reference
 
 ### Core Files
-- `src/index.js` - Main bot entry point
-- `src/events/` - Event handlers
-  - `interactionCreate.js` - Main interaction dispatcher (57 lines)
-  - `messageCreate.js` - Message handling
-  - `ready.js` - Bot ready event
-  - `guildCreate.js` - New guild handling
+- `src/bots/sam/sam.js` - Sam bot entrypoint (Discord UI + commands)
+- `src/bots/jack/jack.js` - Jack queue worker entrypoint (metadata parsing)
+- `src/bots/dean/dean.js` - Dean bot entrypoint (sprints/projects)
+- `src/bots/cas/cas.js` - Cas bot entrypoint (modmail + misc)
+- `src/models/index.js` - Sequelize init + model exports
 
 ### Handlers (Modular Architecture)
-- `src/handlers/`
-  - `commandHandler.js` - Slash command processing
+- `src/bots/sam/handlers/`
+  - `commandHandler.js` - Slash command routing
   - `buttonHandler.js` - Button interaction routing
-  - `modalHandler.js` - Modal form processing
-  - `selectMenuHandler.js` - Select menu handling
+  - `modalHandler.js` - Modal routing
+  - `selectMenuHandler.js` - Select menu routing
   - `buttons/` - Feature-specific button handlers
-    - `profileButtons.js` - Profile system buttons
-    - `navigationButtons.js` - Navigation buttons
-    - `privacyButtons.js` - Privacy setting buttons
-  - `modals/` - Modal processors
-    - `birthdayModal.js` - Birthday form processing
-    - `bioModal.js` - Bio form processing
+  - `modals/` - Feature-specific modal handlers
+  - `selectMenus/` - Feature-specific select menu handlers
 
 ### Utilities
-- `src/utils/`
-  - `profileCard.js` - Profile generation and display
-  - `profileHelp.js` - Profile help system
-  - `birthdayFormatter.js` - Birthday parsing and formatting
-  - `birthdayNotifications.js` - Birthday notification system
-  - `zodiacCalculator.js` - Zodiac sign calculations
-  - `logger.js` - Logging utility
-  - `rec/` - Recommendation system utilities
-    - `config.js` - Rec system configuration
-    - `validator.js` - URL and data validation
-    - `embedBuilder.js` - Embed creation
-    - `statistics.js` - Statistics generation
-    - `pagination.js` - Pagination controls
+- `src/bots/sam/utils/` - Sam-only utilities (profile card, help pages, birthday formatting)
+- `src/shared/utils/` - Shared utilities (logger, message tracking, dual update, emoji)
+- `src/shared/recUtils/` - Shared metadata parsing + embeds + validation
 
 ### Backup & Safety
 - `backup/events/interactionCreate_original.js` - Original 1,484-line file (preserved)
@@ -285,9 +270,16 @@ This document serves as the single source of truth for all variable names, field
 - `'hidden'` - Hidden (timezone won't show on profile)
 
 ## Environment Variables
-- `BOT_TOKEN` - Discord bot token
+- `DATABASE_URL` - Postgres connection string (required in production; optional in dev)
+- `SAM_BOT_TOKEN` - Sam bot token
+- `SAM_CLIENT_ID` - Sam application ID (aka client ID) for slash command registration
+- `SAM_GUILD_ID` - Optional guild ID for guild-scoped command registration (dev)
+- `DEAN_BOT_TOKEN`, `DEAN_APP_ID`/`DEAN_CLIENT_ID`, `DEAN_GUILD_ID`
+- `CAS_BOT_TOKEN`, `CAS_APP_ID`/`CAS_CLIENT_ID`, `CAS_GUILD_ID`
 - `COMMAND_PREFIX` - Default command prefix (default: '!')
-- Database connection variables (SQLite for dev, PostgreSQL for prod)
+
+Legacy aliases that still exist in a few scripts:
+- `BOT_TOKEN`, `CLIENT_ID`, `GUILD_ID`
 
 ## Common Patterns
 

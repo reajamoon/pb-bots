@@ -3,8 +3,8 @@
 This project is modular and designed for incremental feature additions.
 
 ## Commands
-- Add new commands by creating handler modules in `src/bots/sam/commands/`.
-- Follow existing patterns in `handlers/` and `events/` for wiring.
+- Add new Sam commands by creating modules in `src/bots/sam/commands/`.
+- Follow existing patterns in `src/bots/sam/handlers/` and `src/bots/sam/events/` for wiring.
 
 ## Features
 - Add new profile fields or rec features by updating models and utility logic.

@@ -22,16 +22,16 @@ The profile system is fully modular, maintainable, and robust. All profile featu
 
 ### Module Structure
  - **Core Command:**
-	 - `src/commands/profile.js` – Main command handler and interaction flow
+	 - `src/bots/sam/commands/profile.js` – Main command router and interaction flow
  - **Utility Modules:**
-	 - `src/utils/profileCard.js` – Profile generation and user management
-	 - `src/utils/birthdayFormatter.js` – Birthday display logic and privacy handling
-	 - `src/utils/zodiacCalculator.js` – Western and Chinese zodiac calculations
-	 - `src/utils/messageTracking.js` – CustomId/message tracking, encoding/decoding, dual update logic
-	 - `src/utils/buttonId.js` – Standardized button customId builder/parser
-	 - `src/utils/profileHelp.js` – Aggregator for help pages and navigation
-	 - `src/utils/profileHelpBirthday.js`, `profileHelpBio.js`, `profileHelpPrivacy.js`, `profileHelpTips.js`, `profileHelpTimezoneRegion.js` – Modular help category pages
-	 - `src/utils/profileHelpButtons.js` – Shared navigation button logic for help menus
+	 - `src/bots/sam/utils/profileCard.js` – Profile embed generation and UI
+	 - `src/bots/sam/utils/birthdayFormatter.js` – Birthday display logic and privacy handling
+	 - `src/shared/utils/zodiacCalculator.js` – Western and Chinese zodiac calculations
+	 - `src/shared/utils/messageTracking.js` – customId/message tracking, encoding/decoding, dual update logic
+	 - `src/shared/utils/buttonId.js` – Standardized button customId builder/parser
+	 - `src/bots/sam/utils/profileHelp.js` – Aggregator for help pages and navigation
+	 - `src/bots/sam/utils/profileHelpBirthday.js`, `profileHelpBio.js`, `profileHelpPrivacy.js`, `profileHelpTips.js`, `profileHelpTimezoneRegion.js` – Modular help category pages
+	 - `src/bots/sam/utils/profileHelpButtons.js` – Shared navigation button logic for help menus
 
 ### Module Responsibilities
 - **profileCard.js:** User DB ops, profile embed generation, button creation, privacy logic
@@ -70,14 +70,14 @@ const rawMessageId = decodeMessageId(encodedMsgId);
 - Always validate and propagate the original profile message ID.
 
 ### References
-- See `src/utils/messageTracking.js` for all encoding/decoding utilities.
+- See `src/shared/utils/messageTracking.js` for all encoding/decoding utilities.
 - See `docs/message-tracking-utility.md` for usage patterns and migration notes.
 
 ## Privacy & Help System
 All privacy logic and help features are modularized for maintainability and future extensibility.
-- Privacy settings, help menus, and navigation are split into dedicated modules (e.g., `privacySettingsHandler.js`, `privacyHelp.js`, `profileHelpBirthday.js`, etc.).
-- Static help texts and menu descriptions are loaded from a centralized JSON file (`helpTexts.json`) for easy editing and consistency.
-- Navigation and button logic is shared across profile and privacy menus using utilities like `profileHelpButtons.js`.
+- Privacy settings, help menus, and navigation are split into dedicated modules (e.g., `src/bots/sam/commands/profile/privacyHandler.js`, `src/bots/sam/handlers/buttons/privacy/*`, and `profileHelp*.js`).
+- Help text is maintained in the help modules themselves (no centralized JSON file).
+- Navigation and button logic is shared across help pages using `profileHelpButtons.js`.
 
 ### Modularization Highlights
 - Privacy and help logic moved out of shared/profile modules into dedicated files.
@@ -88,15 +88,14 @@ All privacy logic and help features are modularized for maintainability and futu
 
 ### Directory Structure Example
 ```plaintext
-src/utils/profileHelp/
-  profileHelp.js
-  profileHelpBirthday.js
-  profileHelpBio.js
-  profileHelpPrivacy.js
-  profileHelpTips.js
-  profileHelpTimezoneRegion.js
-  profileHelpButtons.js
-  helpTexts.json
+src/bots/sam/utils/
+	profileHelp.js
+	profileHelpBirthday.js
+	profileHelpBio.js
+	profileHelpPrivacy.js
+	profileHelpTips.js
+	profileHelpTimezoneRegion.js
+	profileHelpButtons.js
 ```
 
 ### Best Practices
@@ -111,12 +110,13 @@ src/utils/profileHelp/
 - `/birthday-config` – Admin birthday settings
 
 ## File Structure
-- `src/commands/profile.js` – Main command handler
-- `src/handlers/buttons/profileButtons.js` – Profile button logic
-- `src/handlers/modals/bioModal.js`, `birthdayModal.js`, etc. – Modal forms
-- `src/utils/profileCard.js` – Profile embed generation
-- `src/utils/messageTracking.js`, `buttonId.js` – ID and message tracking
-- `src/utils/profileHelp.js` and category modules – Help system
+- `src/bots/sam/commands/profile.js` – Main command router
+- `src/bots/sam/handlers/buttons/profile/` – Profile button handlers
+- `src/bots/sam/handlers/buttons/privacy/` – Privacy button handlers
+- `src/bots/sam/handlers/modals/` – Modal handlers (bio, birthday, timezone, etc.)
+- `src/bots/sam/utils/profileCard.js` – Profile embed generation
+- `src/shared/utils/messageTracking.js`, `src/shared/utils/buttonId.js` – ID and message tracking
+- `src/bots/sam/utils/profileHelp.js` and category modules – Help system
 
 ## Best Practices
 - Always use centralized utilities for custom ID and message tracking
