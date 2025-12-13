@@ -1,5 +1,6 @@
 import { Events, ChannelType } from 'discord.js';
 import { User, Config, ParseQueue, ModmailRelay } from '../../../models/index.js';
+import { createModmailRelayWithNextTicket } from '../../../shared/utils/modmailTicketAllocator.js';
 
 // Utility: extract fic URL and submitter from the thread's starter message
 async function getFicInfoFromThread(thread) {
@@ -90,7 +91,10 @@ export default {
                     console.log('[ModmailRelay] Message content:', content);
 
                     if (content.toLowerCase().startsWith('@ticket') || content.toLowerCase().startsWith('/ticket')) {
-                        const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id } });
+                        const relayEntry = await ModmailRelay.findOne({
+                            where: { thread_id: message.channel.id, bot_name: 'sam' },
+                            order: [['ticket_seq', 'DESC']],
+                        });
                         if (!relayEntry) {
                             await message.reply('No ticket associated with this thread.');
                         } else {
@@ -114,11 +118,17 @@ export default {
                         return;
                     }
                     if (content.toLowerCase().startsWith('@close') || content.toLowerCase().startsWith('/close')) {
-                        const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id, open: true } });
+                        const relayEntry = await ModmailRelay.findOne({
+                            where: { thread_id: message.channel.id, bot_name: 'sam', open: true },
+                            order: [['ticket_seq', 'DESC']],
+                        });
                         if (!relayEntry) {
                             await message.reply('No open ticket found for this thread.');
                         } else {
-                            await ModmailRelay.update({ open: false, status: 'closed', closed_at: new Date() }, { where: { thread_id: message.channel.id } });
+                            await ModmailRelay.update(
+                                { open: false, status: 'closed', closed_at: new Date() },
+                                { where: { thread_id: message.channel.id, bot_name: 'sam' } }
+                            );
                             await message.reply('Ticket closed. I won’t relay further messages from the user to this thread.');
                         }
                         return;
@@ -152,26 +162,34 @@ export default {
                                     });
                                     await message.reply('Got it—message delivered.');
                                     // Store relay mapping in ModmailRelay table
-                                    // Compute sequential ticket for Sam
-                                    const last = await ModmailRelay.findOne({ where: { bot_name: 'sam' }, order: [['ticket_seq', 'DESC']] });
-                                    const nextSeq = (last && last.ticket_seq ? last.ticket_seq : 0) + 1;
-                                    const ticket = `SAM-${nextSeq}`;
-                                                                        await ModmailRelay.upsert({
-                                        user_id: ficInfo.submitterId,
-                                        bot_name: 'sam',
-                                        ticket_number: ticket,
-                                        ticket_seq: nextSeq,
-                                        fic_url: ficInfo.ficUrl,
-                                        thread_id: message.channel.id,
-                                        open: true,
-                                        status: 'open',
-                                        created_at: new Date(),
-                                        last_relayed_at: new Date()
+                                    const existing = await ModmailRelay.findOne({
+                                        where: { thread_id: message.channel.id, bot_name: 'sam' },
                                     });
+
+                                    let ticket;
+                                    if (existing && existing.ticket_number) {
+                                        ticket = existing.ticket_number;
+                                        await existing.update({
+                                            user_id: ficInfo.submitterId,
+                                            fic_url: ficInfo.ficUrl,
+                                            open: true,
+                                            status: 'open',
+                                            last_relayed_at: new Date(),
+                                        });
+                                    } else {
+                                        const created = await createModmailRelayWithNextTicket({
+                                            botName: 'sam',
+                                            userId: ficInfo.submitterId,
+                                            threadId: message.channel.id,
+                                            baseMessageId: null,
+                                            ficUrl: ficInfo.ficUrl,
+                                        });
+                                        ticket = created.ticket;
+                                    }
                                                                         // Post helper embed with thread commands for mods' convenience
                                                                         const { EmbedBuilder } = await import('discord.js');
                                                                         const help = new EmbedBuilder()
-                                                                            .setColor(0x3b88c3)
+                                                                            .setColor(0x905533)
                                                                             .setTitle('Thread Commands')
                                                                             .setDescription('Use these to manage the ticket:')
                                                                             .addFields(

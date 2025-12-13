@@ -1,7 +1,8 @@
 
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { Recommendation, ModLock, User, Config, ParseQueue, ParseQueueSubscriber, Series } from '../../../models/index.js';
+import { Recommendation, ModLock, User, Config, ParseQueue, ParseQueueSubscriber, Series, ModmailRelay } from '../../../models/index.js';
 import { Op } from 'sequelize';
+import { createModmailRelayWithNextTicket } from '../../../shared/utils/modmailTicketAllocator.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -155,15 +156,58 @@ export default {
           if (existingThread) {
             // Post inside existing thread only; do not create a new base message
             await existingThread.send({ content: approvalMsg });
+
+            // Ensure the thread has a ticket even if nobody has used @relay yet
+            try {
+              if (originalSubmitterId) {
+                const existingRelay = await ModmailRelay.findOne({ where: { thread_id: existingThread.id, bot_name: 'sam' } });
+                if (!existingRelay) {
+                  let baseMessageId = null;
+                  try {
+                    const starter = await existingThread.fetchStarterMessage();
+                    baseMessageId = starter ? starter.id : null;
+                  } catch {}
+                  const created = await createModmailRelayWithNextTicket({
+                    botName: 'sam',
+                    userId: originalSubmitterId,
+                    threadId: existingThread.id,
+                    baseMessageId,
+                    ficUrl,
+                  });
+                  await existingThread.send({ content: `Ticket: ${created.ticket}` });
+                }
+              }
+            } catch (ticketErr) {
+              console.warn('[modutility] Failed to ensure ModmailRelay ticket for existing thread:', ticketErr);
+            }
           } else {
             // Fall back to base message + new thread if no thread exists
             const modmailMsgObj = await modmailChannel.send({ content: approvalMsg + `\n> Got questions or want me to relay a note to them? Reply here and I’ll DM them.` });
             try {
               const threadName = (isSeries ? 'Series: ' : 'Fic: ') + (ficUrl.length > 80 ? ficUrl.slice(0, 77) + '...' : ficUrl);
-              await modmailMsgObj.startThread({
+              const thread = await modmailMsgObj.startThread({
                 name: threadName,
                 autoArchiveDuration: 1440
               });
+
+              // Create a ticket immediately for the new thread
+              try {
+                if (originalSubmitterId && thread && thread.id) {
+                  const existingRelay = await ModmailRelay.findOne({ where: { thread_id: thread.id, bot_name: 'sam' } });
+                  if (!existingRelay) {
+                    const created = await createModmailRelayWithNextTicket({
+                      botName: 'sam',
+                      userId: originalSubmitterId,
+                      threadId: thread.id,
+                      baseMessageId: modmailMsgObj.id,
+                      ficUrl,
+                    });
+                    await thread.send({ content: `Ticket: ${created.ticket}` });
+                  }
+                }
+              } catch (ticketErr) {
+                console.warn('[modutility] Failed to create ModmailRelay ticket for new thread:', ticketErr);
+              }
             } catch {}
           }
         }

@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { Config, ModmailRelay } from '../../../models/index.js';
+import { createModmailRelayWithNextTicket } from '../../../shared/utils/modmailTicketAllocator.js';
 
 const data = new SlashCommandBuilder()
   .setName('modmail')
@@ -52,22 +53,20 @@ async function execute(interaction) {
 
   // Persist relay mapping
   try {
-      await ModmailRelay.create({
-        user_id: interaction.user.id,
-        bot_name: 'cas',
-        fic_url: null,
-        base_message_id: base.id,
-        thread_id: thread.id,
-        open: true,
-        status: 'open',
-        created_at: new Date(),
-        last_user_message_at: new Date()
-      });
+    const created = await createModmailRelayWithNextTicket({
+      botName: 'cas',
+      userId: interaction.user.id,
+      threadId: thread.id,
+      baseMessageId: base.id,
+      ficUrl: null,
+    });
+
+    await thread.send(`Ticket: ${created.ticket}`);
   } catch (persistErr) {
     console.warn('[cas/modmail] Failed to persist ModMailRelay entry:', persistErr);
   }
 
-  await interaction.editReply({ content: 'Ive opened a thread for you. The moderators will reply shortly.' });
+  await interaction.editReply({ content: "I've opened a thread for you. The moderators will reply shortly." });
 }
 
 export { data };

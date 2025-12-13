@@ -82,7 +82,17 @@ async function handleButton(interaction) {
                                 await ParseQueueSubscriber.create({ queue_id: job.id, user_id: job.requested_by }).catch(() => {});
                             }
                         }
-                        // Update message to reflect approval
+                        // Post confirmation inside the thread
+                        try {
+                            const where = interaction.channel && typeof interaction.channel.isThread === 'function' && interaction.channel.isThread()
+                                ? interaction.channel
+                                : null;
+                            if (where) {
+                                await where.send({ content: `✅ Approved and requeued by <@${interaction.user.id}>: <${job.fic_url}>` });
+                            }
+                        } catch {}
+
+                        // Ephemeral ack to the clicker
                         await interaction.reply({ content: 'Approved and requeued. I’ll skip validation next time.', flags: EPHEMERAL_FLAG });
                         // Optionally disable buttons
                         try {
@@ -95,6 +105,15 @@ async function handleButton(interaction) {
                     return;
                 } else if (action === 'dismiss') {
                     // Keep job as nOTP; acknowledge
+                    try {
+                        const where = interaction.channel && typeof interaction.channel.isThread === 'function' && interaction.channel.isThread()
+                            ? interaction.channel
+                            : null;
+                        if (where) {
+                            await where.send({ content: `🟨 Dismissed (kept nOTP) by <@${interaction.user.id}>: <${job.fic_url}>` });
+                        }
+                    } catch {}
+
                     await interaction.reply({ content: 'Dismissed. I’ll keep this flagged for validation.', flags: EPHEMERAL_FLAG });
                     // Optionally disable buttons to prevent repeated actions
                     try {

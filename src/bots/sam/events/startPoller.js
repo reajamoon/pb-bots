@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
-import { ParseQueue, ParseQueueSubscriber, User, Config, Recommendation } from '../../../models/index.js';
+import { ParseQueue, ParseQueueSubscriber, User, Config, Recommendation, ModmailRelay } from '../../../models/index.js';
 import { findModmailThreadByUrl } from '../../../shared/utils/findModmailThreadByUrl.js';
+import { createModmailRelayWithNextTicket } from '../../../shared/utils/modmailTicketAllocator.js';
 // Tiny cache for modmail threads by normalized URL (simple Map)
 const modmailThreadCache = new Map();
 import { createRecEmbed } from '../../../shared/recUtils/createRecEmbed.js';
@@ -108,6 +109,25 @@ async function notifyQueueSubscribers(client) {
                         autoArchiveDuration: 1440, // 24 hours
                         reason: 'AO3 rec validation failed (nOTP)'
                     });
+                    // Create a ticket immediately (so mods can reference it before any @relay)
+                    try {
+                        const submitterId = job.requested_by ? job.requested_by.split(',')[0].trim() : null;
+                        if (submitterId) {
+                            const existingRelay = await ModmailRelay.findOne({ where: { thread_id: thread.id, bot_name: 'sam' } });
+                            if (!existingRelay) {
+                                const created = await createModmailRelayWithNextTicket({
+                                    botName: 'sam',
+                                    userId: submitterId,
+                                    threadId: thread.id,
+                                    baseMessageId: sentMsg.id,
+                                    ficUrl: job.fic_url,
+                                });
+                                await thread.send({ content: `Ticket: ${created.ticket}` });
+                            }
+                        }
+                    } catch (ticketErr) {
+                        console.warn('[Poller] Failed to create ModmailRelay ticket for nOTP thread:', ticketErr);
+                    }
                     try { modmailThreadCache.set(job.fic_url, thread.id); } catch {}
                     // Persist threadId immediately to avoid duplicates on next heartbeat
                     try {
@@ -116,6 +136,31 @@ async function notifyQueueSubscribers(client) {
                     } catch (persistErr) {
                         console.error('[Poller] Failed to persist threadId on nOTP job:', persistErr);
                     }
+                }
+                // If thread already existed (reuse), ensure it still has a ticket row
+                try {
+                    const submitterId = job.requested_by ? job.requested_by.split(',')[0].trim() : null;
+                    if (submitterId && thread && thread.id) {
+                        const existingRelay = await ModmailRelay.findOne({ where: { thread_id: thread.id, bot_name: 'sam' } });
+                        if (!existingRelay) {
+                            let baseMessageId = null;
+                            try {
+                                const starter = await thread.fetchStarterMessage();
+                                baseMessageId = starter ? starter.id : null;
+                            } catch {}
+
+                            const created = await createModmailRelayWithNextTicket({
+                                botName: 'sam',
+                                userId: submitterId,
+                                threadId: thread.id,
+                                baseMessageId,
+                                ficUrl: job.fic_url,
+                            });
+                            await thread.send({ content: `Ticket: ${created.ticket}` });
+                        }
+                    }
+                } catch (ticketErr) {
+                    console.warn('[Poller] Failed to ensure ModmailRelay ticket for existing nOTP thread:', ticketErr);
                 }
                 // Send action buttons inside the thread for intuitive mod actions
                 try {
@@ -182,31 +227,32 @@ async function notifyQueueSubscribers(client) {
                                     const { queueRecommendationRefresh } = await import('../../../shared/recUtils/queueUtils.js');
                                     await queueRecommendationRefresh(rec.url);
                                 } catch {}
-                                continue;
+                                await thread.send({ content: `Context: <${job.fic_url}>` });
+                            } else {
+                                if (process.env.REC_EMBED_DEBUG) {
+                                    try {
+                                        console.debug('[sam:poller] Gate check (fandom_tags only)', {
+                                            id: rec.id,
+                                            hasFandomTags,
+                                            hasDeanCas,
+                                            fandomCount: rec.fandom_tags ? rec.fandom_tags.length : 0
+                                        });
+                                    } catch {}
+                                }
+                                if (process.env.REC_EMBED_DEBUG) {
+                                    try {
+                                        console.debug('[sam:poller] Pre-embed rec audit', {
+                                            id: rec.id,
+                                            hasSeries: !!rec.series,
+                                            tagsType: Array.isArray(rec.tags) ? 'array' : typeof rec.tags,
+                                            tagsLen: Array.isArray(rec.tags) ? rec.tags.length : (typeof rec.tags === 'string' ? rec.tags.length : 0),
+                                            userMetaCount: Array.isArray(rec.userMetadata) ? rec.userMetadata.length : 0
+                                        });
+                                    } catch {}
+                                }
+                                const embed = createRecEmbed(rec);
+                                await thread.send({ embeds: [embed] });
                             }
-                            if (process.env.REC_EMBED_DEBUG) {
-                                try {
-                                    console.debug('[sam:poller] Gate check (fandom_tags only)', {
-                                        id: rec.id,
-                                        hasFandomTags,
-                                        hasDeanCas,
-                                        fandomCount: rec.fandom_tags ? rec.fandom_tags.length : 0
-                                    });
-                                } catch {}
-                            }
-                            if (process.env.REC_EMBED_DEBUG) {
-                                try {
-                                    console.debug('[sam:poller] Pre-embed rec audit', {
-                                        id: rec.id,
-                                        hasSeries: !!rec.series,
-                                        tagsType: Array.isArray(rec.tags) ? 'array' : typeof rec.tags,
-                                        tagsLen: Array.isArray(rec.tags) ? rec.tags.length : (typeof rec.tags === 'string' ? rec.tags.length : 0),
-                                        userMetaCount: Array.isArray(rec.userMetadata) ? rec.userMetadata.length : 0
-                                    });
-                                } catch {}
-                            }
-                            const embed = createRecEmbed(rec);
-                            await thread.send({ embeds: [embed] });
                         } else {
                             await thread.send({ content: `Context: <${job.fic_url}>` });
                         }

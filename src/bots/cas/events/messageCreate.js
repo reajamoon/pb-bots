@@ -1,5 +1,40 @@
 import { Config, ModmailRelay } from '../../../models/index.js';
 import { EmbedBuilder, ChannelType, PermissionFlagsBits } from 'discord.js';
+import { createModmailRelayWithNextTicket } from '../../../shared/utils/modmailTicketAllocator.js';
+
+async function resolveRelayThread({ client, channel, relay }) {
+  if (!relay?.thread_id) return null;
+
+  let thread = client.channels.cache.get(relay.thread_id);
+
+  if (!thread && channel && channel.threads && typeof channel.threads.fetch === 'function') {
+    try {
+      const fetched = await channel.threads.fetch(relay.thread_id);
+      thread = fetched || null;
+    } catch {}
+  }
+
+  if (!thread) {
+    try {
+      thread = await client.channels.fetch(relay.thread_id);
+    } catch {}
+  }
+
+  if (!thread && relay.base_message_id && channel) {
+    try {
+      const baseMsg = await channel.messages.fetch(relay.base_message_id);
+      if (baseMsg && baseMsg.hasThread) {
+        thread = baseMsg.thread;
+      }
+    } catch {}
+  }
+
+  if (thread && typeof thread.isThread === 'function' && thread.isThread()) {
+    return thread;
+  }
+
+  return null;
+}
 
 export default async function onMessageCreate(message) {
   try {
@@ -9,38 +44,43 @@ export default async function onMessageCreate(message) {
 
     const client = message.client;
     if (isDM) {
-      // Find existing open relay for this user
-        // Find existing open relays for this user and prefer Cas-owned threads
-        let relay = null;
-        const relays = await ModmailRelay.findAll({ where: { user_id: message.author.id, open: true, bot_name: 'cas' } });
-        for (const r of relays) {
-          const th = client.channels.cache.get(r.thread_id) || (channel && channel.threads && typeof channel.threads.fetch === 'function' ? await channel.threads.fetch(r.thread_id).catch(() => null) : null) || await client.channels.fetch(r.thread_id).catch(() => null);
-          if (th && typeof th.isThread === 'function' && th.isThread()) {
-            // Only reuse threads created by Cas
-            if (th.ownerId === client.user.id) {
-              relay = r;
-              break;
-            }
-          }
-        }
+      // Resolve modmail channel early (used for thread lookups and creation)
+      const modmailConfig = await Config.findOne({ where: { key: 'modmail_channel_id' } });
+      const modmailChannelId = modmailConfig ? modmailConfig.value : null;
+      let channel = modmailChannelId ? client.channels.cache.get(modmailChannelId) : null;
+      if (!channel && modmailChannelId) {
+        try {
+          channel = await client.channels.fetch(modmailChannelId);
+        } catch {}
+      }
+      if (!channel) {
+        await message.reply("I don't have modmail configured yet. Please ping a mod.");
+        return;
+      }
 
-    // Resolve modmail channel
-    const modmailConfig = await Config.findOne({ where: { key: 'modmail_channel_id' } });
-    const modmailChannelId = modmailConfig ? modmailConfig.value : null;
-    let channel = modmailChannelId ? client.channels.cache.get(modmailChannelId) : null;
-    if (!channel && modmailChannelId) {
-      try {
-        channel = await client.channels.fetch(modmailChannelId);
-      } catch {}
-    }
-    if (!channel) {
-      await message.reply("I don't have modmail configured yet. Please ping a mod.");
-      return;
-    }
+      // Find existing open relays for this user and prefer Cas-owned threads
+      let relay = null;
+      const relays = await ModmailRelay.findAll({
+        where: { user_id: message.author.id, open: true, bot_name: 'cas' },
+        order: [
+          ['last_user_message_at', 'DESC'],
+          ['last_relayed_at', 'DESC'],
+          ['created_at', 'DESC'],
+        ],
+      });
+      for (const r of relays) {
+        const th = await resolveRelayThread({ client, channel, relay: r });
+        if (!th) continue;
+        // Only reuse threads created by Cas
+        if (th.ownerId === client.user.id) {
+          relay = r;
+          break;
+        }
+      }
 
     // If a relay exists, try to use its thread; if it's a Sam-owned thread, do not post into it
     if (relay) {
-      const existingThread = client.channels.cache.get(relay.thread_id);
+      const existingThread = await resolveRelayThread({ client, channel, relay });
       let ownerMismatch = false;
       if (existingThread && typeof existingThread.isThread === 'function' && existingThread.isThread()) {
         ownerMismatch = existingThread.ownerId && existingThread.ownerId !== client.user.id;
@@ -51,10 +91,8 @@ export default async function onMessageCreate(message) {
         await message.reply('I see your message. Your modmail is currently being handled by the other librarian; they\'ll reply in that thread.');
         return;
       }
-      if (!existingThread || !(typeof existingThread.isThread === 'function' && existingThread.isThread())) {
-        // Missing or invalid thread; allow recreation below
-        relay = null;
-      }
+      // If thread can't be resolved here, keep the relay and let the DM handler
+      // recreate and update it under the same ticket.
     }
 
     if (isDM && !relay) {
@@ -82,6 +120,12 @@ export default async function onMessageCreate(message) {
             message: { embeds: [baseEmbed] }
           });
           console.log('[cas.modmail] Forum thread created:', (thread && thread.id) || null);
+          try {
+            const starter = await thread.fetchStarterMessage();
+            if (starter) {
+              base = { id: starter.id };
+            }
+          } catch {}
         } else {
           const perms = channel.permissionsFor(client.user);
           if (!perms || (!perms.has(PermissionFlagsBits.CreatePublicThreads) && !perms.has(PermissionFlagsBits.CreatePrivateThreads))) {
@@ -93,7 +137,22 @@ export default async function onMessageCreate(message) {
           base = await channel.send({ embeds: [baseEmbed] });
           console.log('[cas.modmail] Base message sent. base.id:', base ? base.id : null);
           // On regular text channels, start a public thread by default
-          thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'User-initiated modmail (DM)' });
+          try {
+            thread = await base.startThread({ name: threadName, autoArchiveDuration: 1440, reason: 'User-initiated modmail (DM)' });
+          } catch (startErr) {
+            console.warn('[cas.modmail] base.startThread failed, attempting channel.threads.create fallback:', startErr);
+            try {
+              thread = await channel.threads.create({
+                name: threadName,
+                autoArchiveDuration: 1440,
+                reason: 'User-initiated modmail (DM)',
+                startMessage: base,
+              });
+            } catch (fallbackErr) {
+              console.error('[cas.modmail] Fallback thread creation failed:', fallbackErr);
+              throw fallbackErr;
+            }
+          }
           console.log('[cas.modmail] startThread result:', (thread && thread.id) || null, 'isThread?', (thread && typeof thread.isThread === 'function') ? thread.isThread() : null, 'ownerId:', (thread && thread.ownerId) || null);
           if (!thread || !thread.isThread()) {
             await message.reply("I sent the modmail message but couldn’t start the thread. Please ping a mod.");
@@ -119,51 +178,29 @@ export default async function onMessageCreate(message) {
           )
           .setTimestamp(new Date());
         const introMsg = await thread.send({ embeds: [intro] });
-        // Use thread intro as base anchor regardless of parent message
+        // If we don't have a parent/base message id, fall back to the thread's intro id
         base = base || { id: introMsg.id };
       } catch {}
-      // Compute sequential ticket per bot (simple max+1; safe under single process)
-      const last = await ModmailRelay.findOne({ where: { bot_name: 'cas' }, order: [['ticket_seq', 'DESC']] });
-      const nextSeq = (last && last.ticket_seq ? last.ticket_seq : 0) + 1;
-      const ticket = `CAS-${nextSeq}`;
-      relay = await ModmailRelay.create({
-        user_id: message.author.id,
-        bot_name: 'cas',
-        ticket_number: ticket,
-        ticket_seq: nextSeq,
-        fic_url: null,
-        base_message_id: base ? base.id : null,
-        thread_id: thread.id,
-        open: true,
-        status: 'open',
-        created_at: new Date(),
-        last_user_message_at: new Date()
+
+      const created = await createModmailRelayWithNextTicket({
+        botName: 'cas',
+        userId: message.author.id,
+        threadId: thread.id,
+        baseMessageId: base ? base.id : null,
+        ficUrl: null,
       });
-      console.log('[cas.modmail] Relay created:', { user_id: message.author.id, ticket, base_message_id: base ? base.id : null, thread_id: thread ? thread.id : null });
-      await message.reply(`I’ve opened a thread for you. Your ticket is ${ticket}. The moderators will reply shortly.`);
+      relay = created.relay;
+
+      console.log('[cas.modmail] Relay created:', {
+        user_id: message.author.id,
+        ticket: created.ticket,
+        base_message_id: base ? base.id : null,
+        thread_id: thread ? thread.id : null,
+      });
+      await message.reply(`I’ve opened a thread for you. Your ticket is ${created.ticket}. The moderators will reply shortly.`);
     } else if (isDM) {
       // Post into existing Cas-owned thread
-      // Try to resolve thread robustly (cache → fetch → threads.fetch → base message)
-      let thread = client.channels.cache.get(relay.thread_id);
-      if (!thread && channel && channel.threads && typeof channel.threads.fetch === 'function') {
-        try {
-          const fetched = await channel.threads.fetch(relay.thread_id);
-          thread = fetched || null;
-        } catch {}
-      }
-      if (!thread) {
-        try {
-          thread = await client.channels.fetch(relay.thread_id);
-        } catch {}
-      }
-      if (!thread && relay.base_message_id && channel) {
-        try {
-          const baseMsg = await channel.messages.fetch(relay.base_message_id);
-          if (baseMsg && baseMsg.hasThread) {
-            thread = baseMsg.thread;
-          }
-        } catch {}
-      }
+      const thread = await resolveRelayThread({ client, channel, relay });
       if (thread && typeof thread.isThread === 'function' && thread.isThread()) {
         await thread.send({ content: `<@${message.author.id}>: ${message.content}` });
         await relay.update({ last_user_message_at: new Date() });
