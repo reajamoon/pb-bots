@@ -1,57 +1,54 @@
-// Pure routing function for testability
 import Discord from 'discord.js';
-const { MessageFlags } = Discord;
 import { parseButtonId } from '../../../../../shared/utils/buttonId.js';
-function getHelpMenuPayload(customId) {
+
+async function getHelpMenuPayload(customId) {
     const parsed = parseButtonId(customId);
-    if (parsed && parsed.context === 'profile_help_menu') {
-        const ephemeralFlag = Discord.MessageFlags?.Ephemeral ?? 64;
-        // Import modular help builders
-        // ESM imports at top
-        import { createBirthdayHelp } from '../../../utils/profileHelpBirthday.js';
-        import { createBioHelp } from '../../../utils/profileHelpBio.js';
-        import { createTimezoneRegionHelp } from '../../../utils/profileHelpTimezoneRegion.js';
-        import { createPrivacyHelp } from '../../../utils/profileHelpPrivacy.js';
-        import { createTipsHelp } from '../../../utils/profileHelpTips.js';
-        import { createProfileHelpMain } from '../../../utils/profileHelp.js';
+    if (!parsed || parsed.context !== 'profile_help_menu') return null;
 
-        // Create a mock interaction object for help builders
-        const mockInteraction = {
-            user: { id: parsed.primaryId },
-            id: parsed.secondaryId,
-            message: { id: parsed.secondaryId }
-        };
+    const ephemeralFlag = Discord.MessageFlags?.Ephemeral ?? 64;
 
-        switch (parsed.action) {
-            case 'birthday': {
-                const { embed, components } = createBirthdayHelp(mockInteraction);
-                return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
-            }
-            case 'bio': {
-                const { embed, components } = createBioHelp(mockInteraction);
-                return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
-            }
-            case 'timezone_region': {
-                const { embed, components } = createTimezoneRegionHelp(mockInteraction);
-                return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
-            }
-            case 'privacy': {
-                const { embed, components } = createPrivacyHelp(mockInteraction);
-                return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
-            }
-            case 'tips': {
-                const { embed, components } = createTipsHelp(mockInteraction);
-                return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
-            }
-            case 'main': {
-                const { embed, components } = createProfileHelpMain(mockInteraction);
-                return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
-            }
-            case 'done':
-                return { type: 'close', content: '\u274c Help closed.', components: [], embeds: [], flags: ephemeralFlag, userId: parsed.primaryId, messageId: parsed.secondaryId };
+    const mockInteraction = {
+        user: { id: parsed.primaryId },
+        id: parsed.secondaryId,
+        message: { id: parsed.secondaryId }
+    };
+
+    switch (parsed.action) {
+        case 'birthday': {
+            const { createBirthdayHelp } = await import('../../../utils/profileHelpBirthday.js');
+            const { embed, components } = await createBirthdayHelp(mockInteraction);
+            return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
         }
+        case 'bio': {
+            const { createBioHelp } = await import('../../../utils/profileHelpBio.js');
+            const { embed, components } = await createBioHelp(mockInteraction);
+            return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
+        }
+        case 'timezone_region': {
+            const { createTimezoneRegionHelp } = await import('../../../utils/profileHelpTimezoneRegion.js');
+            const { embed, components } = await createTimezoneRegionHelp(mockInteraction);
+            return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
+        }
+        case 'privacy': {
+            const { createPrivacyHelp } = await import('../../../utils/profileHelpPrivacy.js');
+            const { embed, components } = await createPrivacyHelp(mockInteraction);
+            return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
+        }
+        case 'tips': {
+            const { createTipsHelp } = await import('../../../utils/profileHelpTips.js');
+            const { embed, components } = await createTipsHelp(mockInteraction);
+            return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
+        }
+        case 'main': {
+            const { createProfileHelpMain } = await import('../../../utils/profileHelp.js');
+            const { embed, components } = await createProfileHelpMain(mockInteraction);
+            return { type: 'back', embeds: [embed], components, flags: ephemeralFlag };
+        }
+        case 'done':
+            return { type: 'close', content: '❌ Help closed.', components: [], embeds: [], flags: ephemeralFlag, userId: parsed.primaryId, messageId: parsed.secondaryId };
+        default:
+            return null;
     }
-    return null;
 }
 
 export { getHelpMenuPayload };

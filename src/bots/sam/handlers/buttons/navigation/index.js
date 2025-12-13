@@ -13,7 +13,7 @@ async function handleNavigationButtons(interaction) {
     // Modular help menu buttonId format
     if (/(_profile_help_menu_)/.test(interaction.customId)) {
     const { getHelpMenuPayload } = await import('./profileHelp.js');
-        const payload = getHelpMenuPayload(interaction.customId);
+        const payload = await getHelpMenuPayload(interaction.customId);
         if (payload) {
             // If type is 'close', just update with empty content
             if (payload.type === 'close') {

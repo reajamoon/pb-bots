@@ -16,7 +16,7 @@ import { createHelpWithBackButton } from './profileHelpButtons.js';
  * @returns {Object} Object with embed and component row
  */
 
-function createProfileHelpMain(interaction) {
+async function createProfileHelpMain(interaction) {
     // Main help menu embed is still constructed here, but all category help is loaded from modular files
     const embed = new EmbedBuilder()
         .setTitle('📚 Profile Help')
@@ -36,11 +36,9 @@ function createProfileHelpMain(interaction) {
         .setColor(0x5865F2)
         .setFooter({ text: 'Pick a category to learn more.' });
 
-    // ESM: import at top if needed, or update usage if required elsewhere
     const userId = interaction?.user?.id || '';
     const messageId = interaction?.message?.id || '';
-    const encodedMsgId = encodeMessageId(messageId);
-    return createHelpWithBackButton(embed, { user: { id: userId }, id: messageId, message: { id: messageId } });
+    return await createHelpWithBackButton(embed, { user: { id: userId }, id: messageId, message: { id: messageId } });
 }
 
 /**

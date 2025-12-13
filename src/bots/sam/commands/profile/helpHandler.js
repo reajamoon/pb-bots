@@ -4,8 +4,8 @@ import Discord from 'discord.js';
 
 export default async function handleProfileHelp(interaction) {
         logger.info(`[handleProfileHelp] Called with interaction.customId=${interaction.customId}`);
-        const { embed, components } = createProfileHelpMain(interaction);
-        embed.setDescription(embed.description && embed.description.length > 0 ? embed.description : 'Profile help and navigation.');
+        const { embed, components } = await createProfileHelpMain(interaction);
+        embed.setDescription(embed?.data?.description && embed.data.description.length > 0 ? embed.data.description : 'Profile help and navigation.');
         const { MessageFlags } = Discord;
         const ephemeralFlag = MessageFlags?.Ephemeral ?? 64;
         if (interaction.isButton && interaction.isButton()) {
