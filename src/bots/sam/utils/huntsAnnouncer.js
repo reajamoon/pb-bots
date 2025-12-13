@@ -41,9 +41,9 @@ function buildSamAnnouncer(interaction) {
         const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
         await fallback.send(payload);
       }
-    } catch {
+    } catch (err) {
       const channel = interaction.channel;
-      try { console.warn('[hunts] Sam announcer fell back to interaction.channel in catch'); } catch {}
+      try { console.warn('[hunts] Sam announcer fell back to interaction.channel in catch:', err?.message || err); } catch {}
       if (channel?.send) {
         const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
         await channel.send(payload);

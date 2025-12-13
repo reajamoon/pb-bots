@@ -35,9 +35,9 @@ function buildCasAnnouncer(interactionOrChannel) {
         const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
         await channel.send(payload);
       }
-    } catch {
+    } catch (err) {
       const channel = interactionOrChannel?.channel || interactionOrChannel;
-      try { console.warn('[hunts] Cas announcer fell back to interactionOrChannel'); } catch {}
+      try { console.warn('[hunts] Cas announcer fell back to interactionOrChannel:', err?.message || err); } catch {}
       if (channel?.send) {
         const payload = typeof contentOrOpts === 'string' ? { content: contentOrOpts } : { content: contentOrOpts.content, embeds: contentOrOpts.embed ? [contentOrOpts.embed] : contentOrOpts.embeds };
         await channel.send(payload);

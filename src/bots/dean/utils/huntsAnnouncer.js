@@ -25,13 +25,15 @@ function buildDeanAnnouncer(interactionOrChannel) {
     if ((!channel || !channel.send) && interactionOrChannel?.client) {
       try {
         const { Config } = await import('../../../models/index.js');
-        const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
+        const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel_id' } });
         const fallbackId = queueCfg && queueCfg.value ? queueCfg.value : null;
         if (fallbackId) {
           const fetched = await interactionOrChannel.client.channels.fetch(fallbackId).catch(() => null);
           if (fetched && fetched.isTextBased()) channel = fetched;
         }
-      } catch {}
+      } catch (e) {
+        try { console.warn('[hunts/dean] Failed loading configured queue channel from Config:', e?.message || e); } catch {}
+      }
     }
     if (channel?.send) {
       const payload = typeof contentOrOpts === 'string'

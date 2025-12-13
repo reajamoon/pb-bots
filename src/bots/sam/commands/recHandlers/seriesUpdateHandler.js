@@ -262,7 +262,7 @@ async function handleAutoQueueUpdate(interaction, series) {
     const { siteId, siteType, seriesId, workId } = detectSiteAndExtractIDs(normalizedUrl);
 
     // Create or join queue entry for background processing (no manual overrides)
-    const queueEntry = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
+    await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
 
     const responseMessage = `🔄 Series "${series.name}" has been queued for refresh from AO3. You'll be notified when processing is complete.`;
     await interaction.editReply({
@@ -370,7 +370,7 @@ async function handleQueueSeriesUpdate(interaction, series, updates) {
     await saveUserMetadata(userMetadataOptions);
 
     // Create or join queue entry for background processing
-    const queueEntry = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
+    const { queueEntry } = await createOrJoinQueueEntry(normalizedUrl, interaction.user.id);
     // Ensure series batch type so Jack marks series-done
     try { await queueEntry.update({ batch_type: 'series' }); } catch {}
     // If notes or additional tags were provided, persist into ParseQueue with proper serialization
