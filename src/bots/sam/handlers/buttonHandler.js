@@ -163,6 +163,7 @@ async function handleButton(interaction) {
         // Privacy and settings buttons
         if (customId === 'privacy_settings' || customId.startsWith('privacy_settings_') ||
             customId === 'privacy_settings_done' || customId.startsWith('privacy_settings_done_') ||
+            customId.startsWith('done_privacy_settings_') ||
             customId === 'toggle_birthday_mentions' || customId.startsWith('toggle_birthday_mentions_') ||
             customId === 'toggle_birthday_lists' || customId.startsWith('toggle_birthday_lists_') ||
             customId === 'toggle_birthday_announcements' ||
