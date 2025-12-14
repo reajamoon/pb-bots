@@ -1,4 +1,4 @@
-import { midpointEmbed, completeEmbed, summaryEmbed } from './text/sprintText.js';
+import { summaryEmbed, formatSprintIdentifier, sprintCheckInWordsText, sprintEndedWordsText } from './text/sprintText.js';
 import { DeanSprints, GuildSprintSettings, Wordcount, Project } from '../../models/index.js';
 import fireTrigger from '../../shared/hunts/triggerEngine.js';
 
@@ -20,11 +20,38 @@ export async function scheduleSprintNotifications(sprint, client) {
 
   const startedAtMs = new Date(sprint.startedAt).getTime();
   const now = Date.now();
+  const startsInMs = startedAtMs - now;
   const midpointDelay = Math.max(0, startedAtMs + durationMs / 2 - now);
   const endDelay = Math.max(0, startedAtMs + durationMs - now);
 
   const targetChannel = getChannelFromIds(client, sprint.guildId, sprint.channelId, sprint.threadId);
   if (!targetChannel) return;
+
+  async function safeDisplayName(userId) {
+    try {
+      if (targetChannel.guild && targetChannel.guild.members) {
+        const m = await targetChannel.guild.members.fetch(userId);
+        return m?.displayName || m?.user?.username || userId;
+      }
+    } catch {}
+    return userId;
+  }
+
+  async function buildLeaderboardLines(participantRows) {
+    const scores = [];
+    for (const p of participantRows) {
+      const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+      const total = wcRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      scores.push({ userId: p.userId, total });
+    }
+    scores.sort((a, b) => (b.total || 0) - (a.total || 0));
+    const lines = [];
+    for (let i = 0; i < scores.length; i++) {
+      const name = await safeDisplayName(scores[i].userId);
+      lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+    }
+    return lines;
+  }
 
   // Midpoint notification (dedupe: only host for team; Set guard)
   const firedKeySet = scheduleSprintNotifications._midKeys || (scheduleSprintNotifications._midKeys = new Set());
@@ -38,8 +65,27 @@ export async function scheduleSprintNotifications(sprint, client) {
         if (!fresh || fresh.status !== 'processing') return;
         // For team sprints, only host posts midpoint to avoid duplicates
         if (fresh.type === 'team' && fresh.role !== 'host') return;
-        const embed = midpointEmbed(fresh.label);
-        await targetChannel.send({ embeds: [embed] });
+
+        const sprintIdentifier = formatSprintIdentifier({ type: fresh.type, groupId: fresh.groupId, label: fresh.label, startedAt: fresh.startedAt });
+        const endsAt = new Date(new Date(fresh.startedAt).getTime() + (fresh.durationMinutes || 0) * 60000);
+        const remainingMin = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 60000));
+
+        const participants = (fresh.type === 'team' && fresh.groupId)
+          ? await DeanSprints.findAll({ where: { guildId: fresh.guildId, groupId: fresh.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] })
+          : [fresh];
+
+        const progressLines = [];
+        for (const p of participants) {
+          const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+          const total = wcRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+          const name = await safeDisplayName(p.userId);
+          progressLines.push(`${name}: NET ${total || 0}`);
+        }
+
+        await targetChannel.send({
+          content: sprintCheckInWordsText({ sprintIdentifier, timeLeftMinutes: remainingMin, progressLines }),
+          allowedMentions: { parse: [] },
+        });
         await fresh.update({ midpointNotified: true });
       } catch (e) {
         console.warn('[dean] midpoint notify failed', (e && e.message) || e);
@@ -47,23 +93,115 @@ export async function scheduleSprintNotifications(sprint, client) {
     }, midpointDelay);
   }
 
+  // Optional pre-start reminder pings (team host only)
+  // Dedupe uses DB flags so rescheduling after restart won't re-ping.
+  const isTeamHostForReminders = sprint.type === 'team' && sprint.role === 'host' && sprint.groupId;
+  const preStartEnabled = Boolean(sprint.preStartPingsEnabled);
+  if (isTeamHostForReminders && preStartEnabled && startsInMs > 60000) {
+    async function sendPreStartPing(minutesRemaining) {
+      try {
+        const fresh = await DeanSprints.findByPk(sprint.id);
+        if (!fresh || fresh.status !== 'processing') return;
+
+        const freshStartedAtMs = new Date(fresh.startedAt).getTime();
+        const remainingMs = freshStartedAtMs - Date.now();
+        if (remainingMs <= 0) return;
+
+        let flagField = null;
+        if (minutesRemaining === 10) flagField = 'preStartPing10Sent';
+        if (minutesRemaining === 5) flagField = 'preStartPing5Sent';
+        if (minutesRemaining === 1) flagField = 'preStartPing1Sent';
+        if (!flagField) return;
+
+        const [updated] = await DeanSprints.update(
+          { [flagField]: true },
+          { where: { id: fresh.id, [flagField]: false } }
+        ).catch(() => [0]);
+        if (!updated) return;
+
+        const participants = await DeanSprints.findAll({ where: { guildId: fresh.guildId, groupId: fresh.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] });
+        const participantIds = participants.map(p => p.userId);
+        const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
+        const sprintIdentifier = formatSprintIdentifier({ type: fresh.type, groupId: fresh.groupId, label: fresh.label, startedAt: fresh.startedAt });
+
+        let reminderLine = `T-minus **${minutesRemaining}** minute${minutesRemaining === 1 ? '' : 's'}.`;
+        if (minutesRemaining === 10) reminderLine = 'Ten minutes. Finish your tea, find your doc.';
+        if (minutesRemaining === 5) reminderLine = 'Five minutes. Wrap it up and get in position.';
+        if (minutesRemaining === 1) reminderLine = 'One minute. Lock in.';
+
+        await targetChannel.send({
+          content: `${pingLine}\n${reminderLine}\nSprint: ${sprintIdentifier}`,
+          allowedMentions: { users: participantIds, parse: [] },
+        });
+      } catch (e) {
+        console.warn('[dean] pre-start ping failed', (e && e.message) || e);
+      }
+    }
+
+    const delay10 = Math.max(0, startedAtMs - (Date.now() + 10 * 60000));
+    const delay5 = Math.max(0, startedAtMs - (Date.now() + 5 * 60000));
+    const delay1 = Math.max(0, startedAtMs - (Date.now() + 1 * 60000));
+
+    if (startsInMs >= 10 * 60000) {
+      setTimeout(() => sendPreStartPing(10), delay10);
+    }
+    if (startsInMs >= 5 * 60000) {
+      setTimeout(() => sendPreStartPing(5), delay5);
+    }
+    setTimeout(() => sendPreStartPing(1), delay1);
+  }
+
   // End notification
   setTimeout(async () => {
     try {
       const fresh = await DeanSprints.findByPk(sprint.id);
       if (!fresh || fresh.status !== 'processing') return;
-      const embed = completeEmbed(fresh.type === 'team', fresh.label);
+
+      const sprintIdentifier = formatSprintIdentifier({ type: fresh.type, groupId: fresh.groupId, label: fresh.label, startedAt: fresh.startedAt });
+
       // Only host posts completion for team to avoid duplicates
       if (fresh.type === 'team' && fresh.role !== 'host') {
-        await fresh.update({ status: 'done', endNotified: true });
+        await fresh.update({ status: 'done', endNotified: true, endedAt: new Date() });
         return;
       }
-      await targetChannel.send({ embeds: [embed] });
+
+      const participants = (fresh.type === 'team' && fresh.groupId)
+        ? await DeanSprints.findAll({ where: { guildId: fresh.guildId, groupId: fresh.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] })
+        : [fresh];
+      const participantIds = participants.map(p => p.userId);
+      const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
+      const leaderboardLines = await buildLeaderboardLines(participants);
+
+      const endedAt = new Date();
+      const endMessage = await targetChannel.send({
+        content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: fresh.durationMinutes, leaderboardLines }),
+        allowedMentions: { users: participantIds, parse: [] },
+      });
+
       // Mark all team rows done if host, otherwise just the solo
       if (fresh.type === 'team' && fresh.groupId) {
-        await DeanSprints.update({ status: 'done', endNotified: true }, { where: { guildId: fresh.guildId, groupId: fresh.groupId, status: 'processing' } });
+        try {
+          await DeanSprints.update(
+            {
+              status: 'done',
+              endNotified: true,
+              endedAt,
+              endSummaryChannelId: targetChannel.id,
+              endSummaryMessageId: endMessage.id,
+            },
+            { where: { guildId: fresh.guildId, groupId: fresh.groupId } }
+          );
+        } catch (e) {
+          console.warn('[dean] failed to persist end summary refs (team scheduled):', (e && e.message) || e);
+          await DeanSprints.update({ status: 'done', endNotified: true }, { where: { guildId: fresh.guildId, groupId: fresh.groupId } });
+        }
       } else {
-        await fresh.update({ status: 'done', endNotified: true });
+        try {
+          await fresh.update({ status: 'done', endNotified: true, endedAt, endSummaryChannelId: targetChannel.id, endSummaryMessageId: endMessage.id });
+        } catch (e) {
+          console.warn('[dean] failed to persist end summary refs (solo scheduled):', (e && e.message) || e);
+          await fresh.update({ status: 'done', endNotified: true, endedAt });
+        }
       }
 
       // Fire hunt trigger for sprint completion (covers scheduler-driven finishes)
@@ -77,7 +215,8 @@ export async function scheduleSprintNotifications(sprint, client) {
         const summaryChannel = getChannelFromIds(client, fresh.guildId, settings.defaultSummaryChannelId);
         if (summaryChannel) {
           const sum = await buildSummaries(fresh);
-          const sumEmbed = summaryEmbed(`<#${fresh.threadId || fresh.channelId}>`, sum.label, sum.isTeam);
+          const summaryIdentifier = formatSprintIdentifier({ type: fresh.type, groupId: fresh.groupId, label: sum.label ?? fresh.label, startedAt: fresh.startedAt });
+          const sumEmbed = summaryEmbed(`<#${fresh.threadId || fresh.channelId}>`, summaryIdentifier, sum.isTeam);
           await summaryChannel.send({ embeds: [sumEmbed] });
           // Post per-member totals line-wise for readability
           const lines = sum.members.map(m => `• <@${m.userId}>: ${m.total} words${m.projectName ? ` (${m.projectName})` : ''}`);
@@ -138,15 +277,94 @@ export async function startSprintWatchdog(client) {
         const shouldNotify = s.type === 'solo' || isTeamHost;
         // Midpoint notifications are handled by scheduleSprintNotifications to avoid duplicates
         if (!s.endNotified && now >= endsAt) {
+          const endedAt = new Date();
+          let endSummaryChannelId = null;
+          let endSummaryMessageId = null;
+          let handledStatusUpdate = false;
           if (shouldNotify) {
-            await notify(client, s, { embeds: [completeEmbed()] });
+            try {
+              const channel = await client.channels.fetch(s.threadId || s.channelId).catch(() => null);
+              if (channel) {
+                const sprintIdentifier = formatSprintIdentifier({ type: s.type, groupId: s.groupId, label: s.label, startedAt: s.startedAt });
+                const participants = (s.type === 'team' && s.groupId)
+                  ? await DeanSprints.findAll({ where: { guildId: s.guildId, groupId: s.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] })
+                  : [s];
+                const participantIds = participants.map(p => p.userId);
+                const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
+
+                const scores = [];
+                for (const p of participants) {
+                  const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+                  const total = wcRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+                  scores.push({ userId: p.userId, total });
+                }
+                scores.sort((a, b) => (b.total || 0) - (a.total || 0));
+                const leaderboardLines = [];
+                for (let i = 0; i < scores.length; i++) {
+                  let name = scores[i].userId;
+                  try {
+                    if (channel.guild && channel.guild.members) {
+                      const m = await channel.guild.members.fetch(scores[i].userId);
+                      name = m?.displayName || m?.user?.username || scores[i].userId;
+                    }
+                  } catch {}
+                  leaderboardLines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+                }
+
+                const endMessage = await channel.send({
+                  content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines }),
+                  allowedMentions: { users: participantIds, parse: [] },
+                });
+
+                endSummaryChannelId = channel.id;
+                endSummaryMessageId = endMessage.id;
+              }
+            } catch (e) {
+              console.warn('[dean] watchdog end notify failed', (e && e.message) || e);
+            }
             // Also send to summary channel if configured
             const settings = await GuildSprintSettings.findOne({ where: { guildId: s.guildId } });
             if (settings && settings.defaultSummaryChannelId) {
               await notifySummary(client, s, settings.defaultSummaryChannelId);
             }
           }
-          await s.update({ endNotified: true, status: 'done' });
+
+          // Best-effort persist end refs for late logging edits
+          if (s.type === 'team' && s.groupId && isTeamHost) {
+            try {
+              await DeanSprints.update(
+                {
+                  endNotified: true,
+                  status: 'done',
+                  endedAt,
+                  ...(endSummaryChannelId ? { endSummaryChannelId } : {}),
+                  ...(endSummaryMessageId ? { endSummaryMessageId } : {}),
+                },
+                { where: { guildId: s.guildId, groupId: s.groupId } }
+              );
+              handledStatusUpdate = true;
+            } catch (e) {
+              console.warn('[dean] failed to persist end refs (team watchdog):', (e && e.message) || e);
+              try {
+                await DeanSprints.update(
+                  { endNotified: true, status: 'done' },
+                  { where: { guildId: s.guildId, groupId: s.groupId } }
+                );
+                handledStatusUpdate = true;
+              } catch {}
+            }
+          } else if (endSummaryChannelId && endSummaryMessageId) {
+            try {
+              await s.update({ endNotified: true, status: 'done', endedAt, endSummaryChannelId, endSummaryMessageId });
+              handledStatusUpdate = true;
+            } catch (e) {
+              console.warn('[dean] failed to persist end refs (solo watchdog):', (e && e.message) || e);
+            }
+          }
+
+          if (!handledStatusUpdate) {
+            await s.update({ endNotified: true, status: 'done', endedAt });
+          }
           // Fire hunt trigger for sprint completion in watchdog path
           try {
             const channel = await client.channels.fetch(s.threadId || s.channelId).catch(() => null);
@@ -170,7 +388,8 @@ export async function startSprintWatchdog(client) {
     const channel = await client.channels.fetch(summaryChannelId).catch(() => null);
     if (!channel) return;
     const sum = await buildSummaries(s);
-    const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, sum.label, sum.isTeam);
+    const summaryIdentifier = formatSprintIdentifier({ type: s.type, groupId: s.groupId, label: sum.label ?? s.label, startedAt: s.startedAt });
+    const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, summaryIdentifier, sum.isTeam);
     await channel.send({ embeds: [embed] });
     const lines = sum.members.map(m => `• <@${m.userId}>: ${m.total} words${m.projectName ? ` (${m.projectName})` : ''}`);
     if (lines.length) {

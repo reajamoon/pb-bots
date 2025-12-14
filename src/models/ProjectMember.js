@@ -12,7 +12,8 @@ export default (sequelize) => {
       allowNull: false,
     },
     userId: {
-      type: DataTypes.UUID,
+      // Discord user ID (string). Matches migration schema.
+      type: DataTypes.STRING,
       allowNull: false,
     },
     role: {

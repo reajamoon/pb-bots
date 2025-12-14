@@ -8,7 +8,8 @@ export default (sequelize) => {
       primaryKey: true,
     },
     ownerId: {
-      type: DataTypes.UUID,
+      // Discord user ID (string). Matches migration schema.
+      type: DataTypes.STRING,
       allowNull: false,
     },
     name: {

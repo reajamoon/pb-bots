@@ -8,7 +8,8 @@ export default (sequelize) => {
       primaryKey: true,
     },
     userId: {
-      type: DataTypes.UUID,
+      // Discord user ID (string). Matches migration schema.
+      type: DataTypes.STRING,
       allowNull: false,
     },
     projectId: {
@@ -16,7 +17,8 @@ export default (sequelize) => {
       allowNull: true,
     },
     sprintId: {
-      type: DataTypes.UUID,
+      // DeanSprints.id is INTEGER (auto-increment). Matches migration schema.
+      type: DataTypes.INTEGER,
       allowNull: true,
     },
     countStart: {
