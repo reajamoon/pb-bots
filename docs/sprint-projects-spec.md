@@ -547,7 +547,7 @@ For a project `P`, the displayed **included total** is based on which members ar
 Let `IncludedUsers(P)` be the set of users where `includeWordcountInProjectTotal = true` for this project.
 
 
-$$\ProjectNetIncluded(P) = \sum_{e \in E(P)} e.amount \;\;\text{where } e.userId \in IncludedUsers(P)$$
+$$ProjectNetIncluded(P) = \sum_{e \in E(P)} e.amount \;\;\text{where } e.userId \in IncludedUsers(P)$$
 
 
 Where $E(P)$ are entries with `projectId = P` and `type ∈ {WRITE, ADJUST}`.
@@ -561,7 +561,7 @@ The project view should also show **excluded contributions** so it’s visible w
 
 Let `ExcludedUsers(P)` be members of the project where `includeWordcountInProjectTotal = false`.
 
-$$\ProjectNetExcluded(P) = \sum_{e \in E(P)} e.amount \;\;\text{where } e.userId \in ExcludedUsers(P)$$
+$$ProjectNetExcluded(P) = \sum_{e \in E(P)} e.amount \;\;\text{where } e.userId \in ExcludedUsers(P)$$
 
 Display intent:
 - “Project total” uses `ProjectNetIncluded(P)`.
@@ -574,9 +574,9 @@ Let `SprintMinutes(P, U)` be the total minutes user `U` spent in sprints attribu
 
 Then:
 
-$$\ProjectTimeIncludedMinutes(P) = \sum SprintMinutes(P, U) \;\;\text{for } U \in IncludedUsersTime(P)$$
+$$ProjectTimeIncludedMinutes(P) = \sum SprintMinutes(P, U) \;\;\text{for } U \in IncludedUsersTime(P)$$
 
-$$\ProjectTimeExcludedMinutes(P) = \sum SprintMinutes(P, U) \;\;\text{for } U \in ExcludedUsersTime(P)$$
+$$ProjectTimeExcludedMinutes(P) = \sum SprintMinutes(P, U) \;\;\text{for } U \in ExcludedUsersTime(P)$$
 
 Where:
 - `IncludedUsersTime(P)` are members with `includeTimeInProjectTotal = true`
