@@ -547,7 +547,7 @@ For a project `P`, the displayed **included total** is based on which members ar
 Let `IncludedUsers(P)` be the set of users where `includeWordcountInProjectTotal = true` for this project.
 
 
-$$ProjectNetIncluded(P) = \sum_{e \in E(P)} e.amount \;\;\text{where } e.userId \in IncludedUsers(P)$$
+$$\ProjectNetIncluded(P) = \sum_{e \in E(P)} e.amount \;\;\text{where } e.userId \in IncludedUsers(P)$$
 
 
 Where $E(P)$ are entries with `projectId = P` and `type ∈ {WRITE, ADJUST}`.
