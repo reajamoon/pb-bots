@@ -97,10 +97,19 @@ export default async function onMessageCreate(message) {
 
     if (isDM && !relay) {
       // Create a new modmail thread
+      // Collect any attachments from the user's DM (images, files)
+      const dmAttachments = message.attachments && message.attachments.size
+        ? Array.from(message.attachments.values()).map(a => ({ attachment: a.url, name: a.name }))
+        : [];
+
+      const description = (message.content && message.content.trim().length > 0)
+        ? message.content
+        : (dmAttachments.length > 0 ? 'Attachment(s) included below.' : '');
+
       const baseEmbed = new EmbedBuilder()
         .setColor(0x3b88c3)
         .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
-        .setDescription(message.content)
+        .setDescription(description)
         .addFields(
           { name: 'Thread Commands', value: '`@ticket` • show ticket details\n`@relay <message>` • DM the user\n`@close` • close this ticket' }
         )
@@ -117,7 +126,7 @@ export default async function onMessageCreate(message) {
             name: threadName,
             autoArchiveDuration: 1440,
             reason: 'User-initiated modmail (DM)',
-            message: { embeds: [baseEmbed] }
+            message: { embeds: [baseEmbed], files: dmAttachments }
           });
           console.log('[cas.modmail] Forum thread created:', (thread && thread.id) || null);
           try {
@@ -129,12 +138,27 @@ export default async function onMessageCreate(message) {
         } else {
           const perms = channel.permissionsFor(client.user);
           if (!perms || (!perms.has(PermissionFlagsBits.CreatePublicThreads) && !perms.has(PermissionFlagsBits.CreatePrivateThreads))) {
-            base = await channel.send({ embeds: [baseEmbed] });
+            base = await channel.send({ embeds: [baseEmbed], files: dmAttachments });
             await message.reply("I can’t create threads in this channel. Please grant thread permissions or ping a mod.");
             console.warn('[cas.modmail] Missing thread permissions. Base message id:', base ? base.id : null);
             return;
           }
-          base = await channel.send({ embeds: [baseEmbed] });
+          // Attempt to include attachments; if it fails (e.g., size limits), fall back to links
+          try {
+            base = await channel.send({ embeds: [baseEmbed], files: dmAttachments });
+          } catch (sendErr) {
+            console.warn('[cas.modmail] Base message with files failed, falling back to links:', sendErr?.message);
+            const links = dmAttachments.length
+              ? `\n\nAttachments:\n` + dmAttachments.map(f => `• ${f.name || 'file'} — ${f.attachment}`).join('\n')
+              : '';
+            const fallbackEmbed = new EmbedBuilder()
+              .setColor(0x3b88c3)
+              .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
+              .setDescription((description || '') + links)
+              .setFooter({ text: `Opened by Cas • User ID: ${message.author.id}` })
+              .setTimestamp(new Date());
+            base = await channel.send({ embeds: [fallbackEmbed] });
+          }
           console.log('[cas.modmail] Base message sent. base.id:', base ? base.id : null);
           // On regular text channels, start a public thread by default
           try {
@@ -202,7 +226,22 @@ export default async function onMessageCreate(message) {
       // Post into existing Cas-owned thread
       const thread = await resolveRelayThread({ client, channel, relay });
       if (thread && typeof thread.isThread === 'function' && thread.isThread()) {
-        await thread.send({ content: `<@${message.author.id}>: ${message.content}` });
+        const dmAttachments = message.attachments && message.attachments.size
+          ? Array.from(message.attachments.values()).map(a => ({ attachment: a.url, name: a.name }))
+          : [];
+        const hasText = message.content && message.content.trim().length > 0;
+        const prefix = `<@${message.author.id}>`;
+        let contentText = hasText ? `${prefix}: ${message.content}` : (dmAttachments.length ? `${prefix} sent ${dmAttachments.length} attachment(s):` : `${prefix}:`);
+        try {
+          await thread.send({ content: contentText, files: dmAttachments });
+        } catch (sendErr) {
+          console.warn('[cas.modmail] Relaying DM with files failed, falling back to links:', sendErr?.message);
+          if (dmAttachments.length) {
+            const links = dmAttachments.map(f => `${f.name || 'file'} — ${f.attachment}`).join('\n');
+            contentText += `\n${links}`;
+          }
+          await thread.send({ content: contentText });
+        }
         await relay.update({ last_user_message_at: new Date() });
         await message.react('✅');
       } else {
@@ -211,7 +250,7 @@ export default async function onMessageCreate(message) {
         const resumeEmbed = new EmbedBuilder()
           .setColor(0x3b88c3)
           .setAuthor({ name: `Modmail — ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
-          .setDescription(message.content)
+          .setDescription((message.content && message.content.trim().length) ? message.content : 'Attachment(s) included below.')
           .addFields(
             { name: 'Thread Commands', value: '`@ticket` • show ticket details\n`@relay <message>` • DM the user\n`@close` • close this ticket' }
           )
@@ -278,10 +317,28 @@ export default async function onMessageCreate(message) {
       const parent = message.channel.parent;
       if (parent && parent.id === modmailChannelId) {
         // Only handle commands in threads owned by Cas
-        if (message.channel.ownerId !== message.client.user.id) {
+          if (message.channel.ownerId !== message.client.user.id) {
           return;
         }
         const content = (message.content || '').trim();
+        if (/^(@help|\/help)/i.test(content)) {
+          const guideUrl = 'https://github.com/reajamoon/pb-bots/blob/main/docs/modmail-guide.md';
+          const help = new EmbedBuilder()
+            .setColor(0x3b88c3)
+            .setTitle('Modmail Help')
+            .setURL(guideUrl)
+            .setDescription('Relay messages to the user and manage this ticket here.')
+            .addFields(
+              { name: 'Show Ticket', value: '`@ticket` or `/ticket`', inline: true },
+              { name: 'Relay to User', value: '`@relay <message>` (attachments allowed)', inline: true },
+              { name: 'Close Ticket', value: '`@close` or `/close`', inline: true },
+              { name: 'Guide', value: guideUrl, inline: false },
+              { name: 'Attachments', value: 'Cas forwards images/files both ways; if uploads fail, links are sent instead.', inline: false }
+            )
+            .setTimestamp(new Date());
+          await message.reply({ embeds: [help] });
+          return;
+        }
         if (/^(@ticket|\/ticket)/i.test(content)) {
           const relayEntry = await ModmailRelay.findOne({ where: { thread_id: message.channel.id } });
           if (!relayEntry) {
@@ -318,8 +375,10 @@ export default async function onMessageCreate(message) {
         }
         if (/^(@relay|\/relay)/i.test(content)) {
           const relayMsg = content.replace(/^(@cas\s+relay|@relay|\/relay)/i, '').trim();
-          if (!relayMsg) {
-            await message.reply('Add a message after `@relay` to DM the user.');
+          // Allow relaying attachments without text; only error if neither text nor attachments are present
+          const hasAttachments = message.attachments && message.attachments.size > 0;
+          if (!relayMsg && !hasAttachments) {
+            await message.reply('Add a message or attach an image/file after `@relay` to DM the user.');
             return;
           }
           // Find relay by this thread
@@ -367,16 +426,37 @@ export default async function onMessageCreate(message) {
           }
           try {
             const dmUser = await client.users.fetch(relayEntry.user_id);
-            const { EmbedBuilder } = await import('discord.js');
-            await dmUser.send({
-              embeds: [
-                new EmbedBuilder()
-                  .setColor(0x3b88c3)
-                  .setDescription(relayMsg)
-                  .setFooter({ text: 'Cas — Moderator relay' })
-                  .setTimestamp(new Date())
-              ]
-            });
+            const files = hasAttachments
+              ? Array.from(message.attachments.values()).map(a => ({ attachment: a.url, name: a.name }))
+              : [];
+            if (relayMsg) {
+              // Prefer an embed for text + include attachments
+              const { EmbedBuilder } = await import('discord.js');
+              try {
+                await dmUser.send({
+                  embeds: [
+                    new EmbedBuilder()
+                      .setColor(0x3b88c3)
+                      .setDescription(relayMsg)
+                      .setFooter({ text: 'Cas — Moderator relay' })
+                      .setTimestamp(new Date())
+                  ],
+                  files
+                });
+              } catch (sendErr) {
+                // Fallback to plain text with links if attachments rejected
+                const links = files.length ? ('\n\nAttachments:\n' + files.map(f => `• ${f.name || 'file'} — ${f.attachment}`).join('\n')) : '';
+                await dmUser.send({ content: relayMsg + links });
+              }
+            } else if (files.length) {
+              // Only attachments, no text
+              try {
+                await dmUser.send({ content: 'A moderator sent you attachment(s):', files });
+              } catch (sendErr) {
+                const links = files.map(f => `${f.name || 'file'} — ${f.attachment}`).join('\n');
+                await dmUser.send({ content: 'A moderator sent you attachment(s):\n' + links });
+              }
+            }
             await message.reply('I’ve delivered your message.');
             await ModmailRelay.update({ last_relayed_at: new Date() }, { where: { thread_id: message.channel.id } });
           } catch (err) {

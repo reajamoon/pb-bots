@@ -1,5 +1,14 @@
 # PB Community Changelog
 
+## 2025-12-16
+
+### Bug Fixes
+- Cas Modmail relay now correctly forwards images and other attachments in both directions (user → modmail thread and @relay → user DMs).
+- Allow `@relay` with only attachments (no text). Previously replied with “Add a message…”.
+- Added graceful fallbacks: when Discord rejects uploading large files, Cas sends the message with attachment links and guidance.
+- New DM thread open/resume embeds include a clear note when a message contains only attachments, preventing “empty” looking posts.
+ - `/modmail` slash command now supports up to 3 attachments when opening a new thread (also works with attachment-only submissions).
+
 ## 2025-11-13
 
 ### Tag schemas and rec search and embed sprucing
