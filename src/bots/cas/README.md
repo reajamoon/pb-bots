@@ -14,3 +14,7 @@ This folder contains all code specific to the Cas Discord bot.
 - Events: `src/bots/cas/events/*`
 
 Cas does not currently use the Sam-style modular interaction handler folders; most features are implemented directly in `commands/` and `events/`.
+
+## Modmail
+
+- See `docs/modmail-guide.md` for how DM relay, `/modmail`, and `@relay` work, including attachment handling and fallbacks.

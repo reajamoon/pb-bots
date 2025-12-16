@@ -287,6 +287,25 @@ async function notifyQueueSubscribers(client) {
             } catch (err) {
                 console.error('[Poller] Failed to send modmail notification or create thread for nOTP job:', err, `job id: ${job.id}, url: ${job.fic_url}`);
             }
+            // Update tracked placeholder (if any) to reflect manual review status
+            try {
+                const tracked = subscribers.find(s => s && s.channel_id && s.message_id);
+                if (tracked) {
+                    let trackedChannel = client.channels.cache.get(tracked.channel_id);
+                    if (!trackedChannel && client.channels && client.channels.fetch) {
+                        trackedChannel = await client.channels.fetch(tracked.channel_id).catch(() => null);
+                    }
+                    if (trackedChannel && trackedChannel.messages && trackedChannel.messages.fetch) {
+                        const msg = await trackedChannel.messages.fetch(tracked.message_id).catch(() => null);
+                        if (msg) {
+                            const content = `Flagged for manual review — ${job.fic_url ? `<${job.fic_url}>` : 'fic'}\nThis has been flagged for manual mod review and will be either re-queued shortly or a mod will be in touch for more information.`;
+                            await msg.edit({ content }).catch(() => null);
+                        }
+                    }
+                }
+            } catch (editErr) {
+                console.warn('[Poller] Failed to update placeholder for nOTP job:', editErr);
+            }
             // After notifying, clear subscribers to avoid duplicate mentions, but keep the job
             if (subscribers.length) {
                 await ParseQueueSubscriber.destroy({ where: { queue_id: job.id } });
@@ -300,6 +319,34 @@ async function notifyQueueSubscribers(client) {
             }
             // Clear single-flight guard
             nOTPInFlight.delete(job.id);
+        }
+
+        // Update placeholders for in-progress jobs (pending/processing)
+        const inProgressJobs = await ParseQueue.findAll({
+            where: { status: { [Op.in]: ['pending', 'processing'] } },
+            include: [{ model: ParseQueueSubscriber, as: 'subscribers' }]
+        });
+        for (const job of inProgressJobs) {
+            try {
+                const subscribers = await ParseQueueSubscriber.findAll({ where: { queue_id: job.id } });
+                const tracked = subscribers.find(s => s && s.channel_id && s.message_id);
+                if (tracked) {
+                    let trackedChannel = client.channels.cache.get(tracked.channel_id);
+                    if (!trackedChannel && client.channels && client.channels.fetch) {
+                        trackedChannel = await client.channels.fetch(tracked.channel_id).catch(() => null);
+                    }
+                    if (trackedChannel && trackedChannel.messages && trackedChannel.messages.fetch) {
+                        const msg = await trackedChannel.messages.fetch(tracked.message_id).catch(() => null);
+                        if (msg) {
+                            const statusWord = job.status === 'pending' ? 'Queued' : 'Processing';
+                            const content = `${statusWord} — ${job.fic_url ? `<${job.fic_url}>` : 'fic'}\nI’ll update when your fic is ready.`;
+                            await msg.edit({ content }).catch(() => null);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[Poller] Failed to update placeholder for in-progress job:', e, `job id: ${job.id}, url: ${job.fic_url}`);
+            }
         }
 
         // Notify for completed jobs
@@ -359,6 +406,26 @@ async function notifyQueueSubscribers(client) {
             // Notify subscribers via DM and then clean up the job
             try {
                 const subscribers = await ParseQueueSubscriber.findAll({ where: { queue_id: job.id } });
+                // Update any tracked placeholder to show failure
+                try {
+                    const tracked = subscribers.find(s => s && s.channel_id && s.message_id);
+                    if (tracked) {
+                        let trackedChannel = client.channels.cache.get(tracked.channel_id);
+                        if (!trackedChannel && client.channels && client.channels.fetch) {
+                            trackedChannel = await client.channels.fetch(tracked.channel_id).catch(() => null);
+                        }
+                        if (trackedChannel && trackedChannel.messages && trackedChannel.messages.fetch) {
+                            const msg = await trackedChannel.messages.fetch(tracked.message_id).catch(() => null);
+                            if (msg) {
+                                const errMsg = job.error_message || 'Unknown error';
+                                const content = `Failed — ${job.fic_url ? `<${job.fic_url}>` : 'fic'}\n${errMsg}`;
+                                await msg.edit({ content }).catch(() => null);
+                            }
+                        }
+                    }
+                } catch (editErr) {
+                    console.warn('[Poller] Failed to edit placeholder for error job:', editErr);
+                }
                 const errMsg = job.error_message || 'Unknown error';
                 for (const sub of subscribers) {
                     const user = await User.findOne({ where: { discordId: sub.user_id } });
@@ -366,7 +433,7 @@ async function notifyQueueSubscribers(client) {
                         const dmUser = await client.users.fetch(sub.user_id).catch(() => null);
                         if (dmUser) {
                             await dmUser.send({
-                                content: `Hey, quick heads up. Your fic job for <${job.fic_url}> hit an error and I had to drop it. (${errMsg})\n\nYou can try again, or tweak the URL if needed. To turn off these DMs, use \`/rec notifytag\`.`
+                                content: `Heads up — I couldn’t fetch that one: ${errMsg}.\nTry again or tweak the link: <${job.fic_url}>.\nYou can turn off these DMs with \`/rec notifytag\`.`
                             });
                         }
                     }
@@ -498,8 +565,8 @@ async function notifyQueueSubscribers(client) {
                 console.warn(`[Poller] Notification channel ${channelId} not found (after fetch); skipping notification for job id: ${job.id}, url: ${job.fic_url}`);
                 continue;
             }
-            // For instant_candidate jobs, do not @mention users, but still send embed
-            let contentMsg = `Your fic parsing job is done!` + (job.fic_url ? `\n<${job.fic_url}>` : '');
+            // For instant_candidate jobs, keep DMs concise.
+            let contentMsg = `All set — your fic is ready.` + (job.fic_url ? `\n<${job.fic_url}>` : '');
             // Always log when a done job is being processed for notification
             console.log(`[Poller] Processing done job: job id ${job.id}, url: ${job.fic_url}, subscribers: [${subscribers.map(s => s.user_id).join(', ')}]`);
             try {
@@ -514,8 +581,6 @@ async function notifyQueueSubscribers(client) {
                     contentMsg,
                     embedExists: !!embed
                 });
-
-                // Do not edit tracked subscriber messages; public posting is unconditional
 
                 // DM subscribers instead of @mentioning in the channel
                 for (const u of users.filter(u => u.queueNotifyTag !== false)) {
@@ -624,7 +689,29 @@ async function notifyQueueSubscribers(client) {
             }
 
             try {
-                let contentMsg = `Your series parsing job is done!\n` + (job.fic_url ? `\n<${job.fic_url}>` : '');
+                let contentMsg = `All set — your series is ready.` + (job.fic_url ? `\n<${job.fic_url}>` : '');
+
+                // First, try to edit a tracked message if one exists (prevents duplicates in fic-recs)
+                let editedTracked = false;
+                try {
+                    const tracked = subscribers.find(s => s && s.channel_id && s.message_id);
+                    if (tracked && embed) {
+                        let trackedChannel = client.channels.cache.get(tracked.channel_id);
+                        if (!trackedChannel && client.channels && client.channels.fetch) {
+                            trackedChannel = await client.channels.fetch(tracked.channel_id).catch(() => null);
+                        }
+                        if (trackedChannel && trackedChannel.messages && trackedChannel.messages.fetch) {
+                            const msg = await trackedChannel.messages.fetch(tracked.message_id).catch(() => null);
+                            if (msg) {
+                                await msg.edit({ embeds: [embed] }).catch(() => null);
+                                editedTracked = true;
+                            }
+                        }
+                    }
+                } catch (editErr) {
+                    console.warn('[Poller] Failed to edit tracked series message; will fall back to posting:', editErr);
+                }
+
                 // DM subscribers instead of @mentioning in the channel
                 for (const u of users.filter(u => u.queueNotifyTag !== false)) {
                     try {
@@ -704,7 +791,7 @@ export default function startPoller(client) {
                     const dmUser = await client.users.fetch(sub.user_id).catch(() => null);
                     if (dmUser) {
                         await dmUser.send({
-                            content: `Hey, just a heads up—your fic parsing job for <${job.fic_url}> got stuck in the queue and I had to drop it. Sometimes the stacks get a little weird, but you can always try again.\n\nIf you want to turn off these DMs, just use the \`/rec notifytag\` command. (And if you have questions, you know where to find me.)`
+                            content: `Heads up — your fic job for <${job.fic_url}> got stuck, so I dropped it.\nTry again anytime. You can turn off these DMs with \`/rec notifytag\`.`
                         });
                     }
                 }

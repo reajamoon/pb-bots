@@ -212,7 +212,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                     }
 
                     // Provide feedback and track message for poller edits
-                    const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
+                    const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll update when your fic is ready." });
                     await ParseQueueSubscriber.update(
                         { channel_id: msg.channelId, message_id: msg.id },
                         { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
@@ -304,45 +304,27 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                 const recChannelCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
                 const recChannelId = recChannelCfg && recChannelCfg.value ? recChannelCfg.value : null;
                 const inRecChannel = recChannelId && interaction.channelId === recChannelId;
-                if (inRecChannel && newNotesTrim) {
-                    // If recommendation exists and is fresh (<= 1 day), post embed now and confirm ephemerally
+                        if (inRecChannel) {
+                            // If recommendation exists and is fresh (<= 1 day), previously posted embed; now post placeholder and track for poller
                     const oneDayMs = 24 * 60 * 60 * 1000;
                     const lastUpdated = recommendation.updatedAt || recommendation.createdAt;
                     const ageMs = Date.now() - new Date(lastUpdated).getTime();
                     if (ageMs <= oneDayMs) {
-                        const recWithSeries = await fetchRecWithSeries(recommendation.id, true);
-                        if (process.env.REC_EMBED_DEBUG) {
-                            try {
-                                console.debug('[sam:updateHandler] Pre-embed rec audit', {
-                                    id: recWithSeries.id,
-                                    hasSeries: !!recWithSeries.series,
-                                    tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
-                                    tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
-                                    userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
-                                });
-                            } catch {}
-                        }
-                        const embed = createRecEmbed(recWithSeries, {
-                            preferredUserId: puppetUserId || interaction.user.id,
-                            overrideNotes: (typeof newNotesTrim === 'string' && newNotesTrim.length) ? newNotesTrim : undefined
-                        });
-                        try {
-                            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
-                            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-                            let targetChannel = null;
-                            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
-                            if (channelIdPref) {
-                                targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
-                            }
-                            if (!targetChannel) targetChannel = interaction.channel;
-                            if (targetChannel) {
-                                await targetChannel.send({ embeds: [embed] });
-                            }
-                        } catch (postErr) {
-                            console.warn('[rec update] Failed to post public embed (immediate fic-recs):', postErr);
-                        }
-                        try { await interaction.deleteReply(); } catch {}
-                        await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+                                let placeholder = null;
+                                try {
+                                    const content = `Queued — <${urlToUse}>\nI’ll update when your fic is ready.`;
+                                    placeholder = await interaction.channel.send({ content });
+                                } catch (postErr) {
+                                    console.warn('[rec update] Failed to post fic-recs placeholder (fresh rec):', postErr);
+                                }
+                                if (placeholder) {
+                                    await ParseQueueSubscriber.update(
+                                        { channel_id: placeholder.channelId, message_id: placeholder.id },
+                                        { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                                    );
+                                }
+                                try { await interaction.deleteReply(); } catch {}
+                                await interaction.followUp({ content: 'Got it — I’ll update when your fic is ready.', flags: MessageFlags.Ephemeral });
                         return;
                     }
                 }
@@ -440,28 +422,24 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                                     });
                                 } catch {}
                             }
-                            const embedNow = createRecEmbed(recWithSeries, {
-                                preferredUserId: puppetUserId || interaction.user.id,
-                                overrideNotes: (typeof newNotesTrim === 'string' && newNotesTrim.length) ? newNotesTrim : undefined
-                            });
-                            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
-                            const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-                            let targetChannel = null;
-                            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
-                            if (channelIdPref) {
-                                targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
+                            let placeholder = null;
+                            try {
+                                const content = `Processing — <${urlToUse}>\nI’ll update when your fic is ready.`;
+                                placeholder = await interaction.channel.send({ content });
+                            } catch (postErr) {
+                                console.warn('[rec update] Failed to post fic-recs placeholder (existing processing):', postErr);
                             }
-                            if (!targetChannel) targetChannel = interaction.channel;
-                            const postedMsg = await targetChannel.send({ embeds: [embedNow] });
-                            await ParseQueueSubscriber.update(
-                                { channel_id: postedMsg.channelId, message_id: postedMsg.id },
-                                { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
-                            );
+                            if (placeholder) {
+                                await ParseQueueSubscriber.update(
+                                    { channel_id: placeholder.channelId, message_id: placeholder.id },
+                                    { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                                );
+                            }
                             try { await interaction.deleteReply(); } catch {}
-                            await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
+                            await interaction.followUp({ content: 'Got it — I’ll update when your fic is ready.', flags: MessageFlags.Ephemeral });
                             return;
                         } else {
-                            const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
+                            const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll update when your fic is ready." });
                             await ParseQueueSubscriber.update(
                                 { channel_id: msg.channelId, message_id: msg.id },
                                 { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
@@ -499,7 +477,7 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                     // If already pending/processing, just subscribe and inform the user
                     if (queueEntry.status === 'pending' || queueEntry.status === 'processing') {
                         const msg = await interaction.editReply({
-                            content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready."
+                            content: "Refreshing that fic’s metadata. I’ll update when your fic is ready."
                         });
                         try {
                             await ParseQueueSubscriber.update(
@@ -592,10 +570,10 @@ For raw refreshes without a note, hop over to the team-free-bots channel.`;
                         await interaction.followUp({ content: 'Filed it in the library.', flags: MessageFlags.Ephemeral });
                     } else {
                         // We already have a tracked message; keep the reply minimal and let the poller edit
-                        await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll update the existing embed when it’s ready." });
+                        await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll update when your fic is ready." });
                     }
                 } else {
-                    const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll post the updated embed when it’s ready." });
+                    const msg = await interaction.editReply({ content: "Refreshing that fic’s metadata. I’ll update when your fic is ready." });
                     await ParseQueueSubscriber.update(
                         { channel_id: msg.channelId, message_id: msg.id },
                         { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }

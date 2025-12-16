@@ -87,7 +87,7 @@ export default async function handlePull(interaction) {
         posted = true;
       } else {
         console.warn('[rec pull] Failed to post embed:', postErr);
-        await interaction.editReply({ content: 'Failed to post the embed. Please check channel permissions and try again.' });
+        await interaction.editReply({ content: 'Failed to post. Check channel permissions and try again.' });
         return;
       }
     }
@@ -99,7 +99,7 @@ export default async function handlePull(interaction) {
   } catch (error) {
     console.error('[rec pull] Error:', error);
     try {
-      await interaction.editReply({ content: error.message || 'There was an error posting the embed.' });
+      await interaction.editReply({ content: error.message || 'There was an error posting.' });
     } catch {}
   }
 }

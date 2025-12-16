@@ -91,6 +91,7 @@ See `docs/deployment.md` for operational details.
 - `docs/sprint-and-projects-guide.md`
 - `docs/security.md`
 - `docs/extending.md`
+- `docs/modmail-guide.md`
 - `CHANGELOG.md`
 
 ## Bot Readmes
