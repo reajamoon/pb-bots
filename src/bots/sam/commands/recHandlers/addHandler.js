@@ -215,7 +215,32 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           });
           // Ensure series jobs are marked for batch processing
           try { await queueEntry.update({ batch_type: 'series' }); } catch {}
-          // Post a clean embed now and record it for poller to edit later
+          // In fic-recs, allow posting a placeholder and track it for poller edits
+          const { Config } = await import('../../../../models/index.js');
+          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+          const inRecChannel = recCfg && recCfg.value && interaction.channelId === recCfg.value;
+          if (inRecChannel) {
+            let placeholder = null;
+            try {
+              const content = `Queued — <${url}>\nI’ll update when your fic is ready.`;
+              placeholder = await interaction.channel.send({ content });
+            } catch (postErr) {
+              console.warn('[rec add] Failed to post fic-recs placeholder (series refresh):', postErr);
+            }
+            if (placeholder) {
+              try {
+                await ParseQueueSubscriber.update(
+                  { channel_id: placeholder.channelId, message_id: placeholder.id },
+                  { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                );
+              } catch (e) {
+                console.warn('[rec add] Failed to record fic-recs placeholder (series refresh):', e);
+              }
+            }
+            try { await interaction.deleteReply(); } catch {}
+            return;
+          }
+          // Outside fic-recs, keep current behavior of posting a clean embed now
           const { fetchSeriesWithUserMetadata } = await import('../../../../models/index.js');
           const seriesWithMeta = await fetchSeriesWithUserMetadata(existingSeries.id, true);
           const embedNow = createSeriesEmbed(seriesWithMeta, {
@@ -225,11 +250,9 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           });
           let postedMsg = null;
           try {
-            const { Config } = await import('../../../../models/index.js');
-            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
             let targetChannel = null;
-            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+            const channelIdPref = queueCfg && queueCfg.value ? queueCfg.value : null;
             if (channelIdPref) {
               targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
             }
@@ -238,27 +261,11 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
               postedMsg = await targetChannel.send({ embeds: [embedNow] });
             }
           } catch (postErr) {
-            if (postErr && (postErr.code === 50013 || postErr.status === 403)) {
-              console.info('[rec add] No permission to post in target channel; delivering embed via reply.');
-            } else {
-              console.warn('[rec add] Failed to post immediate series embed before refresh:', postErr);
-            }
+            console.warn('[rec add] Failed to post immediate series embed before refresh (non-recs):', postErr);
           }
-          if (postedMsg) {
-            try {
-              await ParseQueueSubscriber.update(
-                { channel_id: postedMsg.channelId, message_id: postedMsg.id },
-                { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
-              );
-            } catch (e) {
-              console.warn('[rec add] Failed to record posted embed for series refresh:', e);
-            }
-          }
-          // Keep fic-recs clean: if public embed posted, remove deferred reply
           if (postedMsg) {
             try { await interaction.deleteReply(); } catch {}
           } else {
-            // Fallback: deliver embed in the deferred reply if posting failed
             await interaction.editReply({ embeds: [embedNow] });
           }
           return;
@@ -271,13 +278,35 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             overrideNotes: notes || '',
             includeAdditionalTags: additionalTags || []
           });
+          const { Config } = await import('../../../../models/index.js');
+          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
+          const inRecChannel = recCfg && recCfg.value && interaction.channelId === recCfg.value;
+          if (inRecChannel) {
+            let placeholder = null;
+            try {
+              const content = `Queued — <${url}>\nI’ll update when your fic is ready.`;
+              placeholder = await interaction.channel.send({ content });
+            } catch (postErr) {
+              console.warn('[rec add] Failed to post fic-recs placeholder (series no-refresh):', postErr);
+            }
+            if (placeholder) {
+              try {
+                await ParseQueueSubscriber.update(
+                  { channel_id: placeholder.channelId, message_id: placeholder.id },
+                  { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+                );
+              } catch (e) {
+                console.warn('[rec add] Failed to record fic-recs placeholder (series no-refresh):', e);
+              }
+            }
+            try { await interaction.deleteReply(); } catch {}
+            return;
+          }
           let postedMsg = null;
           try {
-            const { Config } = await import('../../../../models/index.js');
-            const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
             const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
             let targetChannel = null;
-            const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
+            const channelIdPref = queueCfg && queueCfg.value ? queueCfg.value : null;
             if (channelIdPref) {
               targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
             }
@@ -286,11 +315,7 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
               postedMsg = await targetChannel.send({ embeds: [embed] });
             }
           } catch (postErr) {
-            if (postErr && (postErr.code === 50013 || postErr.status === 403)) {
-              console.info('[rec add] No permission to post in target channel; delivering embed via reply.');
-            } else {
-              console.warn('[rec add] Failed to post public series embed:', postErr);
-            }
+            console.warn('[rec add] Failed to post public series embed (non-recs):', postErr);
           }
           if (postedMsg) {
             try { await interaction.deleteReply(); } catch {}
@@ -303,9 +328,26 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
       // Add the series to the processing queue (never fetch AO3 directly)
       const { queueEntry, status, message } = await createOrJoinQueueEntry(url, interaction.user.id);
       if (status === 'processing') {
-        return await interaction.editReply({
-          content: message || updateMessages.alreadyProcessing
-        });
+        // Post or update a placeholder for processing status (series)
+        let placeholder = null;
+        try {
+          const content = `Processing — <${url}>\nI’ll update when your fic is ready.`;
+          placeholder = await interaction.channel.send({ content });
+        } catch (postErr) {
+          console.warn('[rec add] Failed to post processing placeholder (series):', postErr);
+        }
+        if (placeholder) {
+          try {
+            await ParseQueueSubscriber.update(
+              { channel_id: placeholder.channelId, message_id: placeholder.id },
+              { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+            );
+          } catch (e) {
+            console.warn('[rec add] Failed to record processing placeholder (series):', e);
+          }
+        }
+        try { await interaction.deleteReply(); } catch {}
+        return;
       } else if (status === 'done' && queueEntry.result) {
         // Series was already processed, UserFicMetadata already saved above
         await interaction.editReply({
@@ -328,6 +370,26 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
         }
         // Mark as series batch job so Jack returns series-done
         try { await queueEntry.update({ batch_type: 'series' }); } catch {}
+        // Post a placeholder message showing status and track it for poller edits
+        let placeholder = null;
+        try {
+          const content = `Queued — <${url}>\nI’ll update when your fic is ready.`;
+          placeholder = await interaction.channel.send({ content });
+        } catch (postErr) {
+          console.warn('[rec add] Failed to post placeholder for series job:', postErr);
+        }
+        if (placeholder) {
+          try {
+            await ParseQueueSubscriber.update(
+              { channel_id: placeholder.channelId, message_id: placeholder.id },
+              { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+            );
+          } catch (e) {
+            console.warn('[rec add] Failed to record placeholder for series job:', e);
+          }
+        }
+        try { await interaction.deleteReply(); } catch {}
+        return;
         try {
           const { Config } = await import('../../../../models/index.js');
           const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
@@ -382,60 +444,8 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
           notes: notes || '',
           additional_tags: additionalTagsString || null
         });
-        // Post a clean embed now and record it for poller to edit later
-        const recWithSeries = await fetchRecWithSeries(existingRec.id, true);
-        if (process.env.REC_EMBED_DEBUG) {
-          try {
-            console.debug('[sam:addHandler] Pre-embed rec audit', {
-              id: recWithSeries.id,
-              hasSeries: !!recWithSeries.series,
-              tagsType: Array.isArray(recWithSeries.tags) ? 'array' : typeof recWithSeries.tags,
-              tagsLen: Array.isArray(recWithSeries.tags) ? recWithSeries.tags.length : (typeof recWithSeries.tags === 'string' ? recWithSeries.tags.length : 0),
-              userMetaCount: Array.isArray(recWithSeries.userMetadata) ? recWithSeries.userMetadata.length : 0
-            });
-          } catch {}
-        }
-        const embedNow = createRecEmbed(recWithSeries, {
-          overrideNotes: notes || '',
-          preferredUserId: interaction.user.id,
-          includeAdditionalTags: additionalTags || []
-        });
-        let postedMsg = null;
-        try {
-          const { Config } = await import('../../../../models/index.js');
-          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
-          const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-          let targetChannel = null;
-          const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
-          if (channelIdPref) {
-            targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
-          }
-          if (!targetChannel) targetChannel = interaction.channel;
-          if (targetChannel) {
-            postedMsg = await targetChannel.send({ embeds: [embedNow] });
-          }
-        } catch (postErr) {
-          if (postErr && (postErr.code === 50013 || postErr.status === 403)) {
-            console.info('[rec add] No permission to post in target channel; delivering embed via reply.');
-          } else {
-            console.warn('[rec add] Failed to post immediate rec embed before refresh:', postErr);
-          }
-        }
-        if (postedMsg) {
-          try {
-            await ParseQueueSubscriber.update(
-              { channel_id: postedMsg.channelId, message_id: postedMsg.id },
-              { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
-            );
-          } catch (e) {
-            console.warn('[rec add] Failed to record posted embed for fic refresh:', e);
-          }
-        }
-        if (postedMsg) {
-          try { await interaction.deleteReply(); } catch {}
-        } else {
-          await interaction.editReply({ embeds: [embedNow] });
-        }
+        // Final-only behavior: do not post immediate embeds; rely on poller
+        await interaction.editReply({ content: 'Got it — I’ll update when your fic is ready.' });
         return;
       } else {
         // No refresh needed; send a single embed now with the user’s note override
@@ -451,37 +461,8 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
             });
           } catch {}
         }
-        const embed = createRecEmbed(recWithSeries, {
-          overrideNotes: notes || '',
-          preferredUserId: interaction.user.id,
-          includeAdditionalTags: additionalTags || []
-        });
-        let postedMsg = null;
-        try {
-          const { Config } = await import('../../../../models/index.js');
-          const recCfg = await Config.findOne({ where: { key: 'fic_rec_channel' } });
-          const queueCfg = await Config.findOne({ where: { key: 'fic_queue_channel' } });
-          let targetChannel = null;
-          const channelIdPref = recCfg && recCfg.value ? recCfg.value : (queueCfg && queueCfg.value ? queueCfg.value : null);
-          if (channelIdPref) {
-            targetChannel = interaction.client.channels.cache.get(channelIdPref) || await interaction.client.channels.fetch(channelIdPref).catch(() => null);
-          }
-          if (!targetChannel) targetChannel = interaction.channel;
-          if (targetChannel) {
-            postedMsg = await targetChannel.send({ embeds: [embed] });
-          }
-        } catch (postErr) {
-          if (postErr && (postErr.code === 50013 || postErr.status === 403)) {
-            console.info('[rec add] No permission to post in target channel; delivering embed via reply.');
-          } else {
-            console.warn('[rec add] Failed to post public rec embed:', postErr);
-          }
-        }
-        if (postedMsg) {
-          try { await interaction.deleteReply(); } catch {}
-        } else {
-          await interaction.editReply({ embeds: [embed] });
-        }
+        // Final-only behavior: do not post immediate embeds; rely on poller
+        await interaction.editReply({ content: 'I’ll update when your fic is ready.' });
         return;
       }
     }
@@ -511,9 +492,26 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
     // Step 2: Queue URL only (no user metadata in payload)
     const { queueEntry, status, message } = await createOrJoinQueueEntry(url, interaction.user.id);
     if (status === 'processing') {
-      return await interaction.editReply({
-        content: message || updateMessages.alreadyProcessing
-      });
+      // Post or update a placeholder for processing status (work)
+      let placeholder = null;
+      try {
+        const content = `Processing — <${url}>\nI’ll update when your fic is ready.`;
+        placeholder = await interaction.channel.send({ content });
+      } catch (postErr) {
+        console.warn('[rec add] Failed to post processing placeholder (work):', postErr);
+      }
+      if (placeholder) {
+        try {
+          await ParseQueueSubscriber.update(
+            { channel_id: placeholder.channelId, message_id: placeholder.id },
+            { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+          );
+        } catch (e) {
+          console.warn('[rec add] Failed to record processing placeholder (work):', e);
+        }
+      }
+      try { await interaction.deleteReply(); } catch {}
+      return;
     } else if (status === 'done' && queueEntry.result) {
       // Return cached result: fetch Recommendation and build embed directly (no AO3 access)
       const rec = await Recommendation.findOne({ where: { url } });
@@ -630,8 +628,27 @@ Tell us what you love: squee, gush, nerd out. Share the good stuff readers look 
         });
       }
       await interaction.editReply({
-        content: updateMessages.addedToQueue
+        content: 'Got it — I’ll update when your fic is ready.'
       });
+      // Post a placeholder message showing status and track it for poller edits (work)
+      let placeholder = null;
+      try {
+        const content = `Queued — <${url}>\nI’ll update when your fic is ready.`;
+        placeholder = await interaction.channel.send({ content });
+      } catch (postErr) {
+        console.warn('[rec add] Failed to post placeholder (work created):', postErr);
+      }
+      if (placeholder) {
+        try {
+          await ParseQueueSubscriber.update(
+            { channel_id: placeholder.channelId, message_id: placeholder.id },
+            { where: { queue_id: queueEntry.id, user_id: interaction.user.id } }
+          );
+        } catch (e) {
+          console.warn('[rec add] Failed to record placeholder (work created):', e);
+        }
+      }
+      try { await interaction.deleteReply(); } catch {}
       try {
         const { fireTrigger } = await import('../../../../shared/hunts/triggerEngine.js');
         const makeSamAnnouncer = (await import('../../utils/huntsAnnouncer.js')).default;
