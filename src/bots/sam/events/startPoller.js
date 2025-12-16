@@ -530,11 +530,33 @@ async function notifyQueueSubscribers(client) {
                     }
                 }
 
-                // Always post publicly in the chosen channel for DONE jobs
-                if (embed) {
-                    await channel.send({ embeds: [embed] });
-                } else {
-                    console.warn(`[Poller] No embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                // Prefer editing a tracked placeholder to prevent duplicates
+                let editedTracked = false;
+                try {
+                    const tracked = subscribers.find(s => s && s.channel_id && s.message_id);
+                    if (tracked && embed) {
+                        let trackedChannel = client.channels.cache.get(tracked.channel_id);
+                        if (!trackedChannel && client.channels && client.channels.fetch) {
+                            trackedChannel = await client.channels.fetch(tracked.channel_id).catch(() => null);
+                        }
+                        if (trackedChannel && trackedChannel.messages && trackedChannel.messages.fetch) {
+                            const msg = await trackedChannel.messages.fetch(tracked.message_id).catch(() => null);
+                            if (msg) {
+                                await msg.edit({ content: '', embeds: [embed] }).catch(() => null);
+                                editedTracked = true;
+                            }
+                        }
+                    }
+                } catch (editErr) {
+                    console.warn('[Poller] Failed to edit tracked message; will fall back to posting:', editErr);
+                }
+                // If no tracked message, post publicly in the chosen channel
+                if (!editedTracked) {
+                    if (embed) {
+                        await channel.send({ embeds: [embed] });
+                    } else {
+                        console.warn(`[Poller] No embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                    }
                 }
             } catch (err) {
                 console.error('[Poller] Failed to send fic queue notification:', err, `job id: ${job.id}, url: ${job.fic_url}`);
@@ -618,12 +640,33 @@ async function notifyQueueSubscribers(client) {
                 
                 console.log(`[Poller] Processing series-done job: job id ${job.id}, url: ${job.fic_url}, subscribers: [${subscribers.map(s => s.user_id).join(', ')}]`);
                 
-                // Do not edit tracked subscriber messages for series jobs; public posting is unconditional
-                // Always post publicly in the chosen channel for SERIES-DONE jobs
-                if (embed) {
-                    await channel.send({ embeds: [embed] });
-                } else {
-                    console.warn(`[Poller] No series embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                // Prefer editing a tracked placeholder for series jobs as well
+                let editedTrackedSeries = false;
+                try {
+                    const tracked = subscribers.find(s => s && s.channel_id && s.message_id);
+                    if (tracked && embed) {
+                        let trackedChannel = client.channels.cache.get(tracked.channel_id);
+                        if (!trackedChannel && client.channels && client.channels.fetch) {
+                            trackedChannel = await client.channels.fetch(tracked.channel_id).catch(() => null);
+                        }
+                        if (trackedChannel && trackedChannel.messages && trackedChannel.messages.fetch) {
+                            const msg = await trackedChannel.messages.fetch(tracked.message_id).catch(() => null);
+                            if (msg) {
+                                await msg.edit({ content: '', embeds: [embed] }).catch(() => null);
+                                editedTrackedSeries = true;
+                            }
+                        }
+                    }
+                } catch (editErr) {
+                    console.warn('[Poller] Failed to edit tracked series message; will fall back to posting:', editErr);
+                }
+                // If editing failed or no tracked message, post publicly
+                if (!editedTrackedSeries) {
+                    if (embed) {
+                        await channel.send({ embeds: [embed] });
+                    } else {
+                        console.warn(`[Poller] No series embed built for job id: ${job.id}, url: ${job.fic_url}`);
+                    }
                 }
             } catch (err) {
                 console.error('[Poller] Failed to send series queue notification:', err, `job id: ${job.id}, url: ${job.fic_url}`);
