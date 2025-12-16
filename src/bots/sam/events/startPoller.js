@@ -691,27 +691,6 @@ async function notifyQueueSubscribers(client) {
             try {
                 let contentMsg = `All set — your series is ready.` + (job.fic_url ? `\n<${job.fic_url}>` : '');
 
-                // First, try to edit a tracked message if one exists (prevents duplicates in fic-recs)
-                let editedTracked = false;
-                try {
-                    const tracked = subscribers.find(s => s && s.channel_id && s.message_id);
-                    if (tracked && embed) {
-                        let trackedChannel = client.channels.cache.get(tracked.channel_id);
-                        if (!trackedChannel && client.channels && client.channels.fetch) {
-                            trackedChannel = await client.channels.fetch(tracked.channel_id).catch(() => null);
-                        }
-                        if (trackedChannel && trackedChannel.messages && trackedChannel.messages.fetch) {
-                            const msg = await trackedChannel.messages.fetch(tracked.message_id).catch(() => null);
-                            if (msg) {
-                                await msg.edit({ embeds: [embed] }).catch(() => null);
-                                editedTracked = true;
-                            }
-                        }
-                    }
-                } catch (editErr) {
-                    console.warn('[Poller] Failed to edit tracked series message; will fall back to posting:', editErr);
-                }
-
                 // DM subscribers instead of @mentioning in the channel
                 for (const u of users.filter(u => u.queueNotifyTag !== false)) {
                     try {
