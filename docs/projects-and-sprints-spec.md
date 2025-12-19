@@ -61,6 +61,12 @@ Late logging messaging:
 - If the end summary includes a leaderboard/placements, late logging within the allowed window may change placements; the edited end summary must reflect the recalculated ranking.
 - If editing is not possible (missing message reference/perms), do not post a new message automatically; totals remain correct in history/views.
 
+Deferred UX (post-refactor): optional chat logging
+- Some members strongly prefer typing in chat over commands.
+- We may add an opt-in message parsing mode for wordcount logging (examples: `+200`, `-50`, `set 12345`, `wc +200`).
+- Requirements if implemented: strict patterns only, opt-in by default, only active/recently-ended sprint targets, confirmation response, and never ping/mention from parsed messages.
+- Tracking TODO: see `docs/long-term-todo.md`.
+
 Sprint end ping rule:
 - The sprint end message is the only sprint-related message allowed to ping users.
 - At sprint end, ping all participants in that sprint (solo: the sprinter; team: all participants).
@@ -441,8 +447,7 @@ Defaults:
 - all other roles: `includeWordcountInProjectTotal = false`
 
 Default suggestion for time totals:
-- `co-writer`: `includeTimeInProjectTotal = true`
-- all other roles: `includeTimeInProjectTotal = false`
+- all roles: `includeTimeInProjectTotal = true`
 
 Role change behavior:
 - If a buddy’s project role is changed, auto-set inclusion toggles to the defaults for the new role only for metrics that the project actually uses.

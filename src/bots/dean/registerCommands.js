@@ -2,6 +2,7 @@ import { REST, Routes } from 'discord.js';
 import ping from './commands/ping.js';
 import * as intro from './commands/intro.js';
 import * as sprint from './commands/sprint.js';
+import * as wc from './commands/wc.js';
 
 export default async function registerDeanCommands(client) {
   const appId = (process.env.DEAN_CLIENT_ID || '').trim();
@@ -13,8 +14,9 @@ export default async function registerDeanCommands(client) {
   client.commands.set(ping.data.name, ping);
   client.commands.set(intro.data.name, intro);
   client.commands.set(sprint.data.name, sprint);
+  client.commands.set(wc.data.name, wc);
 
-  const commands = [ping.data.toJSON(), intro.data.toJSON(), sprint.data.toJSON()];
+  const commands = [ping.data.toJSON(), intro.data.toJSON(), sprint.data.toJSON(), wc.data.toJSON()];
   const rest = new REST({ version: '10' }).setToken(token);
   try {
     const result = await rest.put(Routes.applicationCommands(appId), { body: commands });

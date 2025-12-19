@@ -4,6 +4,7 @@ import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, 
 import { Op } from 'sequelize';
 import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintLeaveText, sprintStatusWordsText, sprintEndedWordsText } from '../text/sprintText.js';
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
+import { handleSprintWc } from '../utils/handleSprintWc.js';
 
 export const data = new SlashCommandBuilder()
   .setName('sprint')
@@ -43,6 +44,10 @@ export const data = new SlashCommandBuilder()
 data.addSubcommandGroup(group => group
   .setName('wc')
   .setDescription('Manage wordcounts during sprints')
+  .addSubcommand(sub => sub
+    .setName('baseline')
+    .setDescription('Set your starting baseline (absolute total) for this sprint')
+    .addIntegerOption(opt => opt.setName('count').setDescription('Your starting absolute total').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('set')
     .setDescription('Set your current wordcount')
@@ -122,6 +127,11 @@ export async function execute(interaction) {
     }
 
   const sub = interaction.options.getSubcommand();
+
+  function baselineNudgeText() {
+    return "Quick heads up: if you're using absolute totals, set a baseline with `/sprint wc baseline count:YOUR_START` so `/sprint wc set` doesn't count your whole draft as sprint words.";
+  }
+
   if (sub === 'start') {
     const minutes = interaction.options.getInteger('minutes');
     const startInRaw = interaction.options.getInteger('start_in');
@@ -157,6 +167,7 @@ export async function execute(interaction) {
         allowedMentions: { parse: [] },
       });
     }
+    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
     await scheduleSprintNotifications(sprint, interaction.client);
   } else if (sub === 'host') {
     const minutes = interaction.options.getInteger('minutes');
@@ -195,6 +206,7 @@ export async function execute(interaction) {
         allowedMentions: { parse: [] },
       });
     }
+    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
     await scheduleSprintNotifications(hostRow, interaction.client);
   } else if (sub === 'join') {
     const codeRaw = interaction.options.getString('code');
@@ -237,6 +249,7 @@ export async function execute(interaction) {
     }
     const sprintIdentifier = formatSprintIdentifier({ type: host.type, groupId: host.groupId, label: host.label, startedAt: host.startedAt });
     await interaction.editReply({ content: sprintJoinText({ sprintIdentifier, durationMinutes: host.durationMinutes }), allowedMentions: { parse: [] } });
+    await interaction.followUp({ content: baselineNudgeText(), flags: MessageFlags.Ephemeral });
   } else if (sub === 'end') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
@@ -520,200 +533,5 @@ export async function execute(interaction) {
         const content = sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines });
 
         await msg.edit({ content, allowedMentions: { parse: [] } });
-      } catch (e) {
-        console.warn('[dean] late-log end summary edit failed:', e?.message || e);
+        return handleSprintWc(interaction, { guildId });
       }
-    }
-
-    const resolved = await resolveWcTarget();
-    if (resolved.error) {
-      return interaction.editReply({ content: resolved.error });
-    }
-    const target = resolved.target;
-
-    const subName = interaction.options.getSubcommand();
-    if (subName === 'set') {
-      const count = interaction.options.getInteger('count');
-      if (count < 0) {
-        await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/sprint wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      // Find last wordcount for this sprint/user
-      const last = await Wordcount.findOne({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
-      // Fallback to sprint's tracked end if no row found to avoid zero-based spikes
-      const prev = last && typeof last.countEnd === 'number' ? last.countEnd : (typeof target.wordcountEnd === 'number' ? target.wordcountEnd : 0);
-      const delta = count - prev;
-      await target.update({ wordcountEnd: count });
-      await Wordcount.create({
-        userId: discordId,
-        projectId: target.projectId || null,
-        sprintId: target.id,
-        countStart: prev,
-        countEnd: count,
-        delta,
-        recordedAt: new Date(),
-      });
-      // Sprint stats
-      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      const updates = allRows.length;
-      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-      // Daily stats
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      // Feedback
-      const sinceLabel = last ? 'since last update' : 'since sprint start';
-      let msg = `Locked in at **${count}**.`;
-      msg += `\nWords gained ${sinceLabel}: **${delta >= 0 ? '+' : ''}${delta}**`;
-      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-      msg += `\nTotal gained today: **${dayTotal}**`;
-      msg += `\nUpdates this sprint: **${updates}**`;
-      msg += `\nBest single update this sprint: **${maxGain}**`;
-      // Hunt: check 5k single-sprint total
-      try {
-        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
-        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
-        const announce = makeDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
-      } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
-
-      await maybeEditEndSummary(target);
-      return interaction.editReply({ content: msg });
-    } else if (subName === 'add') {
-      const words = interaction.options.getInteger('new-words');
-      if (words <= 0) {
-        await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/sprint wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const prev = target.wordcountEnd || 0;
-      const next = prev + words;
-      await target.update({ wordcountEnd: next });
-      await Wordcount.create({
-        userId: discordId,
-        projectId: target.projectId || null,
-        sprintId: target.id,
-        countStart: prev,
-        countEnd: next,
-        delta: words,
-        recordedAt: new Date(),
-      });
-      // Sprint stats
-      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      const updates = allRows.length;
-      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-      // Daily stats
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      // Feedback
-      let msg = `Nice. **+${words}**. Sitting at **${next}**.`;
-      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-      msg += `\nTotal gained today: **${dayTotal}**`;
-      msg += `\nUpdates this sprint: **${updates}**`;
-      msg += `\nBest single update this sprint: **${maxGain}**`;
-      // Hunt: check 5k single-sprint total
-      try {
-        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
-        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
-        const announce = makeDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
-      } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
-
-      await maybeEditEndSummary(target);
-      return interaction.editReply({ content: msg });
-    } else if (subName === 'show') {
-      const wc = target.wordcountEnd ?? 0;
-      // Sprint stats
-      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      const updates = allRows.length;
-      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-      const first = allRows.length ? allRows[0].countEnd ?? allRows[0].countStart ?? 0 : 0;
-      // Daily stats
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      let msg = `Current wordcount: **${wc}**`;
-      msg += `\nStarted at: **${first}**`;
-      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-      msg += `\nTotal gained today: **${dayTotal}**`;
-      msg += `\nUpdates this sprint: **${updates}**`;
-      msg += `\nBest single update this sprint: **${maxGain}**`;
-      return interaction.editReply({ content: msg });
-    } else if (subName === 'summary') {
-      const participants = target.type === 'team' && target.groupId
-        ? await DeanSprints.findAll({ where: { guildId, groupId: target.groupId }, order: [['createdAt', 'ASC']] })
-        : [target];
-      const linesSum = [];
-      for (const p of participants) {
-        const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-        const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-        const updates = rows.length;
-        const maxGain = rows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-        const first = rows.length ? rows[0].countEnd ?? rows[0].countStart ?? 0 : 0;
-        const last = rows.length ? rows[rows.length - 1].countEnd ?? rows[rows.length - 1].countStart ?? 0 : 0;
-        let extra = '';
-        if (p.projectId) {
-          let proj = null;
-          try {
-            proj = await Project.findByPk(p.projectId);
-          } catch (e) {
-            proj = null;
-          }
-          if (proj && proj.name) extra = ` (${proj.name})`;
-        }
-        linesSum.push(`• <@${p.userId}>: **${total}** words${extra} (updates: ${updates}, best: ${maxGain}, start: ${first}, end: ${last})`);
-      }
-      const content = linesSum.join('\n') || 'Nobody dropped numbers yet. Wanna be first?';
-      return interaction.editReply({ content: `Here’s the tally so far:\n${content}` });
-    } else if (subName === 'undo') {
-      const last = await Wordcount.findOne({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
-      if (!last) {
-        await interaction.followUp({ content: "No wordcount to undo, partner.", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      await last.destroy();
-      const rows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-      const totalRaw = rows.reduce((acc, r) => {
-        const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
-        return acc + (d > 0 ? d : 0);
-      }, 0);
-      const next = Math.max(0, totalRaw);
-      await target.update({ wordcountEnd: next });
-
-      await maybeEditEndSummary(target);
-      return interaction.editReply({ content: `Undone. Sitting at **${next}**.` });
-    }
-  } else if (interaction.options.getSubcommandGroup() === 'project') {
-    const discordId = interaction.user.id;
-    const subName = interaction.options.getSubcommand();
-    if (subName === 'use') {
-      const projectId = interaction.options.getString('project_id');
-      const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-      if (!active) {
-        return interaction.editReply({ content: noActiveSprintText() });
-      }
-      const member = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
-      if (!member) {
-        return interaction.editReply({ content: 'You’re not on that project, buddy. Get invited first.' });
-      }
-      await active.update({ projectId });
-      return interaction.editReply({ content: `Locked this sprint to project **${projectId}**. Let’s get those pages.` });
-    }
-  }
-  } catch (err) {
-    console.error('[Dean/sprint] Command error:', err);
-    try {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ content: "Yeah, that's on me. Try that again in a sec." });
-      } else {
-        await interaction.reply({ content: "Yeah, that's on me. Try that again in a sec.", flags: MessageFlags.Ephemeral });
-      }
-    } catch (e) {}
-  }
-}
