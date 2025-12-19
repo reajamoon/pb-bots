@@ -1,5 +1,5 @@
 import Discord from 'discord.js';
-const { SlashCommandBuilder, MessageFlags } = Discord;
+const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits } = Discord;
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
 import { Op } from 'sequelize';
 import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintLeaveText, sprintStatusWordsText, sprintEndedWordsText } from '../text/sprintText.js';
@@ -127,6 +127,7 @@ export async function execute(interaction) {
     }
 
   const sub = interaction.options.getSubcommand();
+  const subGroup = interaction.options.getSubcommandGroup(false);
 
   function baselineNudgeText() {
     return "Quick heads up: if you're using absolute totals, set a baseline with `/sprint wc baseline count:YOUR_START` so `/sprint wc set` doesn't count your whole draft as sprint words.";
@@ -416,122 +417,74 @@ export async function execute(interaction) {
     });
     const embed = listEmbeds(lines);
     await interaction.editReply({ embeds: [embed] });
-  } else if (interaction.options.getSubcommandGroup() === 'wc') {
+  } else if (subGroup === 'wc') {
+    return handleSprintWc(interaction, { guildId });
+  } else if (subGroup === 'project') {
     const discordId = interaction.user.id;
-
-    function clampInt(value, min, max, fallback) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return fallback;
-      return Math.max(min, Math.min(max, Math.trunc(n)));
+    if (sub !== 'use') {
+      return interaction.editReply({ content: "Yeah, I don't know that one." });
+    }
+    const projectIdRaw = interaction.options.getString('project_id');
+    if (!projectIdRaw) {
+      return interaction.editReply({ content: "I need a project ID, champ. Grab it from `/project list` and try again.", allowedMentions: { parse: [] } });
+    }
+    const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
+    if (!active) {
+      return interaction.editReply({ content: 'No active sprint right now. Kick one off with `/sprint start`.', allowedMentions: { parse: [] } });
+    }
+    const project = await Project.findByPk(projectIdRaw).catch(() => null);
+    if (!project) {
+      return interaction.editReply({ content: "Nope. Can't find that project. Try `/project list`." , allowedMentions: { parse: [] } });
+    }
+    const membership = await ProjectMember.findOne({ where: { projectId: project.id, userId: discordId } }).catch(() => null);
+    if (!membership && project.ownerId !== discordId) {
+      return interaction.editReply({ content: "You're not on that project, buddy. Get invited first.", allowedMentions: { parse: [] } });
+    }
+    await active.update({ projectId: project.id });
+    return interaction.editReply({ content: `Alright. This sprint is linked to **${project.name}**.`, allowedMentions: { parse: [] } });
+  } else if (sub === 'setchannel') {
+    const perms = interaction.memberPermissions;
+    const isStaff = perms?.has(PermissionFlagsBits.Administrator) || perms?.has(PermissionFlagsBits.ManageGuild) || perms?.has(PermissionFlagsBits.ManageChannels);
+    if (!isStaff) {
+      return interaction.editReply({ content: onlyStaffSetChannelText(), allowedMentions: { parse: [] } });
     }
 
-    async function getLateLogWindowMinutes() {
-      try {
-        const u = await User.findOne({ where: { discordId } });
-        return clampInt(u?.sprintRecentlyEndedWindowMinutes, 0, 360, 15);
-      } catch {
-        return 15;
-      }
+    const chan = interaction.options.getChannel('channel');
+    if (!chan || typeof chan.isTextBased !== 'function' || !chan.isTextBased()) {
+      return interaction.editReply({ content: selectAChannelText(), allowedMentions: { parse: [] } });
+    }
+    const allowThreads = interaction.options.getBoolean('allow_threads');
+    const allowThreadsByDefault = (typeof allowThreads === 'boolean') ? allowThreads : true;
+
+    const existing = await GuildSprintSettings.findOne({ where: { guildId } });
+    if (!existing) {
+      await GuildSprintSettings.create({
+        guildId,
+        allowedChannelIds: [chan.id],
+        blockedChannelIds: [],
+        allowThreadsByDefault,
+        defaultSummaryChannelId: chan.id,
+      });
+    } else {
+      await existing.update({
+        allowedChannelIds: [chan.id],
+        allowThreadsByDefault,
+        defaultSummaryChannelId: chan.id,
+      });
     }
 
-    function getSprintEndedAtCandidate(sprintRow) {
-      if (!sprintRow) return null;
-      if (sprintRow.endedAt) return new Date(sprintRow.endedAt);
-      if (sprintRow.startedAt && sprintRow.durationMinutes) {
-        return new Date(new Date(sprintRow.startedAt).getTime() + sprintRow.durationMinutes * 60000);
+    return interaction.editReply({ content: sprintChannelSetText(chan.id, allowThreadsByDefault), allowedMentions: { parse: [] } });
+  }
+
+  return interaction.editReply({ content: "Yeah, I don't know that one.", allowedMentions: { parse: [] } });
+  } catch (err) {
+    console.error('[Dean/sprint] Command error:', err);
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: "Yeah, that's on me. Try that again in a sec.", allowedMentions: { parse: [] } });
+      } else {
+        await interaction.reply({ content: "Yeah, that's on me. Try that again in a sec.", allowedMentions: { parse: [] } });
       }
-      if (sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
-      return null;
-    }
-
-    async function resolveWcTarget() {
-      const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] });
-      if (actives.length > 1) {
-        return { error: "You've got more than one active sprint, buddy. I can't guess which one you mean. End the one you're done with, or use `/sprint list` to see what's running." };
-      }
-      if (actives.length === 1) return { target: actives[0] };
-
-      const windowMinutes = await getLateLogWindowMinutes();
-      if (windowMinutes <= 0) {
-        return { error: noActiveSprintText() };
-      }
-
-      const recent = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'done' }, order: [['endedAt', 'DESC'], ['updatedAt', 'DESC']] });
-      if (!recent) return { error: noActiveSprintText() };
-
-      const endedAt = getSprintEndedAtCandidate(recent);
-      if (!endedAt) return { error: noActiveSprintText() };
-      const withinWindow = (Date.now() - endedAt.getTime()) <= windowMinutes * 60000;
-      if (!withinWindow) return { error: noActiveSprintText() };
-
-      return { target: recent, isLateLog: true, lateLogWindowMinutes: windowMinutes };
-    }
-
-    async function safeName(userId, guild) {
-      try {
-        if (guild && guild.members) {
-          const m = await guild.members.fetch(userId);
-          return m?.displayName || m?.user?.username || userId;
-        }
-      } catch {}
-      return userId;
-    }
-
-    async function buildLeaderboardLines(participantRows, guild) {
-      const scores = [];
-      for (const p of participantRows) {
-        const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-        const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-        scores.push({ userId: p.userId, total });
-      }
-      scores.sort((a, b) => (b.total || 0) - (a.total || 0));
-      const lines = [];
-      for (let i = 0; i < scores.length; i++) {
-        const name = await safeName(scores[i].userId, guild);
-        lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
-      }
-      return lines;
-    }
-
-    async function getEndSummaryRef(sprintRow) {
-      if (sprintRow?.endSummaryChannelId && sprintRow?.endSummaryMessageId) {
-        return { channelId: sprintRow.endSummaryChannelId, messageId: sprintRow.endSummaryMessageId };
-      }
-      if (sprintRow?.type === 'team' && sprintRow?.groupId) {
-        const any = await DeanSprints.findOne({ where: { guildId, groupId: sprintRow.groupId, endSummaryMessageId: { [Op.ne]: null } }, order: [['updatedAt', 'DESC']] }).catch(() => null);
-        if (any?.endSummaryChannelId && any?.endSummaryMessageId) {
-          return { channelId: any.endSummaryChannelId, messageId: any.endSummaryMessageId };
-        }
-      }
-      return null;
-    }
-
-    async function maybeEditEndSummary(sprintRow) {
-      if (!sprintRow || sprintRow.status !== 'done') return;
-
-      const windowMinutes = await getLateLogWindowMinutes();
-      const endedAt = getSprintEndedAtCandidate(sprintRow);
-      if (!endedAt) return;
-      if ((Date.now() - endedAt.getTime()) > windowMinutes * 60000) return;
-
-      const ref = await getEndSummaryRef(sprintRow);
-      if (!ref) return;
-
-      try {
-        const channel = await interaction.client.channels.fetch(ref.channelId).catch(() => null);
-        if (!channel || typeof channel.messages?.fetch !== 'function') return;
-        const msg = await channel.messages.fetch(ref.messageId).catch(() => null);
-        if (!msg) return;
-
-        const participants = (sprintRow.type === 'team' && sprintRow.groupId)
-          ? await DeanSprints.findAll({ where: { guildId, groupId: sprintRow.groupId }, order: [['createdAt', 'ASC']] })
-          : [sprintRow];
-        const participantIds = participants.map(p => p.userId);
-        const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
-        const sprintIdentifier = formatSprintIdentifier({ type: sprintRow.type, groupId: sprintRow.groupId, label: sprintRow.label, startedAt: sprintRow.startedAt });
-        const leaderboardLines = await buildLeaderboardLines(participants, interaction.guild);
-        const content = sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines });
-
-        await msg.edit({ content, allowedMentions: { parse: [] } });
-        return handleSprintWc(interaction, { guildId });
-      }
+    } catch {}
+  }
+}
