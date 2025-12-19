@@ -148,6 +148,12 @@ export default (sequelize) => {
             defaultValue: true,
             allowNull: false,
             comment: 'Whether to tag the user in fic queue notifications (true = tag, false = no tag)'
+        },
+        sprintRecentlyEndedWindowMinutes: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 15,
+            comment: 'Late logging window for recently ended sprints (minutes). Hard max enforced in app logic.'
         }
     }, {
         tableName: 'users',

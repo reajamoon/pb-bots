@@ -2,8 +2,9 @@ import Discord from 'discord.js';
 const { SlashCommandBuilder, MessageFlags } = Discord;
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
 import { Op } from 'sequelize';
-import { startSoloEmbed, hostTeamEmbed, joinTeamEmbed, endSoloEmbed, endTeamEmbed, statusSoloEmbed, statusTeamEmbed, leaveTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText } from '../text/sprintText.js';
+import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintLeaveText, sprintStatusWordsText, sprintEndedWordsText } from '../text/sprintText.js';
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
+import { handleSprintWc } from '../utils/handleSprintWc.js';
 
 export const data = new SlashCommandBuilder()
   .setName('sprint')
@@ -12,11 +13,14 @@ export const data = new SlashCommandBuilder()
     .setName('start')
     .setDescription('Start a sprint in this channel')
     .addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true))
+    .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1)').setRequired(false))
     .addStringOption(opt => opt.setName('label').setDescription('Optional label')))
   .addSubcommand(sub => sub
     .setName('host')
     .setDescription('Host a team sprint')
     .addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true))
+    .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1)').setRequired(false))
+    .addBooleanOption(opt => opt.setName('pings').setDescription('Enable pre-start reminder pings during the delay (team only)').setRequired(false))
     .addStringOption(opt => opt.setName('label').setDescription('Optional label')))
   .addSubcommand(sub => sub
     .setName('join')
@@ -40,6 +44,10 @@ export const data = new SlashCommandBuilder()
 data.addSubcommandGroup(group => group
   .setName('wc')
   .setDescription('Manage wordcounts during sprints')
+  .addSubcommand(sub => sub
+    .setName('baseline')
+    .setDescription('Set your starting baseline (absolute total) for this sprint')
+    .addIntegerOption(opt => opt.setName('count').setDescription('Your starting absolute total').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('set')
     .setDescription('Set your current wordcount')
@@ -119,8 +127,15 @@ export async function execute(interaction) {
     }
 
   const sub = interaction.options.getSubcommand();
+
+  function baselineNudgeText() {
+    return "Quick heads up: if you're using absolute totals, set a baseline with `/sprint wc baseline count:YOUR_START` so `/sprint wc set` doesn't count your whole draft as sprint words.";
+  }
+
   if (sub === 'start') {
     const minutes = interaction.options.getInteger('minutes');
+    const startInRaw = interaction.options.getInteger('start_in');
+    const startDelayMinutes = Math.max(0, Math.min(180, (typeof startInRaw === 'number' ? startInRaw : 1)));
     const label = interaction.options.getString('label') ?? undefined;
 
     // Upsert the user row if needed (using discordId)
@@ -128,7 +143,7 @@ export async function execute(interaction) {
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 
     // Persist the sprint row
-    const startedAt = new Date();
+    const startedAt = new Date(Date.now() + startDelayMinutes * 60000);
     const sprint = await DeanSprints.create({
       userId: discordId,
       guildId,
@@ -140,19 +155,32 @@ export async function execute(interaction) {
       durationMinutes: minutes,
       status: 'processing',
       label,
+      joinedAt: startedAt,
+      startDelayMinutes,
+      preStartPingsEnabled: false,
     });
 
     await interaction.editReply({ embeds: [startSoloEmbed(minutes, label, 'public')] });
+    if (startDelayMinutes > 0) {
+      await interaction.followUp({
+        content: `Alright. Sprint's queued. Starts in **${startDelayMinutes}** minute${startDelayMinutes === 1 ? '' : 's'}. Use the buffer to set your baseline and get comfy.`,
+        allowedMentions: { parse: [] },
+      });
+    }
+    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
     await scheduleSprintNotifications(sprint, interaction.client);
   } else if (sub === 'host') {
     const minutes = interaction.options.getInteger('minutes');
+    const startInRaw = interaction.options.getInteger('start_in');
+    const startDelayMinutes = Math.max(0, Math.min(180, (typeof startInRaw === 'number' ? startInRaw : 1)));
+    const preStartPingsEnabled = interaction.options.getBoolean('pings') ?? false;
     const label = interaction.options.getString('label') ?? undefined;
     const discordId = interaction.user.id;
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 
     // Generate a short group code
     const groupId = Math.random().toString(36).slice(2, 8).toUpperCase();
-    const startedAt = new Date();
+    const startedAt = new Date(Date.now() + startDelayMinutes * 60000);
     const hostRow = await DeanSprints.create({
       userId: discordId,
       hostId: discordId,
@@ -167,8 +195,18 @@ export async function execute(interaction) {
       durationMinutes: minutes,
       status: 'processing',
       label,
+      joinedAt: startedAt,
+      startDelayMinutes,
+      preStartPingsEnabled,
     });
     await interaction.editReply({ embeds: [hostTeamEmbed(minutes, label, groupId)] });
+    if (startDelayMinutes > 0) {
+      await interaction.followUp({
+        content: `Alright, gang. Starts in **${startDelayMinutes}** minute${startDelayMinutes === 1 ? '' : 's'}. Join up, grab a drink, set your baseline.`,
+        allowedMentions: { parse: [] },
+      });
+    }
+    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
     await scheduleSprintNotifications(hostRow, interaction.client);
   } else if (sub === 'join') {
     const codeRaw = interaction.options.getString('code');
@@ -198,6 +236,7 @@ export async function execute(interaction) {
       durationMinutes: host.durationMinutes,
       status: 'processing',
       label: host.label,
+      joinedAt: new Date(),
     });
     // Fire Hunt trigger: team joined awards host and joiner
     try {
@@ -208,14 +247,49 @@ export async function execute(interaction) {
     } catch (huntErr) {
       console.warn('[hunts] dean.team.joined trigger failed:', huntErr);
     }
-    await interaction.editReply({ embeds: [joinTeamEmbed()] });
+    const sprintIdentifier = formatSprintIdentifier({ type: host.type, groupId: host.groupId, label: host.label, startedAt: host.startedAt });
+    await interaction.editReply({ content: sprintJoinText({ sprintIdentifier, durationMinutes: host.durationMinutes }), allowedMentions: { parse: [] } });
+    await interaction.followUp({ content: baselineNudgeText(), flags: MessageFlags.Ephemeral });
   } else if (sub === 'end') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
     if (!active) {
       return interaction.editReply({ content: noActiveSprintText() });
     }
+    const endedAt = new Date();
+    const sprintIdentifier = formatSprintIdentifier({ type: active.type, groupId: active.groupId, label: active.label, startedAt: active.startedAt });
+
+    async function safeName(userId) {
+      try {
+        if (interaction.guild) {
+          const m = await interaction.guild.members.fetch(userId);
+          return m?.displayName || m?.user?.username || userId;
+        }
+      } catch {}
+      return userId;
+    }
+
+    async function buildLeaderboardLines(participantRows) {
+      const scores = [];
+      for (const p of participantRows) {
+        const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+        const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+        scores.push({ userId: p.userId, total });
+      }
+      scores.sort((a, b) => (b.total || 0) - (a.total || 0));
+      const lines = [];
+      for (let i = 0; i < scores.length; i++) {
+        const name = await safeName(scores[i].userId);
+        lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+      }
+      return lines;
+    }
+
     if (active.type === 'team' && active.role === 'host' && active.groupId) {
+      const participants = await DeanSprints.findAll({ where: { guildId, groupId: active.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] });
+      const participantIds = participants.map(p => p.userId);
+      const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
+      const leaderboardLines = await buildLeaderboardLines(participants);
       // End the team (host + all participants)
       await DeanSprints.update({ status: 'done', endNotified: true }, { where: { guildId, groupId: active.groupId, status: 'processing' } });
       try {
@@ -226,9 +300,35 @@ export async function execute(interaction) {
       } catch (huntErr) {
         console.warn('[hunts] dean.sprint.completed trigger failed:', huntErr);
       }
-      await interaction.editReply({ embeds: [endTeamEmbed()] });
+      await interaction.editReply({
+        content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines }),
+        allowedMentions: { users: participantIds, parse: [] },
+      });
+
+      // Best-effort: capture end summary message ref so late logging can edit it.
+      try {
+        const msg = await interaction.fetchReply();
+        await DeanSprints.update(
+          {
+            endedAt,
+            endSummaryChannelId: msg?.channelId || interaction.channelId || null,
+            endSummaryMessageId: msg?.id || null,
+          },
+          { where: { guildId, groupId: active.groupId } }
+        );
+      } catch (e) {
+        console.warn('[dean] failed to record end summary ref (team):', e?.message || e);
+      }
     } else {
-      await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null });
+      const participantIds = [active.userId];
+      const pingLine = `<@${active.userId}>`;
+      const leaderboardLines = await buildLeaderboardLines([active]);
+      try {
+        await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null, endedAt });
+      } catch (e) {
+        console.warn('[dean] failed to persist endedAt on solo end:', e?.message || e);
+        await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null });
+      }
       // Fire Hunt trigger on solo sprint completion
       try {
         const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
@@ -238,7 +338,21 @@ export async function execute(interaction) {
       } catch (huntErr) {
         console.warn('[hunts] dean.sprint.completed trigger failed (solo):', huntErr);
       }
-      await interaction.editReply({ embeds: [endSoloEmbed()] });
+      await interaction.editReply({
+        content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines }),
+        allowedMentions: { users: participantIds, parse: [] },
+      });
+
+      // Best-effort: capture end summary message ref so late logging can edit it.
+      try {
+        const msg = await interaction.fetchReply();
+        await active.update({
+          endSummaryChannelId: msg?.channelId || interaction.channelId || null,
+          endSummaryMessageId: msg?.id || null,
+        });
+      } catch (e) {
+        console.warn('[dean] failed to record end summary ref (solo):', e?.message || e);
+      }
     }
   } else if (sub === 'status') {
     const discordId = interaction.user.id;
@@ -246,15 +360,31 @@ export async function execute(interaction) {
     if (!active) {
       return interaction.editReply({ content: noActiveSprintText() });
     }
-    const endsAt = new Date(active.startedAt.getTime() + active.durationMinutes * 60000);
-    const remainingMs = endsAt.getTime() - Date.now();
-    const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
-    if (active.type === 'team' && active.role === 'host' && active.groupId) {
-      const count = await DeanSprints.count({ where: { guildId, groupId: active.groupId, status: 'processing' } });
-      await interaction.editReply({ embeds: [statusTeamEmbed(remainingMin, count, active.label)] });
-    } else {
-      await interaction.editReply({ embeds: [statusSoloEmbed(remainingMin, active.label)] });
+    const sprintIdentifier = formatSprintIdentifier({ type: active.type, groupId: active.groupId, label: active.label, startedAt: active.startedAt });
+    const nowMs = Date.now();
+    const startsAtMs = new Date(active.startedAt).getTime();
+    if (nowMs < startsAtMs) {
+      const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
+      return interaction.editReply({
+        content: `Status: ${sprintIdentifier}\nStarts in: ${startsInMin}m\nTimer: ${active.durationMinutes}m once it kicks off.`,
+        allowedMentions: { parse: [] },
+      });
     }
+    const endsAt = new Date(startsAtMs + active.durationMinutes * 60000);
+    const remainingMs = endsAt.getTime() - nowMs;
+    const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
+    const elapsedMin = Math.max(0, Math.floor((nowMs - startsAtMs) / 60000));
+    const rows = await Wordcount.findAll({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
+    const sprintTotal = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    await interaction.editReply({
+      content: sprintStatusWordsText({
+        sprintIdentifier,
+        timeLeftMinutes: remainingMin,
+        yourNetWordsSoFar: sprintTotal,
+        yourMinutesSoFar: elapsedMin,
+      }),
+      allowedMentions: { parse: [] },
+    });
   } else if (sub === 'leave') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing', type: 'team' } });
@@ -264,222 +394,144 @@ export async function execute(interaction) {
     if (active.role === 'host') {
       return interaction.editReply({ content: hostsUseEndText() });
     }
-    await active.update({ status: 'done', endNotified: true });
-    await interaction.editReply({ embeds: [leaveTeamEmbed()] });
+    const sprintIdentifier = formatSprintIdentifier({ type: active.type, groupId: active.groupId, label: active.label, startedAt: active.startedAt });
+    try {
+      await active.update({ status: 'done', endNotified: true, endedAt: new Date() });
+    } catch (e) {
+      console.warn('[dean] failed to persist endedAt on leave:', e?.message || e);
+      await active.update({ status: 'done', endNotified: true });
+    }
+    await interaction.editReply({ content: sprintLeaveText({ sprintIdentifier }), allowedMentions: { parse: [] } });
   } else if (sub === 'list') {
     const sprints = await DeanSprints.findAll({ where: { guildId, channelId, status: 'processing' }, order: [['startedAt', 'DESC']] });
     const lines = sprints.map(s => {
-      const endsAt = new Date(s.startedAt.getTime() + s.durationMinutes * 60000);
-      const remainingMin = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 60000));
+      const nowMs = Date.now();
+      const startsAtMs = new Date(s.startedAt).getTime();
+      const endsAtMs = startsAtMs + s.durationMinutes * 60000;
+      const remainingMin = Math.max(0, Math.ceil((endsAtMs - nowMs) / 60000));
+      const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
       const kind = s.type === 'team' ? (s.role === 'host' ? 'Team host' : 'Team') : 'Solo';
-      return formatListLine(kind, remainingMin, s.userId, s.label);
+      const label = nowMs < startsAtMs ? `(starts in ${startsInMin}m) ${s.label || ''}`.trim() : s.label;
+      return formatListLine(kind, remainingMin, s.userId, label);
     });
     const embed = listEmbeds(lines);
     await interaction.editReply({ embeds: [embed] });
   } else if (interaction.options.getSubcommandGroup() === 'wc') {
     const discordId = interaction.user.id;
-    // Resolve target sprint: active, else most recent within grace window
-    const GRACE_MINUTES = 15;
-    const now = Date.now();
-    let target = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-    if (!target) {
-      const recent = await DeanSprints.findOne({ where: { userId: discordId, guildId }, order: [['updatedAt', 'DESC']] });
-      if (recent) {
-        const endedAt = recent.startedAt ? (new Date(recent.startedAt.getTime() + (recent.durationMinutes || 0) * 60000)) : recent.updatedAt;
-        const withinGrace = endedAt && (now - endedAt.getTime()) <= GRACE_MINUTES * 60000;
-        if (withinGrace) {
-          target = recent;
+
+    function clampInt(value, min, max, fallback) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.trunc(n)));
+    }
+
+    async function getLateLogWindowMinutes() {
+      try {
+        const u = await User.findOne({ where: { discordId } });
+        return clampInt(u?.sprintRecentlyEndedWindowMinutes, 0, 360, 15);
+      } catch {
+        return 15;
+      }
+    }
+
+    function getSprintEndedAtCandidate(sprintRow) {
+      if (!sprintRow) return null;
+      if (sprintRow.endedAt) return new Date(sprintRow.endedAt);
+      if (sprintRow.startedAt && sprintRow.durationMinutes) {
+        return new Date(new Date(sprintRow.startedAt).getTime() + sprintRow.durationMinutes * 60000);
+      }
+      if (sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
+      return null;
+    }
+
+    async function resolveWcTarget() {
+      const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] });
+      if (actives.length > 1) {
+        return { error: "You've got more than one active sprint, buddy. I can't guess which one you mean. End the one you're done with, or use `/sprint list` to see what's running." };
+      }
+      if (actives.length === 1) return { target: actives[0] };
+
+      const windowMinutes = await getLateLogWindowMinutes();
+      if (windowMinutes <= 0) {
+        return { error: noActiveSprintText() };
+      }
+
+      const recent = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'done' }, order: [['endedAt', 'DESC'], ['updatedAt', 'DESC']] });
+      if (!recent) return { error: noActiveSprintText() };
+
+      const endedAt = getSprintEndedAtCandidate(recent);
+      if (!endedAt) return { error: noActiveSprintText() };
+      const withinWindow = (Date.now() - endedAt.getTime()) <= windowMinutes * 60000;
+      if (!withinWindow) return { error: noActiveSprintText() };
+
+      return { target: recent, isLateLog: true, lateLogWindowMinutes: windowMinutes };
+    }
+
+    async function safeName(userId, guild) {
+      try {
+        if (guild && guild.members) {
+          const m = await guild.members.fetch(userId);
+          return m?.displayName || m?.user?.username || userId;
         }
-      }
+      } catch {}
+      return userId;
     }
-    if (!target) {
-      return interaction.editReply({ content: noActiveSprintText() });
-    }
-    const subName = interaction.options.getSubcommand();
-    if (subName === 'set') {
-      const count = interaction.options.getInteger('count');
-      if (count < 0) {
-        await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy. If you want to bump numbers, use `/sprint wc add`. If you need to undo a bad update, try `/sprint wc undo`.", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      // Find last wordcount for this sprint/user
-      const last = await Wordcount.findOne({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
-      // Fallback to sprint's tracked end if no row found to avoid zero-based spikes
-      const prev = last && typeof last.countEnd === 'number' ? last.countEnd : (typeof target.wordcountEnd === 'number' ? target.wordcountEnd : 0);
-      const delta = count - prev;
-      await target.update({ wordcountEnd: count });
-      await Wordcount.create({
-        userId: discordId,
-        projectId: target.projectId || null,
-        sprintId: target.id,
-        countStart: prev,
-        countEnd: count,
-        delta,
-        recordedAt: new Date(),
-      });
-      // Sprint stats
-      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      const updates = allRows.length;
-      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-      // Daily stats
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      // Feedback
-      const sinceLabel = last ? 'since last update' : 'since sprint start';
-      let msg = `Locked in at **${count}**.`;
-      msg += `\nWords gained ${sinceLabel}: **${delta >= 0 ? '+' : ''}${delta}**`;
-      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-      msg += `\nTotal gained today: **${dayTotal}**`;
-      msg += `\nUpdates this sprint: **${updates}**`;
-      msg += `\nBest single update this sprint: **${maxGain}**`;
-      // Hunt: check 5k single-sprint total
-      try {
-        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
-        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
-        const announce = makeDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
-      } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
-      return interaction.editReply({ content: msg });
-    } else if (subName === 'add') {
-      const words = interaction.options.getInteger('new-words');
-      if (words <= 0) {
-        await interaction.followUp({ content: 'New words gotta be a positive number, buddy. If you need to change your total words use `/sprint wc set` instead, or you can use `/sprint wc undo` if you wanna undo the last wordcount change you made.', flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const prev = target.wordcountEnd || 0;
-      const next = prev + words;
-      await target.update({ wordcountEnd: next });
-      await Wordcount.create({
-        userId: discordId,
-        projectId: target.projectId || null,
-        sprintId: target.id,
-        countStart: prev,
-        countEnd: next,
-        delta: words,
-        recordedAt: new Date(),
-      });
-      // Sprint stats
-      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      const updates = allRows.length;
-      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-      // Daily stats
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      // Feedback
-      let msg = `Nice. **+${words}**. Sitting at **${next}**.`;
-      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-      msg += `\nTotal gained today: **${dayTotal}**`;
-      msg += `\nUpdates this sprint: **${updates}**`;
-      msg += `\nBest single update this sprint: **${maxGain}**`;
-      // Hunt: check 5k single-sprint total
-      try {
-        const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
-        const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
-        const announce = makeDeanAnnouncer(interaction);
-        await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
-      } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
-      return interaction.editReply({ content: msg });
-    } else if (subName === 'show') {
-      const wc = target.wordcountEnd ?? 0;
-      // Sprint stats
-      const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-      const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      const updates = allRows.length;
-      const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-      const first = allRows.length ? allRows[0].countEnd ?? allRows[0].countStart ?? 0 : 0;
-      // Daily stats
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-      const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-      let msg = `Current wordcount: **${wc}**`;
-      msg += `\nStarted at: **${first}**`;
-      msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-      msg += `\nTotal gained today: **${dayTotal}**`;
-      msg += `\nUpdates this sprint: **${updates}**`;
-      msg += `\nBest single update this sprint: **${maxGain}**`;
-      return interaction.editReply({ content: msg });
-    } else if (subName === 'summary') {
-      const participants = target.type === 'team' && target.groupId
-        ? await DeanSprints.findAll({ where: { guildId, groupId: target.groupId }, order: [['createdAt', 'ASC']] })
-        : [target];
-      const linesSum = [];
-      for (const p of participants) {
+
+    async function buildLeaderboardLines(participantRows, guild) {
+      const scores = [];
+      for (const p of participantRows) {
         const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
         const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
-        const updates = rows.length;
-        const maxGain = rows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
-        const first = rows.length ? rows[0].countEnd ?? rows[0].countStart ?? 0 : 0;
-        const last = rows.length ? rows[rows.length - 1].countEnd ?? rows[rows.length - 1].countStart ?? 0 : 0;
-        let extra = '';
-        if (p.projectId) {
-          let proj = null;
-          try {
-            proj = await Project.findByPk(p.projectId);
-          } catch (e) {
-            proj = null;
-          }
-          if (proj && proj.name) extra = ` (${proj.name})`;
-        }
-        linesSum.push(`• <@${p.userId}>: **${total}** words${extra} (updates: ${updates}, best: ${maxGain}, start: ${first}, end: ${last})`);
+        scores.push({ userId: p.userId, total });
       }
-      const content = linesSum.join('\n') || 'Nobody dropped numbers yet. Wanna be first?';
-      return interaction.editReply({ content: `Here’s the tally so far:\n${content}` });
+      scores.sort((a, b) => (b.total || 0) - (a.total || 0));
+      const lines = [];
+      for (let i = 0; i < scores.length; i++) {
+        const name = await safeName(scores[i].userId, guild);
+        lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+      }
+      return lines;
     }
-  } else if (interaction.options.getSubcommandGroup() === 'project') {
-    const discordId = interaction.user.id;
-    const subName = interaction.options.getSubcommand();
-    if (subName === 'use') {
-      const projectId = interaction.options.getString('project_id');
-      const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-      if (!active) {
-        return interaction.editReply({ content: noActiveSprintText() });
-      }
-      const member = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
-      if (!member) {
-        return interaction.editReply({ content: 'You’re not on that project, buddy. Get invited first.' });
-      }
-      await active.update({ projectId });
-      return interaction.editReply({ content: `Locked this sprint to project **${projectId}**. Let’s get those pages.` });
-    }
-  }
 
-  // wc undo
-  if (interaction.options.getSubcommandGroup() === 'wc' && interaction.options.getSubcommand() === 'undo') {
-    const discordId = interaction.user.id;
-    const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-    if (!active) {
-      return interaction.editReply({ content: noActiveSprintText() });
-    }
-    const last = await Wordcount.findOne({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'DESC']] });
-    if (!last) {
-      await interaction.followUp({ content: "No wordcount to undo, partner.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    await last.destroy();
-    const rows = await Wordcount.findAll({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-    const totalRaw = rows.reduce((acc, r) => {
-      const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
-      return acc + (d > 0 ? d : 0);
-    }, 0);
-    const next = Math.max(0, totalRaw);
-    await active.update({ wordcountEnd: next });
-    return interaction.editReply({ content: `Undone. Sitting at **${next}**.` });
-  }
-  } catch (err) {
-    console.error('[Dean/sprint] Command error:', err);
-    try {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ content: "Yeah, that's on me. Try that again in a sec." });
-      } else {
-        await interaction.reply({ content: "Yeah, that's on me. Try that again in a sec.", flags: MessageFlags.Ephemeral });
+    async function getEndSummaryRef(sprintRow) {
+      if (sprintRow?.endSummaryChannelId && sprintRow?.endSummaryMessageId) {
+        return { channelId: sprintRow.endSummaryChannelId, messageId: sprintRow.endSummaryMessageId };
       }
-    } catch (e) {}
-  }
-}
+      if (sprintRow?.type === 'team' && sprintRow?.groupId) {
+        const any = await DeanSprints.findOne({ where: { guildId, groupId: sprintRow.groupId, endSummaryMessageId: { [Op.ne]: null } }, order: [['updatedAt', 'DESC']] }).catch(() => null);
+        if (any?.endSummaryChannelId && any?.endSummaryMessageId) {
+          return { channelId: any.endSummaryChannelId, messageId: any.endSummaryMessageId };
+        }
+      }
+      return null;
+    }
+
+    async function maybeEditEndSummary(sprintRow) {
+      if (!sprintRow || sprintRow.status !== 'done') return;
+
+      const windowMinutes = await getLateLogWindowMinutes();
+      const endedAt = getSprintEndedAtCandidate(sprintRow);
+      if (!endedAt) return;
+      if ((Date.now() - endedAt.getTime()) > windowMinutes * 60000) return;
+
+      const ref = await getEndSummaryRef(sprintRow);
+      if (!ref) return;
+
+      try {
+        const channel = await interaction.client.channels.fetch(ref.channelId).catch(() => null);
+        if (!channel || typeof channel.messages?.fetch !== 'function') return;
+        const msg = await channel.messages.fetch(ref.messageId).catch(() => null);
+        if (!msg) return;
+
+        const participants = (sprintRow.type === 'team' && sprintRow.groupId)
+          ? await DeanSprints.findAll({ where: { guildId, groupId: sprintRow.groupId }, order: [['createdAt', 'ASC']] })
+          : [sprintRow];
+        const participantIds = participants.map(p => p.userId);
+        const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
+        const sprintIdentifier = formatSprintIdentifier({ type: sprintRow.type, groupId: sprintRow.groupId, label: sprintRow.label, startedAt: sprintRow.startedAt });
+        const leaderboardLines = await buildLeaderboardLines(participants, interaction.guild);
+        const content = sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines });
+
+        await msg.edit({ content, allowedMentions: { parse: [] } });
+        return handleSprintWc(interaction, { guildId });
+      }

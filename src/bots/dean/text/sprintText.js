@@ -181,3 +181,226 @@ export function onlyStaffSetChannelText() {
 export function sprintChannelSetText(channelId, allowThreads) {
   return `Sprint channel set to <#${channelId}>. Threads are ${allowThreads ? 'allowed' : 'not allowed'}.`;
 }
+
+// ---------------------------------------------------------------------------
+// Spec-aligned message templates (plain text)
+// Note: These are additive helpers. Existing embed flows remain unchanged.
+
+export function formatSprintIdentifier({ type, groupId, label, startedAt } = {}) {
+  if (type === 'team' && groupId) {
+    return label ? `${groupId} - ${label}` : `${groupId}`;
+  }
+  if (label) return label;
+  if (startedAt) {
+    try {
+      const d = new Date(startedAt);
+      // Keep it human-readable without getting cute.
+      return `Solo sprint (${d.toLocaleString()})`;
+    } catch {
+      // fall through
+    }
+  }
+  return 'Solo sprint';
+}
+
+function linesToBlock(lines) {
+  if (!lines || !lines.length) return '';
+  return lines.join('\n');
+}
+
+function lateLogLine() {
+  return "Log your words: You can still drop your numbers during your late logging window with `/wc` (default 15 minutes; your setting may differ; hard max 6 hours).";
+}
+
+export function sprintEndedWordsText({
+  pingLine = '',
+  sprintIdentifier,
+  durationMinutes,
+  leaderboardLines = [],
+  alsoParticipatedLines = [],
+} = {}) {
+  const header = pingLine ? `${pingLine}\n\n` : '';
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+
+  const leaderboardBlock = leaderboardLines.length
+    ? linesToBlock(leaderboardLines)
+    : 'No word logs yet.';
+
+  const alsoBlock = alsoParticipatedLines.length
+    ? `\n\nAlso participated (time)\n${linesToBlock(alsoParticipatedLines)}`
+    : '';
+
+  return (
+    `${header}` +
+    `Sprint's over: ${id}\n` +
+    `Duration: ${dur}\n\n` +
+    `Leaderboard (words)\n` +
+    `${leaderboardBlock}` +
+    `${alsoBlock}\n\n` +
+    `${lateLogLine()}\n` +
+    `Note: This summary might update if late logs roll in.`
+  ).trim();
+}
+
+export function sprintEndedMixedText({
+  pingLine = '',
+  sprintIdentifier,
+  durationMinutes,
+  participantLines = [],
+} = {}) {
+  const header = pingLine ? `${pingLine}\n\n` : '';
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+
+  const participantBlock = participantLines.length
+    ? linesToBlock(participantLines)
+    : 'No participants found.';
+
+  return (
+    `${header}` +
+    `Sprint's over: ${id}\n` +
+    `Duration: ${dur}\n\n` +
+    `Participants (host first, then join order)\n` +
+    `${participantBlock}\n\n` +
+    `${lateLogLine()}\n` +
+    `Note: This summary might update if late logs roll in.`
+  ).trim();
+}
+
+export function sprintEndedTimeText({
+  pingLine = '',
+  sprintIdentifier,
+  durationMinutes,
+  participantLines = [],
+} = {}) {
+  const header = pingLine ? `${pingLine}\n\n` : '';
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+
+  const participantBlock = participantLines.length
+    ? linesToBlock(participantLines)
+    : 'No participants found.';
+
+  return (
+    `${header}` +
+    `Sprint's over: ${id}\n` +
+    `Duration: ${dur}\n\n` +
+    `Participants (host first, then join order)\n` +
+    `${participantBlock}`
+  ).trim();
+}
+
+export function sprintCheckInWordsText({ sprintIdentifier, timeLeftMinutes, progressLines = [] } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const left = Number.isFinite(timeLeftMinutes) ? `${timeLeftMinutes}m` : 'Unknown';
+  const progressBlock = progressLines.length ? linesToBlock(progressLines) : 'No logs yet.';
+
+  return (
+    `Check-in: ${id}\n` +
+    `Time left: ${left}\n\n` +
+    `Logged so far\n` +
+    `${progressBlock}\n\n` +
+    `If you haven't logged yet, chill. Drop it with \/wc when you're ready.`
+  ).trim();
+}
+
+export function sprintCheckInMixedText({ sprintIdentifier, timeLeftMinutes, participantLines = [] } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const left = Number.isFinite(timeLeftMinutes) ? `${timeLeftMinutes}m` : 'Unknown';
+  const participantBlock = participantLines.length ? linesToBlock(participantLines) : 'No participants found.';
+
+  return (
+    `Check-in: ${id}\n` +
+    `Time left: ${left}\n\n` +
+    `So far (host first, then join order)\n` +
+    `${participantBlock}\n\n` +
+    `No pressure. Log words with \/wc if you feel like it.`
+  ).trim();
+}
+
+export function sprintCheckInTimeText({ sprintIdentifier, timeLeftMinutes, participantLines = [] } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const left = Number.isFinite(timeLeftMinutes) ? `${timeLeftMinutes}m` : 'Unknown';
+  const participantBlock = participantLines.length ? linesToBlock(participantLines) : 'No participants found.';
+
+  return (
+    `Check-in: ${id}\n` +
+    `Time left: ${left}\n\n` +
+    `So far (host first, then join order)\n` +
+    `${participantBlock}\n\n` +
+    `Keep it rolling.`
+  ).trim();
+}
+
+export function sprintStatusWordsText({ sprintIdentifier, timeLeftMinutes, yourNetWordsSoFar, yourMinutesSoFar } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const left = Number.isFinite(timeLeftMinutes) ? `${timeLeftMinutes}m` : 'Unknown';
+  const words = Number.isFinite(yourNetWordsSoFar) ? yourNetWordsSoFar : 0;
+  const mins = Number.isFinite(yourMinutesSoFar) ? yourMinutesSoFar : 0;
+  return (
+    `Status: ${id}\n` +
+    `Time left: ${left}\n\n` +
+    `You: NET ${words} (minutes ${mins})\n\n` +
+    `Log with \/wc whenever. You've got this.`
+  ).trim();
+}
+
+export function sprintStatusMixedText({ sprintIdentifier, timeLeftMinutes, yourMinutesSoFar, yourNetWordsSoFar } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const left = Number.isFinite(timeLeftMinutes) ? `${timeLeftMinutes}m` : 'Unknown';
+  const mins = Number.isFinite(yourMinutesSoFar) ? yourMinutesSoFar : 0;
+  const wordsPart = Number.isFinite(yourNetWordsSoFar) ? ` - words NET ${yourNetWordsSoFar}` : '';
+  return (
+    `Status: ${id}\n` +
+    `Time left: ${left}\n\n` +
+    `You: minutes ${mins}${wordsPart}`
+  ).trim();
+}
+
+export function sprintStatusTimeText({ sprintIdentifier, timeLeftMinutes, yourMinutesSoFar } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const left = Number.isFinite(timeLeftMinutes) ? `${timeLeftMinutes}m` : 'Unknown';
+  const mins = Number.isFinite(yourMinutesSoFar) ? yourMinutesSoFar : 0;
+  return (
+    `Status: ${id}\n` +
+    `Time left: ${left}\n\n` +
+    `You: minutes ${mins}`
+  ).trim();
+}
+
+export function sprintJoinText({ sprintIdentifier, durationMinutes } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+  return (
+    `You're in: ${id}\n` +
+    `Timer: ${dur}\n\n` +
+    "Optional: set a baseline now so `/wc set` can do the math for you. Or don't. I'm not your dad."
+  ).trim();
+}
+
+export function sprintJoinTrackTimeText({ sprintIdentifier, durationMinutes } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+  return (
+    `You're in (time track): ${id}\n` +
+    `Timer: ${dur}\n\n` +
+    "You're here for vibes and minutes. If you end up logging words, I'll count you in the leaderboard too."
+  ).trim();
+}
+
+export function sprintLeaveText({ sprintIdentifier } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  return (`Got it. You're out: ${id}\nCatch you next round.`).trim();
+}
+
+export function sprintExtendText({ sprintIdentifier, newEndTimeRelative } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const end = newEndTimeRelative || 'soon';
+  return (`Extended: ${id}\nNew end time: ${end}\n\nAlright, we ride longer.`).trim();
+}
+
+export function sprintEndEarlyText({ sprintIdentifier } = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  return (`Ended early: ${id}\n\nNice work. If you logged words, the end summary will show up when I wrap it.`).trim();
+}

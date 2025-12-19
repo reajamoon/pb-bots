@@ -13,6 +13,11 @@
 ## User Experience
 - [x] Unify `/rec update <id>` to use a single identifier field
 - [x] **Search functionality** COMPLETED: Full search system implemented with multiple filters
+- [ ] (Sprints/WC) Optional chat message parsing for logging
+    - Opt-in per user (and/or per channel), off by default.
+    - Strict patterns only (examples: `+200`, `-50`, `set 12345`, `wc +200`) to avoid accidental triggers.
+    - Guardrails: only when a sprint is active or within late-log window; confirmation response; `allowedMentions: { parse: [] }`.
+    - Defer until after current sprint/projects refactor is complete.
 - [ ] Enhance help and onboarding (interactive guides)
 - [ ] Add user profile pages (show contributions, stats)
 - [ ] Allow users to favorite fics
