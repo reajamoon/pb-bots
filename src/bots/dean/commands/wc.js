@@ -1,6 +1,6 @@
 import Discord from 'discord.js';
 const { SlashCommandBuilder } = Discord;
-import { handleSprintWc } from '../utils/handleSprintWc.js';
+import { handleWc } from '../utils/handleWc.js';
 
 export const data = new SlashCommandBuilder()
   .setName('wc')
@@ -11,8 +11,20 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(opt => opt.setName('count').setDescription('Your starting absolute total').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('set')
-    .setDescription('Set your current absolute wordcount')
-    .addIntegerOption(opt => opt.setName('count').setDescription('Current absolute total').setRequired(true)))
+    .setDescription('Set your current wordcount')
+    .addIntegerOption(opt => opt.setName('count').setDescription('Current total').setRequired(true))
+    .addStringOption(opt => opt
+      .setName('scope')
+      .setDescription('What you are setting')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Sprint', value: 'sprint' },
+        { name: 'Project', value: 'project' },
+      ))
+    .addStringOption(opt => opt
+      .setName('project')
+      .setDescription('Project ID or exact name (for scope=project)')
+      .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('add')
     .setDescription('Add words to your current sprint total')
@@ -30,7 +42,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   try {
     await interaction.deferReply();
-    return handleSprintWc(interaction, { guildId: interaction.guildId });
+    return handleWc(interaction, { guildId: interaction.guildId });
   } catch (err) {
     console.error('[Dean/wc] Command error:', err);
     try {

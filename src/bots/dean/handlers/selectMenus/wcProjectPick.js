@@ -1,7 +1,7 @@
 import Discord from 'discord.js';
 const { MessageFlags } = Discord;
 
-import { DeanSprints } from '../../../../models/index.js';
+import { Project } from '../../../../models/index.js';
 import { getInteractionState, deleteInteractionState } from '../../utils/interactionState.js';
 import { handleWc } from '../../utils/handleWc.js';
 
@@ -11,6 +11,7 @@ export async function execute(interaction) {
   const customId = interaction.customId || '';
   const parts = customId.split('_');
   const token = parts.length > 1 ? parts.slice(1).join('_') : '';
+
   if (!token) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: 'That picker is missing context. Try the command again.', flags: EPHEMERAL_FLAG });
@@ -27,25 +28,24 @@ export async function execute(interaction) {
   }
 
   const picked = interaction.values?.[0];
-  const pickedId = Number(picked);
-  if (!Number.isFinite(pickedId)) {
+  const projectId = String(picked || '').trim();
+  if (!projectId) {
     await interaction.reply({ content: 'That selection did not look right. Try again.', flags: EPHEMERAL_FLAG });
     return;
   }
 
-  const row = await DeanSprints.findByPk(pickedId).catch(() => null);
-  if (!row || row.guildId !== state.guildId || row.userId !== state.userId) {
-    await interaction.reply({ content: 'I cannot find that sprint entry anymore. Try the command again.', flags: EPHEMERAL_FLAG });
+  const project = await Project.findByPk(projectId).catch(() => null);
+  if (!project) {
+    await interaction.reply({ content: 'I cannot find that project anymore. Try the command again.', flags: EPHEMERAL_FLAG });
     return;
   }
 
-  // Acknowledge the selection by updating the picker message.
-  await interaction.update({ content: 'Got it. Logging to that sprint.', components: [] });
+  await interaction.update({ content: 'Got it. Setting project total.', components: [] });
 
-  // Re-run the wc handler, but forcing the target + original subcommand options.
   return handleWc(interaction, {
     guildId: state.guildId,
-    forcedTargetId: pickedId,
+    forcedScope: 'project',
+    forcedProjectId: project.id,
     forcedSubcommand: state.subcommand,
     forcedOptions: state.options,
   });

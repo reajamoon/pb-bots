@@ -2,7 +2,7 @@ import Discord from 'discord.js';
 const { MessageFlags } = Discord;
 
 import { getInteractionState, deleteInteractionState } from '../../utils/interactionState.js';
-import { handleSprintWc } from '../../utils/handleSprintWc.js';
+import { handleWc } from '../../utils/handleWc.js';
 
 const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
 
@@ -34,8 +34,10 @@ export async function execute(interaction) {
 
   // Confirm
   await interaction.deferUpdate();
-  return handleSprintWc(interaction, {
+  return handleWc(interaction, {
     guildId: state.guildId,
+    forcedScope: state.scope,
+    forcedProjectId: state.projectId,
     forcedTargetId: state.targetId,
     forcedSubcommand: state.subcommand,
     forcedOptions: state.options,
