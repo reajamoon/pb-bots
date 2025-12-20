@@ -93,7 +93,9 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     }
 
     const endedCandidates = await DeanSprints.findAll({
-      where: { userId: discordId, guildId: effectiveGuildId, status: 'done' },
+      // Include "done" rows and "processing" rows that may not have been finalized yet
+      // (e.g., bot restarted between end message and DB status update).
+      where: { userId: discordId, guildId: effectiveGuildId, status: { [Op.in]: ['done', 'processing'] } },
       order: [['endedAt', 'DESC'], ['updatedAt', 'DESC']],
       limit: 8,
     });
@@ -102,7 +104,10 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     const within = endedCandidates.filter(row => {
       const endedAt = getSprintEndedAtCandidate(row);
       if (!endedAt) return false;
-      return (Date.now() - endedAt.getTime()) <= windowMinutes * 60000;
+      const endedMs = endedAt.getTime();
+      const nowMs = Date.now();
+      if (nowMs < endedMs) return false;
+      return (nowMs - endedMs) <= windowMinutes * 60000;
     });
     if (!within.length) return { error: noActiveSprintText() };
     if (within.length === 1) return { target: within[0], isLateLog: true, lateLogWindowMinutes: windowMinutes };
@@ -181,6 +186,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
   }
 
   let target = null;
+  let isLateLog = false;
 
   if (forcedTargetId) {
     target = await DeanSprints.findByPk(forcedTargetId).catch(() => null);
@@ -249,6 +255,27 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     }
 
     target = resolved.target;
+    isLateLog = !!resolved.isLateLog;
+  }
+
+  // If we are in the late-log path and the sprint is still marked processing, finalize it now.
+  // This makes late logging resilient to restarts that happen between the end message and DB update.
+  if (isLateLog && target && target.status === 'processing') {
+    const endedAt = getSprintEndedAtCandidate(target);
+    if (endedAt && Date.now() >= endedAt.getTime()) {
+      try {
+        if (target.type === 'team' && target.groupId) {
+          await DeanSprints.update(
+            { status: 'done', endNotified: true, endedAt },
+            { where: { guildId: effectiveGuildId, groupId: target.groupId } }
+          );
+        } else {
+          await target.update({ status: 'done', endNotified: true, endedAt });
+        }
+      } catch (e) {
+        console.warn('[dean] failed to finalize overdue sprint for late log:', e?.message || e);
+      }
+    }
   }
 
   const subName = forcedSubcommand ?? interaction.options?.getSubcommand?.();
