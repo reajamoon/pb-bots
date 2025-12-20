@@ -15,6 +15,7 @@ export default function onInteractionCreate(client) {
     try {
       if (processedInteractionIds.has(interaction.id)) {
         console.warn(`[dean] Duplicate interaction detected: id=${interaction.id} type=${interaction.type} customId=${interaction.customId || 'none'} commandName=${interaction.commandName || 'none'}`);
+        return;
       } else {
         processedInteractionIds.add(interaction.id);
       }

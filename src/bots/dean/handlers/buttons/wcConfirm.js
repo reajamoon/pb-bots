@@ -10,7 +10,7 @@ export async function execute(interaction) {
   const customId = interaction.customId || '';
   const parts = customId.split('_');
   const verb = parts[1] || '';
-  const token = parts[2] || '';
+  const token = parts.length > 2 ? parts.slice(2).join('_') : '';
 
   if (!token) {
     if (!interaction.replied && !interaction.deferred) {
@@ -20,12 +20,12 @@ export async function execute(interaction) {
   }
 
   const state = getInteractionState(token);
-  deleteInteractionState(token);
-
   if (!state || state.userId !== interaction.user.id) {
     await interaction.reply({ content: 'That confirmation is stale. Run the command again.', flags: EPHEMERAL_FLAG });
     return;
   }
+
+  deleteInteractionState(token);
 
   if (verb === 'cancel') {
     await interaction.update({ content: 'Cancelled. No changes made.', components: [] });

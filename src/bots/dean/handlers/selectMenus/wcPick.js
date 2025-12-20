@@ -19,12 +19,12 @@ export async function execute(interaction) {
   }
 
   const state = getInteractionState(token);
-  deleteInteractionState(token);
-
   if (!state || state.userId !== interaction.user.id) {
     await interaction.reply({ content: 'That picker is stale. Run the command again.', flags: EPHEMERAL_FLAG });
     return;
   }
+
+  deleteInteractionState(token);
 
   const picked = interaction.values?.[0];
   const pickedId = Number(picked);
