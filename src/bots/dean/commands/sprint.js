@@ -448,7 +448,7 @@ export async function execute(interaction) {
       return interaction.editReply({ content: "You're not on that project, buddy. Get invited first.", allowedMentions: { parse: [] } });
     }
     await active.update({ projectId: project.id });
-    return interaction.editReply({ content: `Alright. This sprint is linked to **${project.name}**.`, allowedMentions: { parse: [] } });
+    return interaction.editReply({ content: `Alright. Your sprint entry is linked to **${project.name}**.`, allowedMentions: { parse: [] } });
   } else if (sub === 'setchannel') {
     const perms = interaction.memberPermissions;
     const isStaff = perms?.has(PermissionFlagsBits.Administrator) || perms?.has(PermissionFlagsBits.ManageGuild) || perms?.has(PermissionFlagsBits.ManageChannels);
