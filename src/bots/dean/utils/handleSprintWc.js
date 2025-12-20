@@ -27,12 +27,12 @@ async function buildCandidateTargets({ guildId, discordId, windowMinutes }) {
 
   if (windowMinutes > 0) {
     const ended = await DeanSprints.findAll({
-      where: { userId: discordId, guildId, status: 'done', endedAt: { [Op.ne]: null } },
-      order: [['endedAt', 'DESC']],
-      limit: 5,
+      where: { userId: discordId, guildId, status: 'done' },
+      order: [['endedAt', 'DESC'], ['updatedAt', 'DESC']],
+      limit: 8,
     });
     for (const row of ended) {
-      const endedAt = row.endedAt ? new Date(row.endedAt) : null;
+      const endedAt = getSprintEndedAtCandidate(row);
       if (!endedAt) continue;
       const withinWindow = (Date.now() - endedAt.getTime()) <= windowMinutes * 60000;
       if (withinWindow) candidates.push({ row, kind: 'ended' });
