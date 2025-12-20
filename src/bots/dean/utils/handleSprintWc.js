@@ -425,7 +425,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     msg += `\nBest single update this sprint: **${maxGain}**`;
     // Hunt: check 5k single-sprint total
     try {
-      const fireTrigger = (await import('../../shared/hunts/triggerEngine.js')).default;
+      const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
       const makeDeanAnnouncer = (await import('./huntsAnnouncer.js')).default;
       const announce = makeDeanAnnouncer(interaction);
       await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal: sprintWrite, announce, interaction });
@@ -472,7 +472,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     msg += `\nBest single update this sprint: **${maxGain}**`;
     // Hunt: check 5k single-sprint total
     try {
-      const fireTrigger = (await import('../../shared/hunts/triggerEngine.js')).default;
+      const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
       const makeDeanAnnouncer = (await import('./huntsAnnouncer.js')).default;
       const announce = makeDeanAnnouncer(interaction);
       await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal: sprintWrite, announce, interaction });
