@@ -24,6 +24,16 @@ function makeToken(length = 12) {
   return out;
 }
 
+function getSprintEndedAtCandidate(sprintRow) {
+  if (!sprintRow) return null;
+  if (sprintRow.endedAt) return new Date(sprintRow.endedAt);
+  if (sprintRow.startedAt && sprintRow.durationMinutes) {
+    return new Date(new Date(sprintRow.startedAt).getTime() + sprintRow.durationMinutes * 60000);
+  }
+  if (sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
+  return null;
+}
+
 async function buildCandidateTargets({ guildId, discordId, windowMinutes }) {
   const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] });
 
@@ -93,16 +103,6 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     } catch {
       return 15;
     }
-  }
-
-  function getSprintEndedAtCandidate(sprintRow) {
-    if (!sprintRow) return null;
-    if (sprintRow.endedAt) return new Date(sprintRow.endedAt);
-    if (sprintRow.startedAt && sprintRow.durationMinutes) {
-      return new Date(new Date(sprintRow.startedAt).getTime() + sprintRow.durationMinutes * 60000);
-    }
-    if (sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
-    return null;
   }
 
   async function resolveWcTarget() {
