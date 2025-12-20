@@ -7,6 +7,11 @@ export default (sequelize) => {
       defaultValue: sequelize.literal('uuid_generate_v4()'),
       primaryKey: true,
     },
+    publicId: {
+      // Human-friendly stable ID (Discord-facing). Stored uppercase, example: ZEPPELIN-387
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     ownerId: {
       // Discord user ID (string). Matches migration schema.
       type: DataTypes.STRING,

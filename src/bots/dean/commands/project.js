@@ -3,6 +3,99 @@ const { SlashCommandBuilder, MessageFlags } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
 
+import fs from 'fs';
+import path from 'path';
+
+function loadProjectPublicIdWords() {
+  try {
+    const filePath = path.resolve(process.cwd(), 'config', 'projectPublicIdWords.json');
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) return [];
+    return parsed
+      .map(w => String(w || '').trim().toUpperCase())
+      .filter(w => w && /^[A-Z0-9]{2,24}$/.test(w));
+  } catch (e) {
+    return [];
+  }
+}
+
+const PROJECT_PUBLIC_ID_WORDS = loadProjectPublicIdWords();
+
+function randInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function pad3(n) {
+  const s = String(n);
+  if (s.length >= 3) return s.slice(-3);
+  return s.padStart(3, '0');
+}
+
+function makePublicIdCandidate() {
+  const words = PROJECT_PUBLIC_ID_WORDS.length ? PROJECT_PUBLIC_ID_WORDS : ['PROJECT'];
+  const word = words[randInt(0, words.length - 1)];
+  const num = pad3(randInt(0, 999));
+  return `${word}-${num}`;
+}
+
+function extractPublicId(input) {
+  if (!input) return null;
+  const str = String(input).trim();
+  const match = str.match(/\b([A-Za-z0-9]{2,24}-\d{3})\b/);
+  if (!match) return null;
+  return match[1].toUpperCase();
+}
+
+async function ensureProjectHasPublicId(project) {
+  if (!project || project.publicId) return project;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const candidate = makePublicIdCandidate();
+    const existing = await Project.findOne({ where: { publicId: candidate } }).catch(() => null);
+    if (existing) continue;
+    try {
+      await project.update({ publicId: candidate });
+      return project;
+    } catch (e) {
+      continue;
+    }
+  }
+  return project;
+}
+
+async function canAccessProject({ discordId, project }) {
+  if (!project) return false;
+  if (project.ownerId === discordId) return true;
+  const member = await ProjectMember.findOne({ where: { projectId: project.id, userId: discordId } }).catch(() => null);
+  return Boolean(member);
+}
+
+async function resolveProjectForUser({ discordId, projectInputRaw }) {
+  const input = String(projectInputRaw || '').trim();
+  if (!input) return null;
+
+  // Try UUID
+  const uuidMatch = input.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (uuidMatch) {
+    const p = await Project.findByPk(uuidMatch[0]).catch(() => null);
+    if (p && await canAccessProject({ discordId, project: p })) return p;
+  }
+
+  // Try publicId
+  const publicId = extractPublicId(input);
+  if (publicId) {
+    const p = await Project.findOne({ where: { publicId } }).catch(() => null);
+    if (p && await canAccessProject({ discordId, project: p })) return p;
+  }
+
+  // Try exact name: owned first, then membership list
+  const owned = await Project.findOne({ where: { ownerId: discordId, name: input } }).catch(() => null);
+  if (owned) return owned;
+
+  const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] }).catch(() => []);
+  return memberships.map(m => m.project).find(p => p?.name === input) || null;
+}
+
 export const data = new SlashCommandBuilder()
   .setName('project')
   .setDescription('Manage writing projects and collaborators')
@@ -13,7 +106,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub
     .setName('info')
     .setDescription('Show details and recent totals for a project')
-    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
+    .addStringOption(opt => opt.setName('project').setDescription('Project code, ID, or Name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('list')
     .setDescription('List your projects'))
@@ -21,7 +114,7 @@ export const data = new SlashCommandBuilder()
     .setName('invite')
     .setDescription('Invite a member to your project')
     .addUserOption(opt => opt.setName('member').setDescription('User to invite').setRequired(true))
-    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
+    .addStringOption(opt => opt.setName('project').setDescription('Project code, ID, or Name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('remove')
     .setDescription('Remove a member from your project')
@@ -39,7 +132,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub
     .setName('use')
     .setDescription('Use a project for your active sprint')
-    .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
+    .addStringOption(opt => opt.setName('project').setDescription('Project code, ID, or Name').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('members')
     .setDescription('List project members'))
@@ -50,16 +143,16 @@ export const data = new SlashCommandBuilder()
       .setName('add')
       .setDescription('Add words directly to a project (outside a sprint)')
       .addIntegerOption(opt => opt.setName('new-words').setDescription('Words added (positive)').setRequired(true))
-      .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
+      .addStringOption(opt => opt.setName('project').setDescription('Project code, ID, or Name').setRequired(true)))
     .addSubcommand(sub => sub
       .setName('set')
       .setDescription('Set your current wordcount for a project (outside a sprint)')
       .addIntegerOption(opt => opt.setName('count').setDescription('Current wordcount').setRequired(true))
-      .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
+      .addStringOption(opt => opt.setName('project').setDescription('Project code, ID, or Name').setRequired(true)))
     .addSubcommand(sub => sub
       .setName('show')
       .setDescription('Show your current project wordcount (outside a sprint)')
-      .addStringOption(opt => opt.setName('project').setDescription('Project ID or Name').setRequired(true)))
+      .addStringOption(opt => opt.setName('project').setDescription('Project code, ID, or Name').setRequired(true)))
   )
 
 export async function execute(interaction) {
@@ -87,9 +180,10 @@ export async function execute(interaction) {
 
     if (subName === 'create') {
       const name = interaction.options.getString('name');
-      const project = await Project.create({ ownerId: discordId, name });
+      let project = await Project.create({ ownerId: discordId, name });
+      project = await ensureProjectHasPublicId(project);
       await ProjectMember.create({ projectId: project.id, userId: discordId, role: 'owner' });
-      return interaction.editReply({ content: `Done. Project **${name}** is live. ID: \`${project.id}\`. ` });
+      return interaction.editReply({ content: `Done. Project **${name}** is live. Code: **${project.publicId || project.id}**.` });
     }
 
     if (subName === 'info') {
@@ -117,27 +211,18 @@ export async function execute(interaction) {
           .addFields(
             ...allProjects.map(p => ({
               name: p.name,
-              value: `ID: ${p.id}\nOwner: ${p.ownerId === discordId ? 'You' : p.ownerId}\nCreated: <t:${Math.floor(new Date(p.createdAt).getTime() / 1000)}:F>`
+              value: `Code: ${p.publicId || p.id}\nOwner: ${p.ownerId === discordId ? 'You' : p.ownerId}\nCreated: <t:${Math.floor(new Date(p.createdAt).getTime() / 1000)}:F>`
             }))
           );
         return interaction.editReply({ embeds: [embed] });
       }
       let project = null;
-      // Try by extracted UUID first
-      if (uuid) {
-        project = await Project.findByPk(uuid);
-      }
-      if (!project) {
-        // Try by name (owned or member)
-        project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
-        if (!project) {
-          const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-          project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
-        }
-      }
+      if (uuid) project = await Project.findByPk(uuid);
+      if (!project) project = await resolveProjectForUser({ discordId, projectInputRaw: projectInput });
       if (!project) {
         return interaction.editReply({ content: "Nope. Can’t find that project. Try `/project list`." });
       }
+      project = await ensureProjectHasPublicId(project);
       const members = await ProjectMember.findAll({ where: { projectId: project.id } });
       const ownerTag = interaction.client.users.cache.get(project.ownerId)?.tag ?? project.ownerId;
       const activeSprint = await DeanSprints.findOne({ where: { projectId: project.id, status: 'processing' } }).catch(() => null);
@@ -176,6 +261,7 @@ export async function execute(interaction) {
         .setDescription('Project details and stats.')
         .setColor(embedColor)
         .addFields(
+          { name: 'Code', value: project.publicId || project.id, inline: true },
           { name: 'Owner', value: ownerTag, inline: true },
           { name: 'Members', value: `${members.length} (mods: ${mods})`, inline: true },
           { name: 'Active Sprint', value: activeSprint ? `Yes, in ${channelMention}` : 'No', inline: true },
@@ -184,7 +270,7 @@ export async function execute(interaction) {
           { name: '7-Day Total', value: `${weekTotal} words`, inline: true }
         )
         .setTimestamp(project.createdAt)
-        .setFooter({ text: `Project ID: ${project.id} • Created: <t:${Math.floor(new Date(project.createdAt).getTime() / 1000)}:F>` });
+        .setFooter({ text: `Project code: ${project.publicId || project.id} • Created: <t:${Math.floor(new Date(project.createdAt).getTime() / 1000)}:F>` });
       return interaction.editReply({ embeds: [embed] });
     }
 
@@ -194,21 +280,13 @@ export async function execute(interaction) {
       const uuid = extractUuid(projectInputRaw);
       let projectInput = projectInputRaw?.trim();
       let project = null;
-      if (uuid) {
-        project = await Project.findByPk(uuid);
-      }
+      if (uuid) project = await Project.findByPk(uuid);
+      if (!project) project = await resolveProjectForUser({ discordId, projectInputRaw: projectInput });
       if (!project) {
-        // Try by name (owned or member)
-        project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
-        if (!project) {
-          const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-          project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
-        }
-      }
-      if (!project) {
-        await interaction.followUp({ content: 'Nope. Use the project ID or exact name.', flags: MessageFlags.Ephemeral });
+        await interaction.followUp({ content: 'Nope. Use the project code, UUID, or exact name.', flags: MessageFlags.Ephemeral });
         return;
       }
+      project = await ensureProjectHasPublicId(project);
       const projectId = project.id;
       // Validate membership
       const membership = await ProjectMember.findOne({ where: { projectId, userId: discordId } });
@@ -265,7 +343,7 @@ export async function execute(interaction) {
           const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
           return acc + (d > 0 ? d : 0);
         }, 0);
-        return interaction.editReply({ content: `You’re sitting at **${current}** on this project. Keep pace.` });
+        return interaction.editReply({ content: `You’re sitting at **${current}** on **${project.name}** (${project.publicId || project.id}). Keep pace.` });
       }
     }
 
@@ -275,8 +353,9 @@ export async function execute(interaction) {
         return interaction.editReply({ content: "You’re not on any projects yet. Spin one up with `/project create`." });
       }
       const ids = memberships.map(m => m.projectId);
-      const projects = await Project.findAll({ where: { id: ids } });
-      const lines = projects.map(p => `• **${p.name}** (${p.id})`).join('\n');
+      const projects = await Project.findAll({ where: { id: { [Op.in]: ids } } });
+      for (const p of projects) await ensureProjectHasPublicId(p);
+      const lines = projects.map(p => `• **${p.name}** (${p.publicId || p.id})`).join('\n');
       return interaction.editReply({ content: `Your projects:\n${lines}` });
     }
 
@@ -291,12 +370,7 @@ export async function execute(interaction) {
           project = await Project.findByPk(uuid);
         }
         if (!project) {
-          // Try by name: owned first, then membership list
-          project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
-          if (!project) {
-            const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-            project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
-          }
+          project = await resolveProjectForUser({ discordId, projectInputRaw: projectInput });
         }
       } else {
         const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
@@ -305,8 +379,9 @@ export async function execute(interaction) {
         }
       }
       if (!project) {
-          return interaction.editReply({ content: 'No target project. Pass `project:` (ID or exact name), or link one to your sprint. You can create a new project with `/project create`.' });
+          return interaction.editReply({ content: 'No target project. Pass `project:` (code, ID, or exact name), or link one to your sprint. You can create a new project with `/project create`.' });
       }
+        project = await ensureProjectHasPublicId(project);
       // Permission: owner or mod on the target project, or elevated global permission
       const requester = await User.findOne({ where: { discordId } });
       const level = (requester?.permissionLevel || 'member').toLowerCase();
@@ -368,17 +443,13 @@ export async function execute(interaction) {
       const uuid = extractUuid(projectInput);
       let project = uuid ? await Project.findByPk(uuid) : null;
       if (!project) {
-        // Try by name (owned or member)
-        project = await Project.findOne({ where: { ownerId: discordId, name: projectInput } });
-        if (!project) {
-          const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] });
-          project = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
-        }
+        project = await resolveProjectForUser({ discordId, projectInputRaw: projectInput });
       }
         if (!project) {
           await interaction.followUp({ content: "Nope. Try `/project list` or create a new one with `/project create`.", flags: MessageFlags.Ephemeral });
           return;
         }
+      project = await ensureProjectHasPublicId(project);
       const projectId = project.id;
       const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
       if (!active) {
@@ -391,7 +462,7 @@ export async function execute(interaction) {
         return;
       }
       await active.update({ projectId });
-      return interaction.editReply({ content: `Locked this sprint to project **${projectId}**. Let’s get those pages.` });
+      return interaction.editReply({ content: `Locked this sprint to **${project.name}** (${project.publicId || project.id}). Let’s get those pages.` });
     }
 
     if (subName === 'members') {

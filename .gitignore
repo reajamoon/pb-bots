@@ -82,8 +82,6 @@ ao3_cookies.json
 .dynamodb/
 
 #Config
-config
-config/
 config/config.js
 config/config.json
 

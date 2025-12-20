@@ -5,6 +5,71 @@ import { Op } from 'sequelize';
 import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintLeaveText, sprintStatusWordsText, sprintEndedWordsText } from '../text/sprintText.js';
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
 import { handleSprintWc } from '../utils/handleSprintWc.js';
+import { setInteractionState } from '../utils/interactionState.js';
+
+function makeToken(length = 12) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let out = '';
+  for (let i = 0; i < length; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return out;
+}
+
+function extractPublicId(input) {
+  if (!input) return null;
+  const str = String(input).trim();
+  const match = str.match(/\b([A-Za-z0-9]{2,24}-\d{3})\b/);
+  if (!match) return null;
+  return match[1].toUpperCase();
+}
+
+async function getUserProjects(discordId) {
+  const owned = await Project.findAll({ where: { ownerId: discordId }, limit: 100 }).catch(() => []);
+  const memberships = await ProjectMember.findAll({ where: { userId: discordId }, limit: 200 }).catch(() => []);
+  const memberProjectIds = [...new Set(memberships.map(m => m.projectId).filter(Boolean))];
+  const memberProjects = memberProjectIds.length
+    ? await Project.findAll({ where: { id: { [Op.in]: memberProjectIds } }, limit: 200 }).catch(() => [])
+    : [];
+  const byId = new Map();
+  for (const p of [...owned, ...memberProjects]) {
+    if (p?.id) byId.set(p.id, p);
+  }
+  return [...byId.values()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+}
+
+async function resolveProjectFromInput({ discordId, projectInputRaw }) {
+  if (!projectInputRaw) return null;
+  const projectInput = String(projectInputRaw).trim();
+  if (!projectInput) return null;
+
+  // Try UUID
+  const uuidMatch = projectInput.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (uuidMatch) {
+    const p = await Project.findByPk(uuidMatch[0]).catch(() => null);
+    if (p) {
+      const member = await ProjectMember.findOne({ where: { projectId: p.id, userId: discordId } }).catch(() => null);
+      if (member || p.ownerId === discordId) return p;
+    }
+  }
+
+  // Try publicId (CODE-123)
+  const publicId = extractPublicId(projectInput);
+  if (publicId) {
+    const p = await Project.findOne({ where: { publicId } }).catch(() => null);
+    if (p) {
+      const member = await ProjectMember.findOne({ where: { projectId: p.id, userId: discordId } }).catch(() => null);
+      if (member || p.ownerId === discordId) return p;
+    }
+  }
+
+  // Try exact name among owned
+  const owned = await Project.findOne({ where: { ownerId: discordId, name: projectInput } }).catch(() => null);
+  if (owned) return owned;
+
+  // Try exact name among joined
+  const memberships = await ProjectMember.findAll({ where: { userId: discordId }, include: [{ model: Project, as: 'project' }] }).catch(() => []);
+  const joined = memberships.map(m => m.project).find(p => p?.name === projectInput) || null;
+  return joined;
+}
 
 export const data = new SlashCommandBuilder()
   .setName('sprint')
@@ -74,7 +139,12 @@ data.addSubcommandGroup(group => group
   .addSubcommand(sub => sub
     .setName('use')
     .setDescription('Use a project for your sprint')
-    .addStringOption(opt => opt.setName('project_id').setDescription('Project ID').setRequired(true)))
+    .addStringOption(opt => opt.setName('project').setDescription('Project code, ID, or exact name (optional, will prompt)').setRequired(false))
+    // Back-compat with older registrations
+    .addStringOption(opt => opt.setName('project_id').setDescription('Project ID (legacy)').setRequired(false)))
+  .addSubcommand(sub => sub
+    .setName('clear')
+    .setDescription('Unlink your sprint from any project'))
 );
 
   // Admin/mod-only: set default sprint channel for this guild
@@ -428,27 +498,120 @@ export async function execute(interaction) {
     return handleSprintWc(interaction, { guildId });
   } else if (subGroup === 'project') {
     const discordId = interaction.user.id;
-    if (sub !== 'use') {
+    if (!(sub === 'use' || sub === 'clear')) {
       return interaction.editReply({ content: "Yeah, I don't know that one." });
     }
-    const projectIdRaw = interaction.options.getString('project_id');
-    if (!projectIdRaw) {
-      return interaction.editReply({ content: "I need a project ID, champ. Grab it from `/project list` and try again.", allowedMentions: { parse: [] } });
-    }
-    const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-    if (!active) {
+
+    const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] });
+    if (!actives.length) {
       return interaction.editReply({ content: 'No active sprint right now. Kick one off with `/sprint start`.', allowedMentions: { parse: [] } });
     }
-    const project = await Project.findByPk(projectIdRaw).catch(() => null);
+
+    // Disambiguation: never guess wrong.
+    let target = null;
+    if (actives.length === 1) {
+      target = actives[0];
+    } else {
+      const token = makeToken();
+      setInteractionState(token, {
+        guildId,
+        userId: discordId,
+        sprintProjectVerb: sub,
+        projectInputRaw: (sub === 'use') ? (interaction.options.getString('project') || interaction.options.getString('project_id') || null) : null,
+      });
+
+      // Spec: team first, then solo; within group soonest ending first.
+      const nowMs = Date.now();
+      const candidates = actives.map(row => {
+        const startsAtMs = row.startedAt ? new Date(row.startedAt).getTime() : nowMs;
+        const endsAtMs = startsAtMs + (row.durationMinutes || 0) * 60000;
+        return { row, endsAtMs };
+      });
+      candidates.sort((a, b) => {
+        const aTeam = a.row.type === 'team' ? 0 : 1;
+        const bTeam = b.row.type === 'team' ? 0 : 1;
+        if (aTeam !== bTeam) return aTeam - bTeam;
+        return a.endsAtMs - b.endsAtMs;
+      });
+
+      const select = new Discord.StringSelectMenuBuilder()
+        .setCustomId(`sprintProjectSprintPick_${token}`)
+        .setPlaceholder('Pick a sprint')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+      for (const c of candidates.slice(0, 25)) {
+        const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+        const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+        const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        select.addOptions(
+          new Discord.StringSelectMenuOptionBuilder()
+            .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setValue(String(c.row.id))
+        );
+      }
+
+      const row = new Discord.ActionRowBuilder().addComponents(select);
+      return interaction.editReply({
+        content: 'Which sprint are we linking? Pick one. I am not guessing.',
+        components: [row],
+        allowedMentions: { parse: [] },
+      });
+    }
+
+    const sprintIdentifier = formatSprintIdentifier({ type: target.type, groupId: target.groupId, label: target.label, startedAt: target.startedAt });
+
+    if (sub === 'clear') {
+      await target.update({ projectId: null });
+      return interaction.editReply({ content: `Alright. Unlinked: ${sprintIdentifier}`, allowedMentions: { parse: [] } });
+    }
+
+    const projectInputRaw = interaction.options.getString('project') || interaction.options.getString('project_id');
+    let project = await resolveProjectFromInput({ discordId, projectInputRaw });
+
     if (!project) {
-      return interaction.editReply({ content: "Nope. Can't find that project. Try `/project list`." , allowedMentions: { parse: [] } });
+      const projects = await getUserProjects(discordId);
+      if (!projects.length) {
+        return interaction.editReply({ content: "You don't have any projects yet. Make one with `/project create`.", allowedMentions: { parse: [] } });
+      }
+
+      const token = makeToken();
+      setInteractionState(token, {
+        guildId,
+        userId: discordId,
+        sprintProjectVerb: 'use',
+        sprintId: target.id,
+      });
+
+      const select = new Discord.StringSelectMenuBuilder()
+        .setCustomId(`sprintProjectProjectPick_${token}`)
+        .setPlaceholder('Pick a project')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+      for (const p of projects.slice(0, 25)) {
+        select.addOptions(
+          new Discord.StringSelectMenuOptionBuilder()
+            .setLabel(String(p.name || 'Unnamed project').slice(0, 100))
+            .setDescription(String(p.publicId || p.id).slice(0, 100))
+            .setValue(String(p.id))
+        );
+      }
+
+      const row = new Discord.ActionRowBuilder().addComponents(select);
+      return interaction.editReply({
+        content: `Which project for ${sprintIdentifier}?`,
+        components: [row],
+        allowedMentions: { parse: [] },
+      });
     }
-    const membership = await ProjectMember.findOne({ where: { projectId: project.id, userId: discordId } }).catch(() => null);
-    if (!membership && project.ownerId !== discordId) {
-      return interaction.editReply({ content: "You're not on that project, buddy. Get invited first.", allowedMentions: { parse: [] } });
-    }
-    await active.update({ projectId: project.id });
-    return interaction.editReply({ content: `Alright. Your sprint entry is linked to **${project.name}**.`, allowedMentions: { parse: [] } });
+
+    await target.update({ projectId: project.id });
+    return interaction.editReply({
+      content: `Alright. Linked: ${sprintIdentifier}\nProject: **${project.name}** (${project.publicId || project.id})`,
+      allowedMentions: { parse: [] },
+    });
   } else if (sub === 'setchannel') {
     const perms = interaction.memberPermissions;
     const isStaff = perms?.has(PermissionFlagsBits.Administrator) || perms?.has(PermissionFlagsBits.ManageGuild) || perms?.has(PermissionFlagsBits.ManageChannels);

@@ -23,7 +23,7 @@ export const data = new SlashCommandBuilder()
       ))
     .addStringOption(opt => opt
       .setName('project')
-      .setDescription('Project ID or exact name (for scope=project)')
+      .setDescription('Project code, ID, or exact name (for scope=project)')
       .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('add')
@@ -39,7 +39,7 @@ export const data = new SlashCommandBuilder()
       ))
     .addStringOption(opt => opt
       .setName('project')
-      .setDescription('Project ID or exact name (for scope=project)')
+      .setDescription('Project code, ID, or exact name (for scope=project)')
       .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('show')
@@ -54,7 +54,7 @@ export const data = new SlashCommandBuilder()
       ))
     .addStringOption(opt => opt
       .setName('project')
-      .setDescription('Project ID or exact name (for scope=project)')
+      .setDescription('Project code, ID, or exact name (for scope=project)')
       .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('summary')
@@ -69,7 +69,7 @@ export const data = new SlashCommandBuilder()
       ))
     .addStringOption(opt => opt
       .setName('project')
-      .setDescription('Project ID or exact name (for scope=project)')
+      .setDescription('Project code, ID, or exact name (for scope=project)')
       .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('undo')
@@ -84,7 +84,7 @@ export const data = new SlashCommandBuilder()
       ))
     .addStringOption(opt => opt
       .setName('project')
-      .setDescription('Project ID or exact name (for scope=project)')
+      .setDescription('Project code, ID, or exact name (for scope=project)')
       .setRequired(false)));
 
 export async function execute(interaction) {

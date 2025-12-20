@@ -47,6 +47,14 @@ function sumPositive(rows) {
   }, 0);
 }
 
+function extractPublicId(input) {
+  if (!input) return null;
+  const str = String(input).trim();
+  const match = str.match(/\b([A-Za-z0-9]{2,24}-\d{3})\b/);
+  if (!match) return null;
+  return match[1].toUpperCase();
+}
+
 async function getUserProjects(discordId) {
   const memberships = await ProjectMember.findAll({ where: { userId: discordId }, limit: 100 }).catch(() => []);
   if (!memberships.length) return [];
@@ -54,7 +62,7 @@ async function getUserProjects(discordId) {
   const projectIds = [...new Set(memberships.map(m => m.projectId).filter(Boolean))];
   if (!projectIds.length) return [];
 
-  const projects = await Project.findAll({ where: { id: projectIds }, limit: 100 }).catch(() => []);
+  const projects = await Project.findAll({ where: { id: { [Op.in]: projectIds } }, limit: 100 }).catch(() => []);
   return projects;
 }
 
@@ -67,6 +75,16 @@ async function resolveProjectFromInput({ discordId, projectInputRaw }) {
   const uuidMatch = projectInput.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
   if (uuidMatch) {
     const p = await Project.findByPk(uuidMatch[0]).catch(() => null);
+    if (p) {
+      const member = await ProjectMember.findOne({ where: { projectId: p.id, userId: discordId } }).catch(() => null);
+      if (member || p.ownerId === discordId) return p;
+    }
+  }
+
+  // Try publicId (CODE-123)
+  const publicId = extractPublicId(projectInput);
+  if (publicId) {
+    const p = await Project.findOne({ where: { publicId } }).catch(() => null);
     if (p) {
       const member = await ProjectMember.findOne({ where: { projectId: p.id, userId: discordId } }).catch(() => null);
       if (member || p.ownerId === discordId) return p;
@@ -219,7 +237,7 @@ export async function handleWc(
       select.addOptions(
         new StringSelectMenuOptionBuilder()
           .setLabel(String(p.name || 'Unnamed project').slice(0, 100))
-          .setDescription(String(p.id).slice(0, 100))
+          .setDescription(String(p.publicId || p.id).slice(0, 100))
           .setValue(String(p.id))
       );
     }
