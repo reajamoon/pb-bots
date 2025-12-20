@@ -26,13 +26,28 @@ function makeToken(length = 12) {
 
 function getSprintEndedAtCandidate(sprintRow) {
   if (!sprintRow) return null;
-  if (sprintRow.endedAt) return new Date(sprintRow.endedAt);
+  const nowMs = Date.now();
+  if (sprintRow.endedAt) {
+    const endedAt = new Date(sprintRow.endedAt);
+    // Sanity: if endedAt looks wildly in the future, fall back to updatedAt.
+    // This protects late logging from bad/misparsed timestamps.
+    if (Number.isFinite(endedAt.getTime()) && endedAt.getTime() <= nowMs + 5 * 60000) return endedAt;
+    if (sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
+    return endedAt;
+  }
   // If the sprint is marked done but we failed to persist endedAt,
   // fall back to the row update timestamp (covers manual early ends
   // and other edge cases where startedAt+duration isn't reliable).
   if (sprintRow.status === 'done' && sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
   if (sprintRow.startedAt && sprintRow.durationMinutes) {
-    return new Date(new Date(sprintRow.startedAt).getTime() + sprintRow.durationMinutes * 60000);
+    const computed = new Date(new Date(sprintRow.startedAt).getTime() + sprintRow.durationMinutes * 60000);
+    if (Number.isFinite(computed.getTime())) {
+      // Same sanity as above: if we think a done sprint ends far in the future,
+      // treat updatedAt as the best available signal.
+      if (computed.getTime() <= nowMs + 5 * 60000) return computed;
+      if (sprintRow.status === 'done' && sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
+    }
+    return computed;
   }
   if (sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
   return null;
@@ -153,7 +168,26 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       if (nowMs < endedMs) return false;
       return (nowMs - endedMs) <= windowMinutes * 60000;
     });
-    if (!within.length) return { error: noActiveSprintText() };
+    if (!within.length) {
+      try {
+        console.warn('[dean][wc] no eligible sprint target', {
+          discordId,
+          guildId: effectiveGuildId,
+          windowMinutes,
+          endedCandidates: endedCandidates.length,
+          sample: endedCandidates.slice(0, 3).map(r => ({
+            id: r.id,
+            status: r.status,
+            startedAt: r.startedAt,
+            durationMinutes: r.durationMinutes,
+            endedAt: r.endedAt,
+            updatedAt: r.updatedAt,
+            endedAtCandidate: getSprintEndedAtCandidate(r),
+          })),
+        });
+      } catch {}
+      return { error: noActiveSprintText() };
+    }
     if (within.length === 1) return { target: within[0], isLateLog: true, lateLogWindowMinutes: windowMinutes };
 
     return { ambiguous: 'multiple-recent', lateLogWindowMinutes: windowMinutes };
