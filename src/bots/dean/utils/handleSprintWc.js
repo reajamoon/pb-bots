@@ -285,7 +285,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       const participants = (sprintRow.type === 'team' && sprintRow.groupId)
         ? await DeanSprints.findAll({ where: { guildId: effectiveGuildId, groupId: sprintRow.groupId }, order: [['createdAt', 'ASC']] })
         : [sprintRow];
-      const participantIds = participants.map(p => p.userId);
+      const participantIds = [...new Set(participants.map(p => p.userId))];
       const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
       const sprintIdentifier = formatSprintIdentifier({ type: sprintRow.type, groupId: sprintRow.groupId, label: sprintRow.label, startedAt: sprintRow.startedAt });
       const leaderboardLines = await buildLeaderboardLines(participants, interaction.guild);

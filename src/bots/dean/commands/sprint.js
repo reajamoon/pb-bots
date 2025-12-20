@@ -361,7 +361,7 @@ export async function execute(interaction) {
 
     if (active.type === 'team' && active.role === 'host' && active.groupId) {
       const participants = await DeanSprints.findAll({ where: { guildId, groupId: active.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] });
-      const participantIds = participants.map(p => p.userId);
+      const participantIds = [...new Set(participants.map(p => p.userId))];
       const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
       const leaderboardLines = await buildLeaderboardLines(participants);
       // End the team (host + all participants)
