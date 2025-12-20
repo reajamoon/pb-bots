@@ -3,6 +3,8 @@ const { SlashCommandBuilder, MessageFlags } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
 
+import { sumNet } from '../../../shared/utils/wordcountMath.js';
+
 import fs from 'fs';
 import path from 'path';
 
@@ -233,14 +235,14 @@ export async function execute(interaction) {
       const lastSprint = await DeanSprints.findOne({ where: { projectId: project.id }, order: [['updatedAt', 'DESC']] }).catch(() => null);
       if (lastSprint) {
         const rows = await Wordcount.findAll({ where: { sprintId: lastSprint.id }, order: [['recordedAt', 'ASC']] });
-        lastSprintTotal = rows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
+        lastSprintTotal = sumNet(rows);
       }
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const recentRows = await Wordcount.findAll({ where: { projectId: project.id, recordedAt: { [Op.gte]: since } } }).catch(() => []);
       // All-time total across all members for this project
       const allRows = await Wordcount.findAll({ where: { projectId: project.id } }).catch(() => []);
-      const allTotal = allRows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
-      const weekTotal = recentRows.reduce((acc, r) => acc + ((typeof r.delta === 'number') ? Math.max(0, r.delta) : Math.max(0, (r.countEnd ?? 0) - (r.countStart ?? 0))), 0);
+      const allTotal = sumNet(allRows);
+      const weekTotal = sumNet(recentRows);
       // Build embed
       const Discord = await import('discord.js');
       const { EmbedBuilder } = Discord;
@@ -265,9 +267,9 @@ export async function execute(interaction) {
           { name: 'Owner', value: ownerTag, inline: true },
           { name: 'Members', value: `${members.length} (mods: ${mods})`, inline: true },
           { name: 'Active Sprint', value: activeSprint ? `Yes, in ${channelMention}` : 'No', inline: true },
-          { name: 'Last Sprint Total', value: `${lastSprintTotal} words`, inline: true },
-          { name: 'All-Time Total', value: `${allTotal} words`, inline: true },
-          { name: '7-Day Total', value: `${weekTotal} words`, inline: true }
+          { name: 'Last Sprint Net', value: `${lastSprintTotal} words`, inline: true },
+          { name: 'Current Net', value: `${allTotal} words`, inline: true },
+          { name: '7-Day Net', value: `${weekTotal} words`, inline: true }
         )
         .setTimestamp(project.createdAt)
         .setFooter({ text: `Project code: ${project.publicId || project.id} • Created: <t:${Math.floor(new Date(project.createdAt).getTime() / 1000)}:F>` });
@@ -318,13 +320,10 @@ export async function execute(interaction) {
           return;
         }
         const rows = await Wordcount.findAll({ where: { projectId, userId: discordId }, order: [['recordedAt', 'ASC']] });
-        const current = rows.reduce((acc, r) => {
-          const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
-          return acc + (d > 0 ? d : 0);
-        }, 0);
-        const delta = Math.max(0, count - current);
+        const current = sumNet(rows);
+        const delta = count - current;
         if (delta === 0) {
-          await interaction.followUp({ content: `You’re at **${count}** on this project.`, flags: MessageFlags.Ephemeral });
+          await interaction.followUp({ content: `You’re already at **${count}** on this project.`, flags: MessageFlags.Ephemeral });
           return;
         }
         await Wordcount.create({
@@ -336,13 +335,10 @@ export async function execute(interaction) {
           delta,
           recordedAt: new Date(),
         });
-        return interaction.editReply({ content: `Locked **${count}**. Added **+${delta}**.` });
+        return interaction.editReply({ content: `Locked **${count}**. (${delta >= 0 ? '+' : ''}${delta})` });
       } else if (leaf === 'show') {
         const rows = await Wordcount.findAll({ where: { projectId, userId: discordId }, order: [['recordedAt', 'ASC']] });
-        const current = rows.reduce((acc, r) => {
-          const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
-          return acc + (d > 0 ? d : 0);
-        }, 0);
+        const current = sumNet(rows);
         return interaction.editReply({ content: `You’re sitting at **${current}** on **${project.name}** (${project.publicId || project.id}). Keep pace.` });
       }
     }

@@ -1,6 +1,7 @@
 import { summaryEmbed, formatSprintIdentifier, sprintCheckInWordsText, sprintEndedWordsText } from './text/sprintText.js';
 import { DeanSprints, GuildSprintSettings, Wordcount, Project } from '../../models/index.js';
 import fireTrigger from '../../shared/hunts/triggerEngine.js';
+import { sumNet } from '../../shared/utils/wordcountMath.js';
 
 function getChannelFromIds(client, guildId, channelId, threadId) {
   const guild = client.guilds.cache.get(guildId);
@@ -41,7 +42,7 @@ export async function scheduleSprintNotifications(sprint, client) {
     const scores = [];
     for (const p of participantRows) {
       const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-      const total = wcRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      const total = sumNet(wcRows);
       scores.push({ userId: p.userId, total });
     }
     scores.sort((a, b) => (b.total || 0) - (a.total || 0));
@@ -243,11 +244,7 @@ async function buildSummaries(sprint) {
   for (const p of participants) {
     // Sum Wordcount rows recorded for this sprint/user
     const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-    const totalRaw = wcRows.reduce((acc, r) => {
-      const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
-      return acc + (d > 0 ? d : 0);
-    }, 0);
-    const total = Math.max(0, totalRaw);
+    const total = sumNet(wcRows);
     let projectName = null;
     if (p.projectId) {
       const proj = await Project.findByPk(p.projectId).catch(() => null);
@@ -295,7 +292,7 @@ export async function startSprintWatchdog(client) {
                 const scores = [];
                 for (const p of participants) {
                   const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-                  const total = wcRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+                  const total = sumNet(wcRows);
                   scores.push({ userId: p.userId, total });
                 }
                 scores.sort((a, b) => (b.total || 0) - (a.total || 0));

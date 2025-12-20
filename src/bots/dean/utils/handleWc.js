@@ -9,7 +9,9 @@ const {
 } = Discord;
 
 import { Op } from 'sequelize';
-import { Project, ProjectMember, Wordcount } from '../../../models/index.js';
+import { Project, ProjectMember, Wordcount, User, GuildSprintSettings } from '../../../models/index.js';
+import { validateTimezone } from '../../../shared/utils/timezoneValidator.js';
+import { getStartOfTodayUtc } from '../../../shared/utils/timeWindow.js';
 import {
   wcProjectPickerPromptText,
   wcNoProjectsText,
@@ -53,6 +55,27 @@ function extractPublicId(input) {
   const match = str.match(/\b([A-Za-z0-9]{2,24}-\d{3})\b/);
   if (!match) return null;
   return match[1].toUpperCase();
+}
+
+async function resolveEffectiveTimeZone({ discordId, guildId } = {}) {
+  let userZone = null;
+  try {
+    const u = await User.findOne({ where: { discordId } });
+    const res = validateTimezone(u?.timezone);
+    if (res?.isValid && res.normalizedTimezone) userZone = res.normalizedTimezone;
+  } catch {}
+
+  if (userZone) return userZone;
+
+  if (guildId) {
+    try {
+      const settings = await GuildSprintSettings.findOne({ where: { guildId } });
+      const res = validateTimezone(settings?.timezone);
+      if (res?.isValid && res.normalizedTimezone) return res.normalizedTimezone;
+    } catch {}
+  }
+
+  return 'UTC';
 }
 
 async function getUserProjects(discordId) {
@@ -279,8 +302,8 @@ export async function handleWc(
       return d > max ? d : max;
     }, 0);
 
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    const tz = await resolveEffectiveTimeZone({ discordId, guildId: guildId ?? interaction.guildId });
+    const startOfDay = getStartOfTodayUtc({ timeZone: tz, now: new Date() });
     const dayRows = await Wordcount.findAll({
       where: {
         userId: discordId,
@@ -289,13 +312,15 @@ export async function handleWc(
       },
       order: [['recordedAt', 'ASC']],
     }).catch(() => []);
+    const dayNet = sumNet(dayRows);
     const dayGained = sumPositive(dayRows);
 
     const content = [
       `Project: **${project.name}**`,
       `Current total: **${currentNet}**`,
-      `Total gained (all time): **${totalGained}**`,
-      `Total gained today: **${dayGained}**`,
+      `Net today: **${dayNet}**`,
+      `Total written (positive only): **${totalGained}**`,
+      `Written today (positive only): **${dayGained}**`,
       `Updates: **${updates}**`,
       `Best single update: **${maxGain}**`,
     ].join('\n');

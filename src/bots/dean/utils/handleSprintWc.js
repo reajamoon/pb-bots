@@ -8,10 +8,14 @@ const {
   ButtonStyle,
 } = Discord;
 import { Op } from 'sequelize';
-import { DeanSprints, User, Wordcount, Project } from '../../../models/index.js';
+import { DeanSprints, User, Wordcount, Project, GuildSprintSettings } from '../../../models/index.js';
 import { formatSprintIdentifier, noActiveSprintText, sprintEndedWordsText } from '../text/sprintText.js';
 import { wcSprintPickerPromptText, wcConfirmSetPromptText, wcConfirmUndoPromptText, wcConfirmBaselinePromptText } from '../text/wcText.js';
 import { setInteractionState } from './interactionState.js';
+
+import { validateTimezone } from '../../../shared/utils/timezoneValidator.js';
+import { getStartOfTodayUtc } from '../../../shared/utils/timeWindow.js';
+import { sumNet, sumPositive, maxDelta } from '../../../shared/utils/wordcountMath.js';
 
 function makeToken(length = 12) {
   const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -45,6 +49,27 @@ async function buildCandidateTargets({ guildId, discordId, windowMinutes }) {
 export async function handleSprintWc(interaction, { guildId, forcedTargetId, forcedSubcommand, forcedOptions, forcedUndoWordcountId, confirmed } = {}) {
   const discordId = interaction.user.id;
   const effectiveGuildId = guildId ?? interaction.guildId;
+
+  async function resolveEffectiveTimeZone() {
+    let userZone = null;
+    try {
+      const u = await User.findOne({ where: { discordId } });
+      const res = validateTimezone(u?.timezone);
+      if (res?.isValid && res.normalizedTimezone) userZone = res.normalizedTimezone;
+    } catch {}
+
+    if (userZone) return userZone;
+
+    if (effectiveGuildId) {
+      try {
+        const settings = await GuildSprintSettings.findOne({ where: { guildId: effectiveGuildId } });
+        const res = validateTimezone(settings?.timezone);
+        if (res?.isValid && res.normalizedTimezone) return res.normalizedTimezone;
+      } catch {}
+    }
+
+    return 'UTC';
+  }
 
   function getIntOption(name) {
     if (forcedOptions) {
@@ -128,7 +153,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     const scores = [];
     for (const p of participantRows) {
       const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-      const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      const total = sumNet(rows);
       scores.push({ userId: p.userId, total });
     }
     scores.sort((a, b) => (b.total || 0) - (a.total || 0));
@@ -381,20 +406,21 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     });
     // Sprint stats
     const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-    const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    const sprintNet = sumNet(allRows);
+    const sprintWrite = sumPositive(allRows);
     const updates = allRows.length;
-    const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+    const maxGain = maxDelta(allRows);
     // Daily stats
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    const tz = await resolveEffectiveTimeZone();
+    const startOfDay = getStartOfTodayUtc({ timeZone: tz, now: new Date() });
     const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-    const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    const dayNet = sumNet(dayRows);
     // Feedback
     const sinceLabel = last ? 'since last update' : 'since sprint start';
     let msg = `Locked in at **${count}**.`;
     msg += `\nWords gained ${sinceLabel}: **${delta >= 0 ? '+' : ''}${delta}**`;
-    msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-    msg += `\nTotal gained today: **${dayTotal}**`;
+    msg += `\nSprint net: **${sprintNet}**`;
+    msg += `\nNet today: **${dayNet}**`;
     msg += `\nUpdates this sprint: **${updates}**`;
     msg += `\nBest single update this sprint: **${maxGain}**`;
     // Hunt: check 5k single-sprint total
@@ -402,7 +428,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       const fireTrigger = (await import('../../shared/hunts/triggerEngine.js')).default;
       const makeDeanAnnouncer = (await import('./huntsAnnouncer.js')).default;
       const announce = makeDeanAnnouncer(interaction);
-      await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
+      await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal: sprintWrite, announce, interaction });
     } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
 
     await maybeEditEndSummary(target);
@@ -429,18 +455,19 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     });
     // Sprint stats
     const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-    const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    const sprintNet = sumNet(allRows);
+    const sprintWrite = sumPositive(allRows);
     const updates = allRows.length;
-    const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+    const maxGain = maxDelta(allRows);
     // Daily stats
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    const tz = await resolveEffectiveTimeZone();
+    const startOfDay = getStartOfTodayUtc({ timeZone: tz, now: new Date() });
     const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-    const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    const dayNet = sumNet(dayRows);
     // Feedback
     let msg = `Nice. **+${words}**. Sitting at **${next}**.`;
-    msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-    msg += `\nTotal gained today: **${dayTotal}**`;
+    msg += `\nSprint net: **${sprintNet}**`;
+    msg += `\nNet today: **${dayNet}**`;
     msg += `\nUpdates this sprint: **${updates}**`;
     msg += `\nBest single update this sprint: **${maxGain}**`;
     // Hunt: check 5k single-sprint total
@@ -448,7 +475,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       const fireTrigger = (await import('../../shared/hunts/triggerEngine.js')).default;
       const makeDeanAnnouncer = (await import('./huntsAnnouncer.js')).default;
       const announce = makeDeanAnnouncer(interaction);
-      await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal, announce, interaction });
+      await fireTrigger('dean.sprint.wordcount.check', { userId: discordId, sprintTotal: sprintWrite, announce, interaction });
     } catch (huntErr) { console.warn('[hunts] dean.sprint.wordcount.check failed:', huntErr); }
 
     await maybeEditEndSummary(target);
@@ -457,21 +484,21 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     const wc = target.wordcountEnd ?? 0;
     // Sprint stats
     const allRows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-    const sprintTotal = allRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    const sprintNet = sumNet(allRows);
     const updates = allRows.length;
-    const maxGain = allRows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+    const maxGain = maxDelta(allRows);
     const first = (typeof target.wordcountStart === 'number')
       ? target.wordcountStart
       : (allRows.length ? (allRows[0].countEnd ?? allRows[0].countStart ?? 0) : 0);
     // Daily stats
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    const tz = await resolveEffectiveTimeZone();
+    const startOfDay = getStartOfTodayUtc({ timeZone: tz, now: new Date() });
     const dayRows = await Wordcount.findAll({ where: { userId: discordId, recordedAt: { [Op.gte]: startOfDay } }, order: [['recordedAt', 'ASC']] });
-    const dayTotal = dayRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    const dayNet = sumNet(dayRows);
     let msg = `Current wordcount: **${wc}**`;
     msg += `\nStarted at: **${first}**`;
-    msg += `\nTotal gained this sprint: **${sprintTotal}**`;
-    msg += `\nTotal gained today: **${dayTotal}**`;
+    msg += `\nSprint net: **${sprintNet}**`;
+    msg += `\nNet today: **${dayNet}**`;
     msg += `\nUpdates this sprint: **${updates}**`;
     msg += `\nBest single update this sprint: **${maxGain}**`;
     return interaction.editReply({ content: msg });
@@ -482,9 +509,9 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     const linesSum = [];
     for (const p of participants) {
       const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-      const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+      const total = sumNet(rows);
       const updates = rows.length;
-      const maxGain = rows.reduce((max, r) => r.delta > max ? r.delta : max, 0);
+      const maxGain = maxDelta(rows);
       const first = (typeof p.wordcountStart === 'number')
         ? p.wordcountStart
         : (rows.length ? (rows[0].countEnd ?? rows[0].countStart ?? 0) : 0);
@@ -545,11 +572,10 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
 
     await last.destroy();
     const rows = await Wordcount.findAll({ where: { sprintId: target.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-    const totalRaw = rows.reduce((acc, r) => {
-      const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
-      return acc + (d > 0 ? d : 0);
-    }, 0);
-    const next = Math.max(0, totalRaw);
+    const nextRaw = rows.length
+      ? (rows[rows.length - 1].countEnd ?? rows[rows.length - 1].countStart ?? 0)
+      : (typeof target.wordcountStart === 'number' ? target.wordcountStart : 0);
+    const next = Math.max(0, Number(nextRaw) || 0);
     await target.update({ wordcountEnd: next });
 
     await maybeEditEndSummary(target);

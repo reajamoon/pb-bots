@@ -7,6 +7,7 @@ const GuildSprintSettings = sequelize.define('GuildSprintSettings', {
   blockedChannelIds: { type: DataTypes.JSON, allowNull: true },
   allowThreadsByDefault: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   defaultSummaryChannelId: { type: DataTypes.STRING, allowNull: true },
+  timezone: { type: DataTypes.STRING, allowNull: true },
 }, {
   tableName: 'GuildSprintSettings',
   indexes: [{ fields: ['guildId'] }],
