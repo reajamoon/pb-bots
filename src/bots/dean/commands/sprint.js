@@ -168,7 +168,7 @@ export async function execute(interaction) {
         allowedMentions: { parse: [] },
       });
     }
-    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
+    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
     await scheduleSprintNotifications(sprint, interaction.client);
     return;
   } else if (sub === 'host') {
@@ -208,7 +208,7 @@ export async function execute(interaction) {
         allowedMentions: { parse: [] },
       });
     }
-    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
+    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
     await scheduleSprintNotifications(hostRow, interaction.client);
     return;
   } else if (sub === 'join') {
