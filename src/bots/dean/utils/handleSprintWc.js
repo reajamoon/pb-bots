@@ -412,6 +412,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       setInteractionState(token, {
         guildId: effectiveGuildId,
         userId: discordId,
+        scope: 'sprint',
         targetId: target.id,
         subcommand: 'baseline',
         options: { count, newWords: null },
@@ -467,6 +468,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       setInteractionState(token, {
         guildId: effectiveGuildId,
         userId: discordId,
+        scope: 'sprint',
         targetId: target.id,
         subcommand: 'set',
         options: { count, newWords: null },
@@ -644,6 +646,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       setInteractionState(token, {
         guildId: effectiveGuildId,
         userId: discordId,
+        scope: 'sprint',
         targetId: target.id,
         subcommand: 'undo',
         options: { count: null, newWords: null },

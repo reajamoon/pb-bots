@@ -45,6 +45,7 @@ export async function execute(interaction) {
   // Re-run the wc handler, but forcing the target + original subcommand options.
   return handleWc(interaction, {
     guildId: state.guildId,
+    forcedScope: 'sprint',
     forcedTargetId: pickedId,
     forcedSubcommand: state.subcommand,
     forcedOptions: state.options,
