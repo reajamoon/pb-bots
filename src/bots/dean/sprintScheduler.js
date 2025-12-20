@@ -77,7 +77,7 @@ export async function scheduleSprintNotifications(sprint, client) {
         const progressLines = [];
         for (const p of participants) {
           const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-          const total = wcRows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+          const total = sumNet(wcRows);
           const name = await safeDisplayName(p.userId);
           progressLines.push(`${name}: NET ${total || 0}`);
         }

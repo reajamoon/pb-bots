@@ -6,6 +6,96 @@ import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledIn
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
 import { handleSprintWc } from '../utils/handleSprintWc.js';
 import { setInteractionState } from '../utils/interactionState.js';
+import { sumNet } from '../../../shared/utils/wordcountMath.js';
+
+import fs from 'fs';
+import path from 'path';
+
+const DEFAULT_HUNT_CODES = [
+  'ALIEN',
+  'ANGEL',
+  'BANSHEE',
+  'CHANGELING',
+  'CHUPACABRA',
+  'CURSE',
+  'DEMON',
+  'DJINN',
+  'DRAGON',
+  'FAIRY',
+  'FISHTACO',
+  'GHOST',
+  'GHOUL',
+  'HELLHOUND',
+  'HORSEMAN',
+  'JEFFERSON-STARSHIP',
+  'KITSUNE',
+  'KRAKEN',
+  'LAMIA',
+  'LEVIATHAN',
+  'MANTICORE',
+  'MANDRAGORA',
+  'NACHZEHRER',
+  'NEPHILIM',
+  'PIGEON',
+  'POLTERGEIST',
+  'RAKSHASA',
+  'REAPER',
+  'RUGARU',
+  'SCARECROW',
+  'SHAPESHIFTER',
+  'SIREN',
+  'STARSHIP',
+  'TRICKSTER',
+  'VAMPIRE',
+  'VAMPIRATE',
+  'WEREPIRE',
+  'WEREWOLF',
+  'WRAITH',
+  'WITCH',
+  'ZOMBIE',
+];
+
+function loadSprintHuntCodes() {
+  try {
+    const filePath = path.resolve(process.cwd(), 'config', 'sprintHuntCodes.json');
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const arr = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.codes) ? parsed.codes : []);
+    const normalized = arr
+      .map(c => String(c || '').trim().toUpperCase())
+      .filter(c => c && /^[A-Z0-9-]{2,24}$/.test(c));
+    return normalized.length ? [...new Set(normalized)] : DEFAULT_HUNT_CODES;
+  } catch {
+    return DEFAULT_HUNT_CODES;
+  }
+}
+
+const SPRINT_HUNT_CODES = loadSprintHuntCodes();
+
+function makeFallbackJoinCode(length = 6) {
+  return Math.random().toString(36).slice(2, 2 + length).toUpperCase();
+}
+
+async function pickUniqueTeamHuntCode({ guildId }) {
+  const active = await DeanSprints.findAll({
+    where: { guildId, status: 'processing', type: 'team', groupId: { [Op.ne]: null } },
+    attributes: ['groupId'],
+  }).catch(() => []);
+  const used = new Set(active.map(r => String(r.groupId || '').trim().toUpperCase()).filter(Boolean));
+
+  const available = SPRINT_HUNT_CODES.filter(code => !used.has(code));
+  if (available.length) {
+    return available[Math.floor(Math.random() * available.length)];
+  }
+
+  // Fallback behavior (spec): pool exhausted or collisions - use a generated code.
+  for (let i = 0; i < 50; i++) {
+    const candidate = makeFallbackJoinCode(6);
+    if (!used.has(candidate)) return candidate;
+  }
+  // Last resort: return something stable-ish even if collisions exist.
+  return makeFallbackJoinCode(8);
+}
 
 function makeToken(length = 12) {
   const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -250,8 +340,8 @@ export async function execute(interaction) {
     const discordId = interaction.user.id;
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 
-    // Generate a short group code
-    const groupId = Math.random().toString(36).slice(2, 8).toUpperCase();
+    // Assign a hunt code from the pool; must be unique among concurrently active team sprints.
+    const groupId = await pickUniqueTeamHuntCode({ guildId });
     const startedAt = new Date(Date.now() + startDelayMinutes * 60000);
     const hostRow = await DeanSprints.create({
       userId: discordId,
@@ -287,13 +377,15 @@ export async function execute(interaction) {
     const discordId = interaction.user.id;
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 
-    const host = await DeanSprints.findOne({ where: { guildId, channelId, status: 'processing', type: 'team', groupId: provided, role: 'host' } });
+    const host = await DeanSprints.findOne({ where: { guildId, status: 'processing', type: 'team', groupId: provided, role: 'host' } });
     if (!host) {
       return interaction.editReply({ content: noActiveTeamText() });
     }
-    const existing = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-    if (existing) {
-      return interaction.editReply({ content: alreadyActiveSprintText() });
+    const existingInThisTeam = await DeanSprints.findOne({
+      where: { userId: discordId, guildId, status: 'processing', type: 'team', groupId: host.groupId },
+    });
+    if (existingInThisTeam) {
+      return interaction.editReply({ content: "You're already in that sprint, dude. Check it with `/sprint status`.", allowedMentions: { parse: [] } });
     }
     await DeanSprints.create({
       userId: discordId,
@@ -301,8 +393,8 @@ export async function execute(interaction) {
       groupId: host.groupId,
       role: 'participant',
       guildId,
-      channelId,
-      threadId,
+      channelId: host.channelId,
+      threadId: host.threadId ?? null,
       type: 'team',
       visibility: host.visibility,
       startedAt: host.startedAt,
@@ -326,10 +418,54 @@ export async function execute(interaction) {
     return;
   } else if (sub === 'end') {
     const discordId = interaction.user.id;
-    const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-    if (!active) {
-      return interaction.editReply({ content: noActiveSprintText() });
+    const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] });
+    if (!actives.length) return interaction.editReply({ content: noActiveSprintText() });
+
+    if (actives.length > 1) {
+      const token = makeToken();
+      setInteractionState(token, { guildId, userId: discordId, action: 'end' });
+
+      // Spec: team first, then solo; within each group soonest ending first.
+      const nowMs = Date.now();
+      const candidates = actives.map(row => {
+        const startsAtMs = row.startedAt ? new Date(row.startedAt).getTime() : nowMs;
+        const endsAtMs = startsAtMs + (row.durationMinutes || 0) * 60000;
+        return { row, endsAtMs };
+      });
+      candidates.sort((a, b) => {
+        const aTeam = a.row.type === 'team' ? 0 : 1;
+        const bTeam = b.row.type === 'team' ? 0 : 1;
+        if (aTeam !== bTeam) return aTeam - bTeam;
+        return a.endsAtMs - b.endsAtMs;
+      });
+
+      const select = new Discord.StringSelectMenuBuilder()
+        .setCustomId(`sprintPick_${token}`)
+        .setPlaceholder('Pick a sprint')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+      for (const c of candidates.slice(0, 25)) {
+        const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+        const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+        const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        select.addOptions(
+          new Discord.StringSelectMenuOptionBuilder()
+            .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setValue(String(c.row.id))
+        );
+      }
+
+      const row = new Discord.ActionRowBuilder().addComponents(select);
+      return interaction.editReply({
+        content: 'Which sprint are we ending? Pick one. I am not guessing.',
+        components: [row],
+        allowedMentions: { parse: [] },
+      });
     }
+
+    const active = actives[0];
     const endedAt = new Date();
     const sprintIdentifier = formatSprintIdentifier({ type: active.type, groupId: active.groupId, label: active.label, startedAt: active.startedAt });
 
@@ -347,7 +483,7 @@ export async function execute(interaction) {
       const scores = [];
       for (const p of participantRows) {
         const rows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-        const total = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+        const total = sumNet(rows);
         scores.push({ userId: p.userId, total });
       }
       scores.sort((a, b) => (b.total || 0) - (a.total || 0));
@@ -440,10 +576,54 @@ export async function execute(interaction) {
     return;
   } else if (sub === 'status') {
     const discordId = interaction.user.id;
-    const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-    if (!active) {
-      return interaction.editReply({ content: noActiveSprintText() });
+    const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] });
+    if (!actives.length) return interaction.editReply({ content: noActiveSprintText() });
+
+    if (actives.length > 1) {
+      const token = makeToken();
+      setInteractionState(token, { guildId, userId: discordId, action: 'status' });
+
+      // Spec: team first, then solo; within each group soonest ending first.
+      const nowMs = Date.now();
+      const candidates = actives.map(row => {
+        const startsAtMs = row.startedAt ? new Date(row.startedAt).getTime() : nowMs;
+        const endsAtMs = startsAtMs + (row.durationMinutes || 0) * 60000;
+        return { row, endsAtMs };
+      });
+      candidates.sort((a, b) => {
+        const aTeam = a.row.type === 'team' ? 0 : 1;
+        const bTeam = b.row.type === 'team' ? 0 : 1;
+        if (aTeam !== bTeam) return aTeam - bTeam;
+        return a.endsAtMs - b.endsAtMs;
+      });
+
+      const select = new Discord.StringSelectMenuBuilder()
+        .setCustomId(`sprintPick_${token}`)
+        .setPlaceholder('Pick a sprint')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+      for (const c of candidates.slice(0, 25)) {
+        const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+        const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+        const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        select.addOptions(
+          new Discord.StringSelectMenuOptionBuilder()
+            .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setValue(String(c.row.id))
+        );
+      }
+
+      const row = new Discord.ActionRowBuilder().addComponents(select);
+      return interaction.editReply({
+        content: 'Which sprint are we checking? Pick one. I am not guessing.',
+        components: [row],
+        allowedMentions: { parse: [] },
+      });
     }
+
+    const active = actives[0];
     const sprintIdentifier = formatSprintIdentifier({ type: active.type, groupId: active.groupId, label: active.label, startedAt: active.startedAt });
     const nowMs = Date.now();
     const startsAtMs = new Date(active.startedAt).getTime();
@@ -459,7 +639,7 @@ export async function execute(interaction) {
     const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
     const elapsedMin = Math.max(0, Math.floor((nowMs - startsAtMs) / 60000));
     const rows = await Wordcount.findAll({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
-    const sprintTotal = rows.reduce((acc, r) => acc + (r.delta > 0 ? r.delta : 0), 0);
+    const sprintTotal = sumNet(rows);
     await interaction.editReply({
       content: sprintStatusWordsText({
         sprintIdentifier,
@@ -472,13 +652,52 @@ export async function execute(interaction) {
     return;
   } else if (sub === 'leave') {
     const discordId = interaction.user.id;
-    const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing', type: 'team' } });
-    if (!active) {
-      return interaction.editReply({ content: notInTeamSprintText() });
+    const actives = await DeanSprints.findAll({
+      where: { userId: discordId, guildId, status: 'processing', type: 'team' },
+      order: [['startedAt', 'DESC']],
+    });
+    if (!actives.length) return interaction.editReply({ content: notInTeamSprintText() });
+
+    if (actives.length > 1) {
+      const token = makeToken();
+      setInteractionState(token, { guildId, userId: discordId, action: 'leave' });
+
+      const nowMs = Date.now();
+      const candidates = actives.map(row => {
+        const startsAtMs = row.startedAt ? new Date(row.startedAt).getTime() : nowMs;
+        const endsAtMs = startsAtMs + (row.durationMinutes || 0) * 60000;
+        return { row, endsAtMs };
+      });
+      candidates.sort((a, b) => a.endsAtMs - b.endsAtMs);
+
+      const select = new Discord.StringSelectMenuBuilder()
+        .setCustomId(`sprintPick_${token}`)
+        .setPlaceholder('Pick a team sprint')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+      for (const c of candidates.slice(0, 25)) {
+        const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+        const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        select.addOptions(
+          new Discord.StringSelectMenuOptionBuilder()
+            .setLabel(`${sprintIdentifier}`.slice(0, 100))
+            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setValue(String(c.row.id))
+        );
+      }
+
+      const row = new Discord.ActionRowBuilder().addComponents(select);
+      return interaction.editReply({
+        content: 'Which team sprint are you leaving? Pick one. I am not guessing.',
+        components: [row],
+        allowedMentions: { parse: [] },
+      });
     }
-    if (active.role === 'host') {
-      return interaction.editReply({ content: hostsUseEndText() });
-    }
+
+    const active = actives[0];
+    if (active.role === 'host') return interaction.editReply({ content: hostsUseEndText() });
+
     const sprintIdentifier = formatSprintIdentifier({ type: active.type, groupId: active.groupId, label: active.label, startedAt: active.startedAt });
     try {
       await active.update({ status: 'done', endNotified: true, endedAt: new Date() });
@@ -490,20 +709,72 @@ export async function execute(interaction) {
         await active.update({ status: 'done', endNotified: true });
       }
     }
+
     await interaction.editReply({ content: sprintLeaveText({ sprintIdentifier }), allowedMentions: { parse: [] } });
     return;
   } else if (sub === 'list') {
-    const sprints = await DeanSprints.findAll({ where: { guildId, channelId, status: 'processing' }, order: [['startedAt', 'DESC']] });
-    const lines = sprints.map(s => {
-      const nowMs = Date.now();
-      const startsAtMs = new Date(s.startedAt).getTime();
-      const endsAtMs = startsAtMs + s.durationMinutes * 60000;
-      const remainingMin = Math.max(0, Math.ceil((endsAtMs - nowMs) / 60000));
-      const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
-      const kind = s.type === 'team' ? (s.role === 'host' ? 'Team host' : 'Team') : 'Solo';
-      const label = nowMs < startsAtMs ? `(starts in ${startsInMin}m) ${s.label || ''}`.trim() : s.label;
-      return formatListLine(kind, remainingMin, s.userId, label);
+    const sprints = await DeanSprints.findAll({ where: { guildId, channelId, status: 'processing' }, order: [['createdAt', 'ASC']] });
+
+    const nowMs = Date.now();
+
+    // De-dupe team sprints: show one line per hunt code (groupId), prefer host row.
+    const teamByGroupId = new Map();
+    const soloRows = [];
+
+    for (const s of sprints) {
+      if (s.type === 'team' && s.groupId) {
+        const existing = teamByGroupId.get(s.groupId);
+        if (!existing) {
+          teamByGroupId.set(s.groupId, { host: s.role === 'host' ? s : null, any: s, count: 1 });
+        } else {
+          existing.count += 1;
+          if (!existing.host && s.role === 'host') existing.host = s;
+        }
+      } else {
+        soloRows.push(s);
+      }
+    }
+
+    const teamEntries = [...teamByGroupId.entries()].map(([groupId, data]) => {
+      const row = data.host || data.any;
+      const startsAtMs = row.startedAt ? new Date(row.startedAt).getTime() : nowMs;
+      const endsAtMs = startsAtMs + (row.durationMinutes || 0) * 60000;
+      return { row, endsAtMs, groupId, count: data.count };
     });
+
+    const soloEntries = soloRows.map(row => {
+      const startsAtMs = row.startedAt ? new Date(row.startedAt).getTime() : nowMs;
+      const endsAtMs = startsAtMs + (row.durationMinutes || 0) * 60000;
+      return { row, endsAtMs };
+    });
+
+    // Spec ordering: team first, then solo; within each group, soonest ending first.
+    teamEntries.sort((a, b) => a.endsAtMs - b.endsAtMs);
+    soloEntries.sort((a, b) => a.endsAtMs - b.endsAtMs);
+
+    const lines = [];
+
+    for (const t of teamEntries) {
+      const startsAtMs = t.row.startedAt ? new Date(t.row.startedAt).getTime() : nowMs;
+      const remainingMin = Math.max(0, Math.ceil((t.endsAtMs - nowMs) / 60000));
+      const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
+      const sprintIdentifier = formatSprintIdentifier({ type: t.row.type, groupId: t.row.groupId, label: t.row.label, startedAt: t.row.startedAt });
+      const timingPrefix = nowMs < startsAtMs ? `(starts in ${startsInMin}m) ` : '';
+      const sprinterWord = t.count === 1 ? 'sprinter' : 'sprinters';
+      const label = `${timingPrefix}${sprintIdentifier} • ${t.count} ${sprinterWord}`.trim();
+      lines.push(formatListLine('Team', remainingMin, t.row.userId, label));
+    }
+
+    for (const s of soloEntries) {
+      const startsAtMs = s.row.startedAt ? new Date(s.row.startedAt).getTime() : nowMs;
+      const remainingMin = Math.max(0, Math.ceil((s.endsAtMs - nowMs) / 60000));
+      const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
+      const sprintIdentifier = formatSprintIdentifier({ type: s.row.type, groupId: s.row.groupId, label: s.row.label, startedAt: s.row.startedAt });
+      const timingPrefix = nowMs < startsAtMs ? `(starts in ${startsInMin}m) ` : '';
+      const label = `${timingPrefix}${sprintIdentifier}`.trim();
+      lines.push(formatListLine('Solo', remainingMin, s.row.userId, label));
+    }
+
     const embed = listEmbeds(lines);
     await interaction.editReply({ embeds: [embed] });
     return;

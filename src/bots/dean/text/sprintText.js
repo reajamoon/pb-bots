@@ -190,16 +190,25 @@ export function formatSprintIdentifier({ type, groupId, label, startedAt } = {})
   if (type === 'team' && groupId) {
     return label ? `${groupId} - ${label}` : `${groupId}`;
   }
-  if (label) return label;
+
+  let ts = null;
   if (startedAt) {
     try {
       const d = new Date(startedAt);
-      // Keep it human-readable without getting cute.
-      return `Solo sprint (${d.toLocaleString()})`;
+      const ms = d.getTime();
+      if (Number.isFinite(ms)) ts = Math.floor(ms / 1000);
     } catch {
-      // fall through
+      // ignore
     }
   }
+
+  if (label) {
+    // Solo sprint labels are not unique; add a short timestamp so concurrent
+    // sprints with the same label are still distinguishable.
+    return ts ? `${label} • <t:${ts}:t>` : label;
+  }
+
+  if (ts) return `Solo sprint • <t:${ts}:t>`;
   return 'Solo sprint';
 }
 

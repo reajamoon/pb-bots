@@ -1,7 +1,10 @@
 import Discord from 'discord.js';
-const { SlashCommandBuilder, MessageFlags } = Discord;
+const { SlashCommandBuilder, MessageFlags, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, GuildSprintSettings, User, Project, ProjectMember, Wordcount } from '../../../models/index.js';
+
+import { formatSprintIdentifier } from '../text/sprintText.js';
+import { setInteractionState } from '../utils/interactionState.js';
 
 import { sumNet } from '../../../shared/utils/wordcountMath.js';
 
@@ -23,6 +26,30 @@ function loadProjectPublicIdWords() {
 }
 
 const PROJECT_PUBLIC_ID_WORDS = loadProjectPublicIdWords();
+
+function makeToken(length = 12) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let out = '';
+  for (let i = 0; i < length; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return out;
+}
+
+function buildActiveSprintCandidates(rows) {
+  const nowMs = Date.now();
+  const candidates = rows.map(row => {
+    const startsAtMs = row.startedAt ? new Date(row.startedAt).getTime() : nowMs;
+    const endsAtMs = startsAtMs + (Number(row.durationMinutes) || 0) * 60000;
+    return { row, endsAtMs };
+  });
+  // Spec: team first, then solo; within group soonest ending first.
+  candidates.sort((a, b) => {
+    const aTeam = a.row.type === 'team' ? 0 : 1;
+    const bTeam = b.row.type === 'team' ? 0 : 1;
+    if (aTeam !== bTeam) return aTeam - bTeam;
+    return a.endsAtMs - b.endsAtMs;
+  });
+  return candidates;
+}
 
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -227,8 +254,10 @@ export async function execute(interaction) {
       project = await ensureProjectHasPublicId(project);
       const members = await ProjectMember.findAll({ where: { projectId: project.id } });
       const ownerTag = interaction.client.users.cache.get(project.ownerId)?.tag ?? project.ownerId;
-      const activeSprint = await DeanSprints.findOne({ where: { projectId: project.id, status: 'processing' } }).catch(() => null);
-      const channelMention = activeSprint?.channelId ? `<#${activeSprint.channelId}>` : '—';
+      const activeSprints = await DeanSprints.findAll({ where: { projectId: project.id, status: 'processing' }, order: [['startedAt', 'DESC']], limit: 10 }).catch(() => []);
+      const activeSprintCount = activeSprints.length;
+      const channelIds = [...new Set(activeSprints.map(s => s.channelId).filter(Boolean))];
+      const channelMention = channelIds.length === 1 ? `<#${channelIds[0]}>` : null;
       const mods = members.filter(m => m.role === 'mod').length;
       // Recent totals: last sprint totals + last 7 days aggregate
       let lastSprintTotal = 0;
@@ -266,7 +295,7 @@ export async function execute(interaction) {
           { name: 'Code', value: project.publicId || project.id, inline: true },
           { name: 'Owner', value: ownerTag, inline: true },
           { name: 'Members', value: `${members.length} (mods: ${mods})`, inline: true },
-          { name: 'Active Sprint', value: activeSprint ? `Yes, in ${channelMention}` : 'No', inline: true },
+          { name: 'Active Sprint', value: activeSprintCount ? (activeSprintCount === 1 ? `Yes, in ${channelMention || 'this server'}` : `Yes (${activeSprintCount})`) : 'No', inline: true },
           { name: 'Last Sprint Net', value: `${lastSprintTotal} words`, inline: true },
           { name: 'Current Net', value: `${allTotal} words`, inline: true },
           { name: '7-Day Net', value: `${weekTotal} words`, inline: true }
@@ -369,9 +398,41 @@ export async function execute(interaction) {
           project = await resolveProjectForUser({ discordId, projectInputRaw: projectInput });
         }
       } else {
-        const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-        if (active && active.projectId) {
-          project = await Project.findByPk(active.projectId);
+        const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] }).catch(() => []);
+        if (actives.length === 1) {
+          const active = actives[0];
+          if (active && active.projectId) project = await Project.findByPk(active.projectId);
+        } else if (actives.length > 1) {
+          const member = interaction.options.getUser('member');
+          const token = makeToken();
+          setInteractionState(token, { guildId, userId: discordId, action: 'invite', memberId: member?.id || null });
+
+          const candidates = buildActiveSprintCandidates(actives);
+          const select = new StringSelectMenuBuilder()
+            .setCustomId(`projectActiveSprintPick_${token}`)
+            .setPlaceholder('Pick a sprint')
+            .setMinValues(1)
+            .setMaxValues(1);
+
+          const nowMs = Date.now();
+          for (const c of candidates.slice(0, 25)) {
+            const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+            const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+            const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+            select.addOptions(
+              new StringSelectMenuOptionBuilder()
+                .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+                .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+                .setValue(String(c.row.id))
+            );
+          }
+
+          const row = new ActionRowBuilder().addComponents(select);
+          return interaction.editReply({
+            content: 'Which sprint are we using for this project action? Pick one. I am not guessing.',
+            components: [row],
+            allowedMentions: { parse: [] },
+          });
         }
       }
       if (!project) {
@@ -394,14 +455,50 @@ export async function execute(interaction) {
     }
 
     if (subName === 'remove') {
-      const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-      if (!active || !active.projectId) {
-        return interaction.editReply({ content: 'No project hooked to this sprint, champ.' });
-      }
       const member = interaction.options.getUser('member');
       const confirm = interaction.options.getBoolean('confirm') ?? false;
       if (!confirm) {
         return interaction.editReply({ content: `You sure you wanna boot <@${member.id}>? Re-run with **confirm:true**.` });
+      }
+
+      let active = null;
+      const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] }).catch(() => []);
+      if (actives.length === 1) {
+        active = actives[0];
+      } else if (actives.length > 1) {
+        const token = makeToken();
+        setInteractionState(token, { guildId, userId: discordId, action: 'remove', memberId: member?.id || null });
+
+        const candidates = buildActiveSprintCandidates(actives);
+        const select = new StringSelectMenuBuilder()
+          .setCustomId(`projectActiveSprintPick_${token}`)
+          .setPlaceholder('Pick a sprint')
+          .setMinValues(1)
+          .setMaxValues(1);
+
+        const nowMs = Date.now();
+        for (const c of candidates.slice(0, 25)) {
+          const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+          const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+          const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+          select.addOptions(
+            new StringSelectMenuOptionBuilder()
+              .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+              .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+              .setValue(String(c.row.id))
+          );
+        }
+
+        const row = new ActionRowBuilder().addComponents(select);
+        return interaction.editReply({
+          content: 'Which sprint are we using for this project action? Pick one. I am not guessing.',
+          components: [row],
+          allowedMentions: { parse: [] },
+        });
+      }
+
+      if (!active || !active.projectId) {
+        return interaction.editReply({ content: 'No project hooked to this sprint, champ.' });
       }
       const requester = await User.findOne({ where: { discordId } });
       const level = (requester?.permissionLevel || 'member').toLowerCase();
@@ -416,13 +513,49 @@ export async function execute(interaction) {
     }
 
     if (subName === 'leave') {
-      const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
-      if (!active || !active.projectId) {
-        return interaction.editReply({ content: 'No project hooked to this sprint, champ.' });
-      }
       const confirm = interaction.options.getBoolean('confirm') ?? false;
       if (!confirm) {
         return interaction.editReply({ content: 'You sure you wanna bail on this project? Re-run with **confirm:true**.' });
+      }
+
+      let active = null;
+      const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] }).catch(() => []);
+      if (actives.length === 1) {
+        active = actives[0];
+      } else if (actives.length > 1) {
+        const token = makeToken();
+        setInteractionState(token, { guildId, userId: discordId, action: 'leaveProject' });
+
+        const candidates = buildActiveSprintCandidates(actives);
+        const select = new StringSelectMenuBuilder()
+          .setCustomId(`projectActiveSprintPick_${token}`)
+          .setPlaceholder('Pick a sprint')
+          .setMinValues(1)
+          .setMaxValues(1);
+
+        const nowMs = Date.now();
+        for (const c of candidates.slice(0, 25)) {
+          const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+          const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+          const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+          select.addOptions(
+            new StringSelectMenuOptionBuilder()
+              .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+              .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+              .setValue(String(c.row.id))
+          );
+        }
+
+        const row = new ActionRowBuilder().addComponents(select);
+        return interaction.editReply({
+          content: 'Which sprint are we using for this project action? Pick one. I am not guessing.',
+          components: [row],
+          allowedMentions: { parse: [] },
+        });
+      }
+
+      if (!active || !active.projectId) {
+        return interaction.editReply({ content: 'No project hooked to this sprint, champ.' });
       }
       const projectId = active.projectId;
       const project = await Project.findByPk(projectId);
@@ -447,7 +580,43 @@ export async function execute(interaction) {
         }
       project = await ensureProjectHasPublicId(project);
       const projectId = project.id;
-      const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
+
+      let active = null;
+      const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] }).catch(() => []);
+      if (actives.length === 1) {
+        active = actives[0];
+      } else if (actives.length > 1) {
+        const token = makeToken();
+        setInteractionState(token, { guildId, userId: discordId, action: 'use', projectId });
+
+        const candidates = buildActiveSprintCandidates(actives);
+        const select = new StringSelectMenuBuilder()
+          .setCustomId(`projectActiveSprintPick_${token}`)
+          .setPlaceholder('Pick a sprint')
+          .setMinValues(1)
+          .setMaxValues(1);
+
+        const nowMs = Date.now();
+        for (const c of candidates.slice(0, 25)) {
+          const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+          const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+          const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+          select.addOptions(
+            new StringSelectMenuOptionBuilder()
+              .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+              .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+              .setValue(String(c.row.id))
+          );
+        }
+
+        const row = new ActionRowBuilder().addComponents(select);
+        return interaction.editReply({
+          content: 'Which sprint are we linking? Pick one. I am not guessing.',
+          components: [row],
+          allowedMentions: { parse: [] },
+        });
+      }
+
       if (!active) {
         await interaction.followUp({ content: 'No active sprint right now. Kick one off with `/sprint start`.', flags: MessageFlags.Ephemeral });
         return;
@@ -462,7 +631,43 @@ export async function execute(interaction) {
     }
 
     if (subName === 'members') {
-      const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
+
+      let active = null;
+      const actives = await DeanSprints.findAll({ where: { userId: discordId, guildId, status: 'processing' }, order: [['startedAt', 'DESC']] }).catch(() => []);
+      if (actives.length === 1) {
+        active = actives[0];
+      } else if (actives.length > 1) {
+        const token = makeToken();
+        setInteractionState(token, { guildId, userId: discordId, action: 'members' });
+
+        const candidates = buildActiveSprintCandidates(actives);
+        const select = new StringSelectMenuBuilder()
+          .setCustomId(`projectActiveSprintPick_${token}`)
+          .setPlaceholder('Pick a sprint')
+          .setMinValues(1)
+          .setMaxValues(1);
+
+        const nowMs = Date.now();
+        for (const c of candidates.slice(0, 25)) {
+          const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+          const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+          const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+          select.addOptions(
+            new StringSelectMenuOptionBuilder()
+              .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
+              .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+              .setValue(String(c.row.id))
+          );
+        }
+
+        const row = new ActionRowBuilder().addComponents(select);
+        return interaction.editReply({
+          content: 'Which sprint are we using for this project action? Pick one. I am not guessing.',
+          components: [row],
+          allowedMentions: { parse: [] },
+        });
+      }
+
       if (!active || !active.projectId) {
         return interaction.editReply({ content: 'No active project on this sprint. Use `/project use` to link one, or create with `/project create`.' });
       }
