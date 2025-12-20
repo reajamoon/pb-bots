@@ -40,6 +40,13 @@ function sumNet(rows) {
   }, 0);
 }
 
+function sumPositive(rows) {
+  return rows.reduce((acc, r) => {
+    const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
+    return acc + (d > 0 ? d : 0);
+  }, 0);
+}
+
 async function getUserProjects(discordId) {
   const memberships = await ProjectMember.findAll({ where: { userId: discordId }, limit: 100 }).catch(() => []);
   if (!memberships.length) return [];
@@ -120,11 +127,11 @@ export async function handleWc(
   const discordId = interaction.user.id;
   const subName = forcedSubcommand ?? interaction.options?.getSubcommand?.();
 
-  // Only /wc set, /wc add, /wc undo, and /wc show need scope right now; all other subcommands remain sprint-scoped.
+  // Only /wc set, /wc add, /wc undo, /wc show, and /wc summary need scope right now; all other subcommands remain sprint-scoped.
   const scopeRaw = forcedScope ?? (forcedOptions?.scope ?? interaction.options?.getString?.('scope'));
   const scope = (typeof scopeRaw === 'string' && scopeRaw) ? scopeRaw.toLowerCase() : 'sprint';
 
-  if (!((subName === 'set' || subName === 'add' || subName === 'undo' || subName === 'show') && scope === 'project')) {
+  if (!((subName === 'set' || subName === 'add' || subName === 'undo' || subName === 'show' || subName === 'summary') && scope === 'project')) {
     return handleSprintWc(interaction, {
       guildId,
       forcedTargetId,
@@ -164,6 +171,10 @@ export async function handleWc(
   }
 
   if (subName === 'show') {
+    // No numeric inputs.
+  }
+
+  if (subName === 'summary') {
     // No numeric inputs.
   }
 
@@ -240,6 +251,38 @@ export async function handleWc(
       components: [],
       allowedMentions: { parse: [] },
     });
+  }
+
+  if (subName === 'summary') {
+    const updates = rows.length;
+    const totalGained = sumPositive(rows);
+    const maxGain = rows.reduce((max, r) => {
+      const d = (typeof r.delta === 'number') ? r.delta : ((r.countEnd ?? 0) - (r.countStart ?? 0));
+      return d > max ? d : max;
+    }, 0);
+
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const dayRows = await Wordcount.findAll({
+      where: {
+        userId: discordId,
+        projectId: project.id,
+        recordedAt: { [Op.gte]: startOfDay },
+      },
+      order: [['recordedAt', 'ASC']],
+    }).catch(() => []);
+    const dayGained = sumPositive(dayRows);
+
+    const content = [
+      `Project: **${project.name}**`,
+      `Current total: **${currentNet}**`,
+      `Total gained (all time): **${totalGained}**`,
+      `Total gained today: **${dayGained}**`,
+      `Updates: **${updates}**`,
+      `Best single update: **${maxGain}**`,
+    ].join('\n');
+
+    return interaction.editReply({ content, components: [], allowedMentions: { parse: [] } });
   }
 
   if (subName === 'undo') {
