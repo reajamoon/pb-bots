@@ -20,7 +20,38 @@ export async function execute(interaction) {
   }
 
   const state = getInteractionState(token);
-  if (!state || state.userId !== interaction.user.id) {
+  if (!state) {
+    // Stateless fallback (used for /sprint wc baseline): baseline-<userId>-<sprintId>-<count>
+    if (token.startsWith('baseline-')) {
+      const baselineParts = token.split('-');
+      const tokenUserId = baselineParts[1] || '';
+      const sprintIdRaw = baselineParts[2] || '';
+      const countRaw = baselineParts[3] || '';
+      const sprintId = Number(sprintIdRaw);
+      const count = Number(countRaw);
+
+      if (tokenUserId && tokenUserId === interaction.user.id && Number.isFinite(sprintId) && Number.isFinite(count)) {
+        if (verb === 'cancel') {
+          await interaction.update({ content: 'Cancelled. No changes made.', components: [] });
+          return;
+        }
+
+        await interaction.deferUpdate();
+        return handleWc(interaction, {
+          guildId: interaction.guildId,
+          forcedTargetId: sprintId,
+          forcedSubcommand: 'baseline',
+          forcedOptions: { count, newWords: null },
+          confirmed: true,
+        });
+      }
+    }
+
+    await interaction.reply({ content: 'That confirmation is stale. Run the command again.', flags: EPHEMERAL_FLAG });
+    return;
+  }
+
+  if (state.userId !== interaction.user.id) {
     await interaction.reply({ content: 'That confirmation is stale. Run the command again.', flags: EPHEMERAL_FLAG });
     return;
   }

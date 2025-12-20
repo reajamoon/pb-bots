@@ -264,7 +264,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     }
 
     if (!confirmed) {
-      const token = makeToken();
+      const token = `baseline-${discordId}-${target.id}-${count}`;
       const sprintIdentifier = formatSprintIdentifier({ type: target.type, groupId: target.groupId, label: target.label, startedAt: target.startedAt });
       const activeOrEnded = target.status === 'done' ? 'ended' : 'active';
       const prompt = wcConfirmBaselinePromptText({ sprintIdentifier, activeOrEnded, baselineB: count });
@@ -292,7 +292,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     });
 
     await maybeEditEndSummary(target);
-    return interaction.editReply({ content: `Baseline set: **${count}**. Now when you do /wc set (or /sprint wc set), I won't pretend you wrote your entire draft in one sprint.` });
+    return interaction.editReply({ content: `Baseline set: **${count}**. Now when you do /wc set (or /sprint wc set), I won't pretend you wrote your entire draft in one sprint.`, components: [] });
   }
   if (subName === 'set') {
     const count = getIntOption('count');
