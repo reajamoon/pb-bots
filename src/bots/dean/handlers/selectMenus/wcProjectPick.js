@@ -14,14 +14,14 @@ export async function execute(interaction) {
 
   if (!token) {
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: 'That picker is missing context. Try the command again.', flags: EPHEMERAL_FLAG });
+      await interaction.reply({ content: "Nope. That menu's missing the context. Run the command again.", flags: EPHEMERAL_FLAG, allowedMentions: { parse: [] } });
     }
     return;
   }
 
   const state = getInteractionState(token);
   if (!state || state.userId !== interaction.user.id) {
-    await interaction.reply({ content: 'That picker is stale. Run the command again.', flags: EPHEMERAL_FLAG });
+    await interaction.reply({ content: 'That one timed out. Run it again.', flags: EPHEMERAL_FLAG, allowedMentions: { parse: [] } });
     return;
   }
 
@@ -30,13 +30,13 @@ export async function execute(interaction) {
   const picked = interaction.values?.[0];
   const projectId = String(picked || '').trim();
   if (!projectId) {
-    await interaction.reply({ content: 'That selection did not look right. Try again.', flags: EPHEMERAL_FLAG });
+    await interaction.reply({ content: "Yeah, that didn't look right. Try again.", flags: EPHEMERAL_FLAG, allowedMentions: { parse: [] } });
     return;
   }
 
   const project = await Project.findByPk(projectId).catch(() => null);
   if (!project) {
-    await interaction.reply({ content: 'I cannot find that project anymore. Try the command again.', flags: EPHEMERAL_FLAG });
+    await interaction.reply({ content: "Can't find that project anymore. Run the command again.", flags: EPHEMERAL_FLAG, allowedMentions: { parse: [] } });
     return;
   }
 

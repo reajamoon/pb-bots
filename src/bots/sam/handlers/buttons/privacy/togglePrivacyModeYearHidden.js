@@ -6,10 +6,10 @@ import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
 import { recordSettingPoke } from '../../../../../shared/hunts/pokedIt.js';
 import Discord from 'discord.js';
-const { InteractionFlags, EmbedBuilder } = Discord;
+const { MessageFlags, EmbedBuilder } = Discord;
 
 export default async function handleTogglePrivacyModeYearHidden(interaction) {
-    const ephemeralFlag = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+    const ephemeralFlag = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
     try {
         let originalMessageId = null;
         const parsed = parsePrivacySettingsCustomId(interaction.customId);

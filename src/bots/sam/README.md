@@ -26,7 +26,7 @@ If you are touching member-facing text, match Sam’s voice.
 Implementation notes:
 - Member-facing strings live under `src/bots/sam/` only.
 - Use shared helpers for formatting (`src/shared/text/*` and `src/shared/recUtils/*`), not shared raw text.
-- Prefer ephemerals for sensitive info: `InteractionFlags.Ephemeral` (or `64`).
+- Prefer ephemerals for sensitive info: `MessageFlags.Ephemeral` (or `64`).
 - CustomID pattern: `action_context_primaryId_secondaryId`; build via `src/shared/utils/buttonId.js`.
 
 ## Where Things Go

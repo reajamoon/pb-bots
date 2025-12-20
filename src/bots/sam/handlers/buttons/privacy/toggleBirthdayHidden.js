@@ -6,12 +6,11 @@ import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
 import { recordSettingPoke } from '../../../../../shared/hunts/pokedIt.js';
 import Discord from 'discord.js';
-const { InteractionFlags } = Discord;
+const { MessageFlags } = Discord;
 
 export default async function handleToggleBirthdayHidden(interaction) {
-    // Ephemeral message flag pattern: use InteractionFlags.Ephemeral if available, otherwise fallback to 64.
-    // This ensures compatibility across discord.js versions and prevents undefined errors.
-    const ephemeralFlag = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+    // Ephemeral message flag pattern: use MessageFlags.Ephemeral if available, otherwise fallback to 64.
+    const ephemeralFlag = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
     try {
         logger.debug('[toggleBirthdayHidden] Interaction received', { user: interaction.user.id, customId: interaction.customId });
         // Extract the original profile card message ID (if present). In untracked contexts, this will be null.

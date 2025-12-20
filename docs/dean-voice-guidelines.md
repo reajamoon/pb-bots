@@ -27,7 +27,7 @@ These guidelines keep Dean’s in-character voice consistent across commands, he
 ## Formatting Conventions
 - **Bot-local strings:** Keep Dean text under `src/bots/dean/`.
 - **Shared helpers only:** Reuse formatting utils; don’t share raw text across bots.
-- **Ephemerals:** Use `InteractionFlags.Ephemeral` (or `64`) where appropriate.
+- **Ephemerals:** Use `MessageFlags.Ephemeral` (or `64`) where appropriate.
  - **Centralize copy:** Build embeds via helpers (e.g., `src/bots/dean/text/sprintText.js`).
 
 ## Examples

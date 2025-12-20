@@ -10,7 +10,7 @@ const sharedDir = path.join(root, 'src', 'shared');
 
 const MESSAGE_HINTS = [
   /reply|send|update|ephemeral|content|description/i,
-  /InteractionFlags\.Ephemeral|\b64\b/, // ephemeral flag usage
+  /MessageFlags\.Ephemeral|InteractionFlags\.Ephemeral|\b64\b/, // ephemeral flag usage
 ];
 
 function* walk(dir) {

@@ -1,5 +1,5 @@
 import Discord from 'discord.js';
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, InteractionFlags } = Discord;
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = Discord;
 import logger from '../../../../../shared/utils/logger.js';
 import { buildModalCustomId, getProfileMessageId } from '../../../../../shared/utils/messageTracking.js';
 
@@ -38,7 +38,7 @@ export async function handleTimezone(interaction) {
         try {
             await interaction.reply({
                 content: '❌ Something went wrong showing the timezone modal. Please try again or contact Sam.',
-                flags: InteractionFlags.Ephemeral || 64
+                flags: MessageFlags.Ephemeral || 64
             });
         } catch (replyError) {
             logger.error(`[handleTimezone] Failed to send fallback reply after modal error: ${replyError && replyError.stack ? replyError.stack : replyError}`);

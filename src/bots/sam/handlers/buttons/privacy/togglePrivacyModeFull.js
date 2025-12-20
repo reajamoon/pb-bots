@@ -6,12 +6,11 @@ import { performDualUpdate } from '../../../../../shared/utils/dualUpdate.js';
 import logger from '../../../../../shared/utils/logger.js';
 import { recordSettingPoke } from '../../../../../shared/hunts/pokedIt.js';
 import Discord from 'discord.js';
-const { InteractionFlags, EmbedBuilder } = Discord;
+const { MessageFlags, EmbedBuilder } = Discord;
 
 export default async function handleTogglePrivacyModeFull(interaction) {
-    // Ephemeral message flag pattern: use InteractionFlags.Ephemeral if available, otherwise fallback to 64.
-    // This ensures compatibility across discord.js versions and prevents undefined errors.
-    const ephemeralFlag = typeof InteractionFlags !== 'undefined' && InteractionFlags.Ephemeral ? InteractionFlags.Ephemeral : 64;
+    // Ephemeral message flag pattern: use MessageFlags.Ephemeral if available, otherwise fallback to 64.
+    const ephemeralFlag = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
     try {
         let originalMessageId = null;
         const parsed = parsePrivacySettingsCustomId(interaction.customId);

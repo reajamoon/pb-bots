@@ -78,6 +78,33 @@ async function buildCandidateTargets({ guildId, discordId, windowMinutes }) {
     }
   }
 
+  // Picker ordering (spec): team first, then solo; within each, active first (soonest ending),
+  // then recently ended (most recently ended).
+  const nowMs = Date.now();
+  candidates.sort((a, b) => {
+    const aIsTeam = a?.row?.type === 'team';
+    const bIsTeam = b?.row?.type === 'team';
+    if (aIsTeam !== bIsTeam) return aIsTeam ? -1 : 1;
+
+    const aKind = a.kind === 'active' ? 0 : 1;
+    const bKind = b.kind === 'active' ? 0 : 1;
+    if (aKind !== bKind) return aKind - bKind;
+
+    if (aKind === 0) {
+      const aStart = a.row.startedAt ? new Date(a.row.startedAt).getTime() : nowMs;
+      const bStart = b.row.startedAt ? new Date(b.row.startedAt).getTime() : nowMs;
+      const aEnd = aStart + (Number(a.row.durationMinutes) || 0) * 60000;
+      const bEnd = bStart + (Number(b.row.durationMinutes) || 0) * 60000;
+      return aEnd - bEnd;
+    }
+
+    const aEnded = getSprintEndedAtCandidate(a.row);
+    const bEnded = getSprintEndedAtCandidate(b.row);
+    const aEndedMs = aEnded ? aEnded.getTime() : 0;
+    const bEndedMs = bEnded ? bEnded.getTime() : 0;
+    return bEndedMs - aEndedMs;
+  });
+
   return candidates;
 }
 
@@ -314,16 +341,16 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
         if (c.kind === 'ended') {
           const endedAt = getSprintEndedAtCandidate(c.row);
           if (endedAt) {
-            const minsAgo = Math.max(0, Math.ceil((Date.now() - endedAt.getTime()) / 60000));
-            timingLabel = ` (ended ${minsAgo}m ago)`;
+            const ts = Math.floor(endedAt.getTime() / 1000);
+            timingLabel = ` (ended <t:${ts}:t>)`;
           }
         } else {
           const startsAtMs = c.row.startedAt ? new Date(c.row.startedAt).getTime() : null;
           const durationMs = (typeof c.row.durationMinutes === 'number') ? c.row.durationMinutes * 60000 : null;
           if (startsAtMs && durationMs) {
             const endsAtMs = startsAtMs + durationMs;
-            const minsLeft = Math.max(0, Math.ceil((endsAtMs - Date.now()) / 60000));
-            timingLabel = ` (ends in ${minsLeft}m)`;
+            const ts = Math.floor(endsAtMs / 1000);
+            timingLabel = ` (ends <t:${ts}:t>)`;
           }
         }
 
@@ -336,7 +363,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       }
 
       const row = new ActionRowBuilder().addComponents(select);
-      return interaction.editReply({ content: wcSprintPickerPromptText(), components: [row] });
+      return interaction.editReply({ content: wcSprintPickerPromptText(), components: [row], allowedMentions: { parse: [] } });
     }
 
     target = resolved.target;

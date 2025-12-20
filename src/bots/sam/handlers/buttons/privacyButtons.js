@@ -1,6 +1,6 @@
 import Discord from 'discord.js';
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags, InteractionFlags } = Discord;
-const EPHEMERAL_FLAG = InteractionFlags?.Ephemeral ?? 64;
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } = Discord;
+const EPHEMERAL_FLAG = (typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral) ? MessageFlags.Ephemeral : 64;
 import { User } from '../../../../models/index.js';
 import logger from '../../../../shared/utils/logger.js';
 import { parsePrivacySettingsCustomId, getProfileMessageId } from '../../../../shared/utils/messageTracking.js';
@@ -26,7 +26,7 @@ export async function handlePrivacyButtons(interaction) {
 
     // Security check: only allow editing own privacy settings
     if (profileOwnerId && interaction.user.id !== profileOwnerId) {
-    // Ephemeral message flag pattern: use InteractionFlags.Ephemeral if available, otherwise fallback to 64.
+    // Ephemeral message flag pattern: use MessageFlags.Ephemeral if available, otherwise fallback to 64.
     // This ensures compatibility across discord.js versions and prevents undefined errors.
         await interaction.reply({
             content: `**You can't edit someone else's privacy settings!**\n\nTo edit your own privacy settings, use:\n\`/profile\` - View and edit your profile\n\`/profile help\` - Learn about privacy features`,

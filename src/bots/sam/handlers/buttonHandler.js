@@ -207,7 +207,7 @@ async function handleButton(interaction) {
 
         try {
             if (!interaction.replied && !interaction.deferred) {
-                // Ensure InteractionFlags is always available
+                // Use EPHEMERAL_FLAG (MessageFlags.Ephemeral fallback)
                 await interaction.reply({
                     content: 'Something went wrong processing that button. Please try again.',
                     flags: EPHEMERAL_FLAG

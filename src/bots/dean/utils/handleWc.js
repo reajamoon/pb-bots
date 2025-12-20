@@ -10,9 +10,11 @@ const {
 
 import { Op } from 'sequelize';
 import { Project, ProjectMember, Wordcount, User, GuildSprintSettings } from '../../../models/index.js';
+import { DeanSprints } from '../../../models/index.js';
 import { validateTimezone } from '../../../shared/utils/timezoneValidator.js';
 import { getStartOfTodayUtc } from '../../../shared/utils/timeWindow.js';
 import {
+  wcScopePickerPromptText,
   wcProjectPickerPromptText,
   wcNoProjectsText,
   wcConfirmSetPromptText,
@@ -170,7 +172,59 @@ export async function handleWc(
 
   // Only /wc set, /wc add, /wc undo, /wc show, and /wc summary need scope right now; all other subcommands remain sprint-scoped.
   const scopeRaw = forcedScope ?? (forcedOptions?.scope ?? interaction.options?.getString?.('scope'));
-  const scope = (typeof scopeRaw === 'string' && scopeRaw) ? scopeRaw.toLowerCase() : 'sprint';
+  const scopeProvided = (typeof scopeRaw === 'string' && scopeRaw);
+  const scope = scopeProvided ? scopeRaw.toLowerCase() : 'sprint';
+
+  // Spec UX:
+  // - /wc set and /wc undo: if scope is omitted, prompt with a scope picker first.
+  // - /wc show and /wc summary: if exactly one active sprint exists, default to sprint; otherwise prompt with a scope picker.
+  if (!forcedScope && !scopeProvided && (subName === 'set' || subName === 'undo' || subName === 'show' || subName === 'summary')) {
+    const count = (subName === 'set')
+      ? (forcedOptions ? forcedOptions.count : (interaction.options?.getInteger?.('count') ?? null))
+      : null;
+    const projectInputRaw = forcedOptions?.project ?? interaction.options?.getString?.('project') ?? null;
+
+    const activeSprintCount = await DeanSprints.count({
+      where: { userId: discordId, guildId: guildId ?? interaction.guildId, status: 'processing' },
+    }).catch(() => 0);
+
+    // /wc show and /wc summary: if there's exactly one active sprint, don't make them pick a scope.
+    if ((subName === 'show' || subName === 'summary') && activeSprintCount === 1) {
+      // Fall through to the sprint handler.
+    } else {
+      const token = makeToken();
+      // If the user has an active sprint, show Sprint first. Otherwise show Project first.
+      const hasActiveSprint = activeSprintCount > 0;
+
+      setInteractionState(token, {
+        guildId: guildId ?? interaction.guildId,
+        userId: discordId,
+        subcommand: subName,
+        options: {
+          count,
+          newWords: null,
+          project: projectInputRaw,
+        },
+      });
+
+      const select = new StringSelectMenuBuilder()
+        .setCustomId(`wcScope_${token}`)
+        .setPlaceholder('Pick one')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+      const sprintOption = new StringSelectMenuOptionBuilder().setLabel('Sprint').setValue('sprint');
+      const projectOption = new StringSelectMenuOptionBuilder().setLabel('Project').setValue('project');
+      if (hasActiveSprint) {
+        select.addOptions(sprintOption, projectOption);
+      } else {
+        select.addOptions(projectOption, sprintOption);
+      }
+
+      const row = new ActionRowBuilder().addComponents(select);
+      return interaction.editReply({ content: wcScopePickerPromptText(), components: [row], allowedMentions: { parse: [] } });
+    }
+  }
 
   if (!((subName === 'set' || subName === 'add' || subName === 'undo' || subName === 'show' || subName === 'summary') && scope === 'project')) {
     return handleSprintWc(interaction, {
