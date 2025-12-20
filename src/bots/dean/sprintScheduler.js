@@ -1,4 +1,4 @@
-import { summaryEmbed, formatSprintIdentifier, sprintCheckInWordsText, sprintEndedWordsText } from './text/sprintText.js';
+import { summaryEmbed, formatSprintIdentifier, sprintCheckInWordsText, sprintEndedWordsText, startSoloEmbed, hostTeamEmbed, sprintEndedEmbed } from './text/sprintText.js';
 import { DeanSprints, GuildSprintSettings, Wordcount, Project } from '../../models/index.js';
 import fireTrigger from '../../shared/hunts/triggerEngine.js';
 import { sumNet } from '../../shared/utils/wordcountMath.js';
@@ -26,6 +26,34 @@ export async function scheduleSprintNotifications(sprint, client) {
 
   const targetChannel = getChannelFromIds(client, sprint.guildId, sprint.channelId, sprint.threadId);
   if (!targetChannel) return;
+
+  // Delayed start notification (so start_in doesn't look like it "already started")
+  // Dedupe: only host for team; in-memory guard.
+  const startKeySet = scheduleSprintNotifications._startKeys || (scheduleSprintNotifications._startKeys = new Set());
+  const isTeamHost = sprint.type === 'team' && sprint.role === 'host' && sprint.groupId;
+  const startKey = isTeamHost ? `${sprint.guildId}:${sprint.groupId}` : `${sprint.guildId}:${sprint.id}`;
+  const hasDelay = Number(sprint.startDelayMinutes || 0) > 0;
+  if (hasDelay && startsInMs > 0 && !startKeySet.has(startKey)) {
+    startKeySet.add(startKey);
+    setTimeout(async () => {
+      try {
+        const fresh = await DeanSprints.findByPk(sprint.id);
+        if (!fresh || fresh.status !== 'processing') return;
+        if (fresh.type === 'team' && fresh.role !== 'host') return;
+
+        const ch = getChannelFromIds(client, fresh.guildId, fresh.channelId, fresh.threadId);
+        if (!ch) return;
+
+        const embed = fresh.type === 'team'
+          ? hostTeamEmbed(fresh.durationMinutes, fresh.label, fresh.groupId, 0)
+          : startSoloEmbed(fresh.durationMinutes, fresh.label, fresh.visibility, 0);
+
+        await ch.send({ embeds: [embed], allowedMentions: { parse: [] } });
+      } catch (e) {
+        console.warn('[dean] start notify failed', (e && e.message) || e);
+      }
+    }, Math.max(0, startsInMs));
+  }
 
   async function safeDisplayName(userId) {
     try {
@@ -55,7 +83,6 @@ export async function scheduleSprintNotifications(sprint, client) {
 
   // Midpoint notification (dedupe: only host for team; Set guard)
   const firedKeySet = scheduleSprintNotifications._midKeys || (scheduleSprintNotifications._midKeys = new Set());
-  const isTeamHost = sprint.type === 'team' && sprint.role === 'host' && sprint.groupId;
   const midKey = isTeamHost ? `${sprint.guildId}:${sprint.groupId}` : `${sprint.guildId}:${sprint.id}`;
   if (!sprint.midpointNotified && !firedKeySet.has(midKey)) {
     firedKeySet.add(midKey);
@@ -247,18 +274,12 @@ export async function startSprintWatchdog(client) {
                 scores.sort((a, b) => (b.total || 0) - (a.total || 0));
                 const leaderboardLines = [];
                 for (let i = 0; i < scores.length; i++) {
-                  let name = scores[i].userId;
-                  try {
-                    if (channel.guild && channel.guild.members) {
-                      const m = await channel.guild.members.fetch(scores[i].userId);
-                      name = m?.displayName || m?.user?.username || scores[i].userId;
-                    }
-                  } catch {}
-                  leaderboardLines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+                  leaderboardLines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
                 }
 
                 const endMessage = await channel.send({
-                  content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines }),
+                  content: pingLine,
+                  embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines })],
                   allowedMentions: { users: participantIds, parse: [] },
                 });
 
@@ -316,11 +337,24 @@ export async function startSprintWatchdog(client) {
     const sum = await buildSummaries(s);
     const summaryIdentifier = formatSprintIdentifier({ type: s.type, groupId: s.groupId, label: sum.label ?? s.label, startedAt: s.startedAt });
     const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, summaryIdentifier, sum.isTeam);
-    await channel.send({ embeds: [embed] });
-    const lines = sum.members.map(m => `• <@${m.userId}>: ${m.total} words${m.projectName ? ` (${m.projectName})` : ''}`);
-    if (lines.length) {
-      await channel.send({ content: lines.join('\n') });
+
+    // Put the leaderboard into the embed. Mentions inside embeds do not ping.
+    const lines = [];
+    for (const m of sum.members) {
+      const proj = m.projectName ? ` (${m.projectName})` : '';
+      lines.push(`<@${m.userId}>: NET ${m.total || 0}${proj}`);
     }
+    if (lines.length) {
+      embed.fields = [
+        {
+          name: 'Leaderboard (NET)',
+          value: lines.join('\n').slice(0, 1024),
+          inline: false,
+        },
+      ];
+    }
+
+    await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
   }
 
   (async function loop() {

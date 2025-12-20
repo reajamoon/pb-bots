@@ -9,7 +9,7 @@ const {
 } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, User, Wordcount, Project, GuildSprintSettings } from '../../../models/index.js';
-import { formatSprintIdentifier, noActiveSprintText, sprintEndedWordsText } from '../text/sprintText.js';
+import { formatSprintIdentifier, noActiveSprintText, sprintEndedWordsText, sprintEndedEmbed } from '../text/sprintText.js';
 import { wcSprintPickerPromptText, wcConfirmSetPromptText, wcConfirmUndoPromptText, wcConfirmBaselinePromptText } from '../text/wcText.js';
 import { setInteractionState } from './interactionState.js';
 
@@ -243,8 +243,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     scores.sort((a, b) => (b.total || 0) - (a.total || 0));
     const lines = [];
     for (let i = 0; i < scores.length; i++) {
-      const name = await safeName(scores[i].userId, guild);
-      lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+      lines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
     }
     return lines;
   }
@@ -286,12 +285,14 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
         ? await DeanSprints.findAll({ where: { guildId: effectiveGuildId, groupId: sprintRow.groupId }, order: [['createdAt', 'ASC']] })
         : [sprintRow];
       const participantIds = [...new Set(participants.map(p => p.userId))];
-      const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
       const sprintIdentifier = formatSprintIdentifier({ type: sprintRow.type, groupId: sprintRow.groupId, label: sprintRow.label, startedAt: sprintRow.startedAt });
       const leaderboardLines = await buildLeaderboardLines(participants, interaction.guild);
-      const content = sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines });
 
-      await msg.edit({ content, allowedMentions: { parse: [] } });
+      await msg.edit({
+        content: msg.content || '',
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines })],
+        allowedMentions: { parse: [] },
+      });
     } catch (e) {
       console.warn('[dean] late-log end summary edit failed:', e?.message || e);
     }

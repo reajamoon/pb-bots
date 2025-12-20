@@ -2,7 +2,7 @@ import Discord from 'discord.js';
 const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits } = Discord;
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
 import { Op } from 'sequelize';
-import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintLeaveText, sprintStatusWordsText, sprintEndedWordsText } from '../text/sprintText.js';
+import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintLeaveText, sprintStatusWordsText, sprintEndedWordsText, sprintEndedEmbed } from '../text/sprintText.js';
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
 import { handleSprintWc } from '../utils/handleSprintWc.js';
 import { setInteractionState } from '../utils/interactionState.js';
@@ -168,13 +168,13 @@ export const data = new SlashCommandBuilder()
     .setName('start')
     .setDescription('Start a sprint in this channel')
     .addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true))
-    .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1)').setRequired(false))
+    .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1; set to 0 to start now)').setRequired(false))
     .addStringOption(opt => opt.setName('label').setDescription('Optional label')))
   .addSubcommand(sub => sub
     .setName('host')
     .setDescription('Host a team sprint')
     .addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true))
-    .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1)').setRequired(false))
+    .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1; set to 0 to start now)').setRequired(false))
     .addBooleanOption(opt => opt.setName('pings').setDescription('Enable pre-start reminder pings during the delay (team only)').setRequired(false))
     .addStringOption(opt => opt.setName('label').setDescription('Optional label')))
   .addSubcommand(sub => sub
@@ -321,13 +321,7 @@ export async function execute(interaction) {
       preStartPingsEnabled: false,
     });
 
-    await interaction.editReply({ embeds: [startSoloEmbed(minutes, label, 'public')] });
-    if (startDelayMinutes > 0) {
-      await interaction.followUp({
-        content: `Alright. Sprint's queued. Starts in **${startDelayMinutes}** minute${startDelayMinutes === 1 ? '' : 's'}. Use the buffer to set your baseline and get comfy.`,
-        allowedMentions: { parse: [] },
-      });
-    }
+    await interaction.editReply({ embeds: [startSoloEmbed(minutes, label, 'public', startDelayMinutes)] });
     await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
     await scheduleSprintNotifications(sprint, interaction.client);
     return;
@@ -361,13 +355,7 @@ export async function execute(interaction) {
       startDelayMinutes,
       preStartPingsEnabled,
     });
-    await interaction.editReply({ embeds: [hostTeamEmbed(minutes, label, groupId)] });
-    if (startDelayMinutes > 0) {
-      await interaction.followUp({
-        content: `Alright, gang. Starts in **${startDelayMinutes}** minute${startDelayMinutes === 1 ? '' : 's'}. Join up, grab a drink, set your baseline.`,
-        allowedMentions: { parse: [] },
-      });
-    }
+    await interaction.editReply({ embeds: [hostTeamEmbed(minutes, label, groupId, startDelayMinutes)] });
     await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
     await scheduleSprintNotifications(hostRow, interaction.client);
     return;
@@ -448,11 +436,14 @@ export async function execute(interaction) {
       for (const c of candidates.slice(0, 25)) {
         const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
         const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+        const startsAtMs = c.row.startedAt ? new Date(c.row.startedAt).getTime() : nowMs;
+        const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
         const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        const desc = nowMs < startsAtMs ? `Starts in ${startsInMin}m` : `Ends in ${minsLeft}m`;
         select.addOptions(
           new Discord.StringSelectMenuOptionBuilder()
             .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
-            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setDescription(desc.slice(0, 100))
             .setValue(String(c.row.id))
         );
       }
@@ -489,8 +480,7 @@ export async function execute(interaction) {
       scores.sort((a, b) => (b.total || 0) - (a.total || 0));
       const lines = [];
       for (let i = 0; i < scores.length; i++) {
-        const name = await safeName(scores[i].userId);
-        lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+        lines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
       }
       return lines;
     }
@@ -516,7 +506,8 @@ export async function execute(interaction) {
         console.warn('[hunts] dean.sprint.completed trigger failed:', huntErr);
       }
       await interaction.editReply({
-        content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines }),
+        content: pingLine,
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines })],
         allowedMentions: { users: participantIds, parse: [] },
       });
 
@@ -558,7 +549,8 @@ export async function execute(interaction) {
         console.warn('[hunts] dean.sprint.completed trigger failed (solo):', huntErr);
       }
       await interaction.editReply({
-        content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines }),
+        content: pingLine,
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines })],
         allowedMentions: { users: participantIds, parse: [] },
       });
 
@@ -606,11 +598,14 @@ export async function execute(interaction) {
       for (const c of candidates.slice(0, 25)) {
         const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
         const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+        const startsAtMs = c.row.startedAt ? new Date(c.row.startedAt).getTime() : nowMs;
+        const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
         const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        const desc = nowMs < startsAtMs ? `Starts in ${startsInMin}m` : `Ends in ${minsLeft}m`;
         select.addOptions(
           new Discord.StringSelectMenuOptionBuilder()
             .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
-            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setDescription(desc.slice(0, 100))
             .setValue(String(c.row.id))
         );
       }
@@ -678,11 +673,14 @@ export async function execute(interaction) {
 
       for (const c of candidates.slice(0, 25)) {
         const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
+        const startsAtMs = c.row.startedAt ? new Date(c.row.startedAt).getTime() : nowMs;
+        const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
         const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        const desc = nowMs < startsAtMs ? `Starts in ${startsInMin}m` : `Ends in ${minsLeft}m`;
         select.addOptions(
           new Discord.StringSelectMenuOptionBuilder()
             .setLabel(`${sprintIdentifier}`.slice(0, 100))
-            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setDescription(desc.slice(0, 100))
             .setValue(String(c.row.id))
         );
       }
@@ -827,11 +825,14 @@ export async function execute(interaction) {
       for (const c of candidates.slice(0, 25)) {
         const sprintIdentifier = formatSprintIdentifier({ type: c.row.type, groupId: c.row.groupId, label: c.row.label, startedAt: c.row.startedAt });
         const kindLabel = c.row.type === 'team' ? 'Team' : 'Solo';
+        const startsAtMs = c.row.startedAt ? new Date(c.row.startedAt).getTime() : nowMs;
+        const startsInMin = Math.max(0, Math.ceil((startsAtMs - nowMs) / 60000));
         const minsLeft = Math.max(0, Math.ceil((c.endsAtMs - nowMs) / 60000));
+        const desc = nowMs < startsAtMs ? `Starts in ${startsInMin}m` : `Ends in ${minsLeft}m`;
         select.addOptions(
           new Discord.StringSelectMenuOptionBuilder()
             .setLabel(`${kindLabel}: ${sprintIdentifier}`.slice(0, 100))
-            .setDescription(`Ends in ${minsLeft}m`.slice(0, 100))
+            .setDescription(desc.slice(0, 100))
             .setValue(String(c.row.id))
         );
       }

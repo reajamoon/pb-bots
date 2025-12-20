@@ -4,7 +4,7 @@ const { MessageFlags } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, Wordcount } from '../../../../models/index.js';
 import { getInteractionState, deleteInteractionState } from '../../utils/interactionState.js';
-import { formatSprintIdentifier, noActiveSprintText, hostsUseEndText, sprintEndedWordsText, sprintLeaveText, sprintStatusWordsText } from '../../text/sprintText.js';
+import { formatSprintIdentifier, noActiveSprintText, hostsUseEndText, sprintEndedWordsText, sprintLeaveText, sprintStatusWordsText, sprintEndedEmbed } from '../../text/sprintText.js';
 import { sumNet } from '../../../../shared/utils/wordcountMath.js';
 
 const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
@@ -35,8 +35,7 @@ async function buildLeaderboardLines(participantRows, guild) {
   scores.sort((a, b) => (b.total || 0) - (a.total || 0));
   const lines = [];
   for (let i = 0; i < scores.length; i++) {
-    const name = await safeName(guild, scores[i].userId);
-    lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
+    lines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
   }
   return lines;
 }
@@ -136,7 +135,8 @@ export async function execute(interaction) {
         ).catch(() => null);
 
         return interaction.update({
-          content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines }),
+          content: pingLine,
+          embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines })],
           components: [],
           allowedMentions: { users: participantIds, parse: [] },
         });
@@ -158,7 +158,8 @@ export async function execute(interaction) {
       const leaderboardLines = await buildLeaderboardLines([target], interaction.guild);
 
       return interaction.update({
-        content: sprintEndedWordsText({ pingLine, sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines }),
+        content: pingLine,
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines })],
         components: [],
         allowedMentions: { users: participantIds, parse: [] },
       });

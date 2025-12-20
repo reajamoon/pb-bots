@@ -45,7 +45,15 @@ function maybeEndearment() {
   return '';
 }
 
-export function startSoloEmbed(minutes, label, visibility) {
+export function startSoloEmbed(minutes, label, visibility, startDelayMinutes = 0) {
+  if (startDelayMinutes > 0) {
+    const startAtUnix = Math.floor((Date.now() + startDelayMinutes * 60000) / 1000);
+    return {
+      title: 'Sprint queued',
+      description: `Starts in ${startDelayMinutes} minute${startDelayMinutes === 1 ? '' : 's'} (at <t:${startAtUnix}:t>). Timer: ${minutes} minute${minutes === 1 ? '' : 's'} once it kicks off.${label ? `\nLabel: ${label}` : ''}`,
+      color: colors.info,
+    };
+  }
   return {
     title: 'Sprint started',
     description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${pick(soloBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
@@ -53,7 +61,15 @@ export function startSoloEmbed(minutes, label, visibility) {
   };
 }
 
-export function hostTeamEmbed(minutes, label, groupId) {
+export function hostTeamEmbed(minutes, label, groupId, startDelayMinutes = 0) {
+  if (startDelayMinutes > 0) {
+    const startAtUnix = Math.floor((Date.now() + startDelayMinutes * 60000) / 1000);
+    return {
+      title: 'Team sprint queued',
+      description: `${hostTeamCodeLine(groupId)} Starts in ${startDelayMinutes} minute${startDelayMinutes === 1 ? '' : 's'} (at <t:${startAtUnix}:t>). Timer: ${minutes} minute${minutes === 1 ? '' : 's'} once it kicks off.${label ? `\nLabel: ${label}` : ''}`,
+      color: colors.info,
+    };
+  }
   return {
     title: 'Team sprint started',
     description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${hostTeamCodeLine(groupId)} ${pick(teamBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
@@ -217,8 +233,27 @@ function linesToBlock(lines) {
   return lines.join('\n');
 }
 
+function chunkLinesForEmbed(lines, maxLen = 1024) {
+  const safeLines = Array.isArray(lines) ? lines.filter(Boolean).map(l => String(l)) : [];
+  if (!safeLines.length) return [];
+
+  const chunks = [];
+  let current = '';
+  for (const line of safeLines) {
+    const next = current ? `${current}\n${line}` : line;
+    if (next.length > maxLen) {
+      if (current) chunks.push(current);
+      current = line.length > maxLen ? line.slice(0, maxLen - 3) + '...' : line;
+    } else {
+      current = next;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 function lateLogLine() {
-  return "Log your words: You can still drop your numbers during your late logging window with `/wc` (default 15 minutes; your setting may differ; hard max 6 hours).";
+  return "Log your words: You can still drop your numbers during your late logging window with `/wc` (default 15 minutes; your setting might be different.).";
 }
 
 export function sprintEndedWordsText({
@@ -250,6 +285,50 @@ export function sprintEndedWordsText({
     `${lateLogLine()}\n` +
     `Note: This summary might update if late logs roll in.`
   ).trim();
+}
+
+export function sprintEndedEmbed({
+  sprintIdentifier,
+  durationMinutes,
+  leaderboardLines = [],
+  alsoParticipatedLines = [],
+} = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+
+  const leaderboard = leaderboardLines.length ? leaderboardLines : ['No word logs yet.'];
+  const leaderboardChunks = chunkLinesForEmbed(leaderboard, 1024);
+
+  const alsoChunks = alsoParticipatedLines.length ? chunkLinesForEmbed(alsoParticipatedLines, 1024) : [];
+
+  const fields = [];
+  for (let i = 0; i < leaderboardChunks.length; i++) {
+    fields.push({
+      name: i === 0 ? 'Leaderboard (NET)' : 'Leaderboard (NET, cont.)',
+      value: leaderboardChunks[i],
+      inline: false,
+    });
+  }
+  for (let i = 0; i < alsoChunks.length; i++) {
+    fields.push({
+      name: i === 0 ? 'Also participated (time)' : 'Also participated (time, cont.)',
+      value: alsoChunks[i],
+      inline: false,
+    });
+  }
+
+  fields.push({
+    name: 'Late logging',
+    value: `${lateLogLine()}\nNote: This summary might update if late logs roll in.`,
+    inline: false,
+  });
+
+  return {
+    title: `Sprint's over: ${id}`,
+    description: `Duration: ${dur}`,
+    color: colors.success,
+    fields,
+  };
 }
 
 export function sprintEndedMixedText({
