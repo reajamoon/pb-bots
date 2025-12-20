@@ -61,7 +61,10 @@ async function buildCandidateTargets({ guildId, discordId, windowMinutes }) {
   if (windowMinutes > 0) {
     const ended = await DeanSprints.findAll({
       where: { userId: discordId, guildId, status: 'done' },
-      order: [['endedAt', 'DESC'], ['updatedAt', 'DESC']],
+      // Important: Postgres sorts NULLs first for DESC, so ordering by endedAt DESC
+      // can starve out real recently-ended rows if old rows have endedAt=NULL.
+      // Prioritize updatedAt to ensure we see the most recent ended rows.
+      order: [['updatedAt', 'DESC'], ['endedAt', 'DESC']],
       limit: 8,
     });
     for (const row of ended) {
@@ -155,7 +158,8 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
       // Include "done" rows and "processing" rows that may not have been finalized yet
       // (e.g., bot restarted between end message and DB status update).
       where: { userId: discordId, guildId: effectiveGuildId, status: { [Op.in]: ['done', 'processing'] } },
-      order: [['endedAt', 'DESC'], ['updatedAt', 'DESC']],
+      // See note above: avoid NULL endedAt rows crowding out recent sprints.
+      order: [['updatedAt', 'DESC'], ['endedAt', 'DESC']],
       limit: 8,
     });
     if (!endedCandidates.length) return { error: noActiveSprintText() };
