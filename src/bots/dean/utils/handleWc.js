@@ -14,6 +14,7 @@ import {
   wcProjectPickerPromptText,
   wcNoProjectsText,
   wcConfirmSetPromptText,
+  wcConfirmAddPromptText,
 } from '../text/wcText.js';
 import { setInteractionState } from './interactionState.js';
 import { handleSprintWc } from './handleSprintWc.js';
@@ -118,11 +119,11 @@ export async function handleWc(
   const discordId = interaction.user.id;
   const subName = forcedSubcommand ?? interaction.options?.getSubcommand?.();
 
-  // Only /wc set needs scope right now; all other subcommands remain sprint-scoped.
+  // Only /wc set and /wc add need scope right now; all other subcommands remain sprint-scoped.
   const scopeRaw = forcedScope ?? (forcedOptions?.scope ?? interaction.options?.getString?.('scope'));
   const scope = (typeof scopeRaw === 'string' && scopeRaw) ? scopeRaw.toLowerCase() : 'sprint';
 
-  if (!(subName === 'set' && scope === 'project')) {
+  if (!((subName === 'set' || subName === 'add') && scope === 'project')) {
     return handleSprintWc(interaction, {
       guildId,
       forcedTargetId,
@@ -133,14 +134,32 @@ export async function handleWc(
     });
   }
 
-  // Project scope: /wc set
-  const count = forcedOptions ? forcedOptions.count : (interaction.options?.getInteger?.('count') ?? null);
-  if (typeof count !== 'number') {
-    return interaction.editReply({ content: 'I need a number for that. Try `/wc set count:123 scope:project`.' });
+  // Parse inputs for project scope
+  const count = subName === 'set'
+    ? (forcedOptions ? forcedOptions.count : (interaction.options?.getInteger?.('count') ?? null))
+    : null;
+  const newWords = subName === 'add'
+    ? (forcedOptions ? forcedOptions.newWords : (interaction.options?.getInteger?.('new-words') ?? null))
+    : null;
+
+  if (subName === 'set') {
+    if (typeof count !== 'number') {
+      return interaction.editReply({ content: 'I need a number for that. Try `/wc set count:123 scope:project`.' });
+    }
+    if (count < 0) {
+      await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy.", flags: MessageFlags.Ephemeral });
+      return;
+    }
   }
-  if (count < 0) {
-    await interaction.followUp({ content: "Wordcount's gotta be at least zero, buddy.", flags: MessageFlags.Ephemeral });
-    return;
+
+  if (subName === 'add') {
+    if (typeof newWords !== 'number') {
+      return interaction.editReply({ content: 'I need a number for that. Try `/wc add new-words:123 scope:project`.' });
+    }
+    if (newWords <= 0) {
+      await interaction.followUp({ content: 'That has to be a positive number, champ.', flags: MessageFlags.Ephemeral });
+      return;
+    }
   }
 
   let project = null;
@@ -165,10 +184,11 @@ export async function handleWc(
       guildId: guildId ?? interaction.guildId,
       userId: discordId,
       scope: 'project',
-      subcommand: 'set',
+      subcommand: subName,
       options: {
         scope: 'project',
         count,
+        newWords,
         project: null,
       },
     });
@@ -205,17 +225,70 @@ export async function handleWc(
 
   const rows = await Wordcount.findAll({ where: { projectId: project.id, userId: discordId }, order: [['recordedAt', 'ASC']] }).catch(() => []);
   const currentNet = sumNet(rows);
-  const delta = count - currentNet;
-  const deltaSigned = `${delta >= 0 ? '+' : ''}${delta}`;
+  if (subName === 'set') {
+    const delta = count - currentNet;
+    const deltaSigned = `${delta >= 0 ? '+' : ''}${delta}`;
+
+    if (!confirmed) {
+      const token = makeToken();
+
+      const prompt = wcConfirmSetPromptText({
+        targetLabel: project.name,
+        newX: count,
+        currentNet,
+        deltaSigned,
+      });
+
+      setInteractionState(token, {
+        guildId: guildId ?? interaction.guildId,
+        userId: discordId,
+        scope: 'project',
+        projectId: project.id,
+        subcommand: 'set',
+        options: {
+          scope: 'project',
+          count,
+          newWords: null,
+          project: project.id,
+        },
+      });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`wcConfirm_confirm_${token}`).setLabel('Confirm').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`wcConfirm_cancel_${token}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+      );
+
+      return interaction.editReply({ content: prompt, components: [row], allowedMentions: { parse: [] } });
+    }
+
+    await Wordcount.create({
+      userId: discordId,
+      projectId: project.id,
+      sprintId: null,
+      countStart: currentNet,
+      countEnd: count,
+      delta,
+      recordedAt: new Date(),
+    });
+
+    return interaction.editReply({
+      content: `Alright. **${project.name}** is now at **${count}**. (${deltaSigned})`,
+      allowedMentions: { parse: [] },
+    });
+  }
+
+  // subName === 'add'
+  const next = currentNet + newWords;
+  const deltaSigned = `+${newWords}`;
 
   if (!confirmed) {
     const token = makeToken();
 
-    const prompt = wcConfirmSetPromptText({
+    const prompt = wcConfirmAddPromptText({
       targetLabel: project.name,
-      newX: count,
+      addingN: newWords,
       currentNet,
-      deltaSigned,
+      newX: next,
     });
 
     setInteractionState(token, {
@@ -223,10 +296,11 @@ export async function handleWc(
       userId: discordId,
       scope: 'project',
       projectId: project.id,
-      subcommand: 'set',
+      subcommand: 'add',
       options: {
         scope: 'project',
-        count,
+        count: null,
+        newWords,
         project: project.id,
       },
     });
@@ -239,19 +313,18 @@ export async function handleWc(
     return interaction.editReply({ content: prompt, components: [row], allowedMentions: { parse: [] } });
   }
 
-  // Write the adjustment row.
   await Wordcount.create({
     userId: discordId,
     projectId: project.id,
     sprintId: null,
     countStart: currentNet,
-    countEnd: count,
-    delta,
+    countEnd: next,
+    delta: newWords,
     recordedAt: new Date(),
   });
 
   return interaction.editReply({
-    content: `Alright. **${project.name}** is now at **${count}**. (${deltaSigned})`,
+    content: `Alright. **${project.name}** ${deltaSigned}. Now at **${next}**.`,
     allowedMentions: { parse: [] },
   });
 }

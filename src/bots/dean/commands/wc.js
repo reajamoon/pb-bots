@@ -28,7 +28,19 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub
     .setName('add')
     .setDescription('Add words to your current sprint total')
-    .addIntegerOption(opt => opt.setName('new-words').setDescription('Words added (positive)').setRequired(true)))
+    .addIntegerOption(opt => opt.setName('new-words').setDescription('Words added (positive)').setRequired(true))
+    .addStringOption(opt => opt
+      .setName('scope')
+      .setDescription('What you are adding to')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Sprint', value: 'sprint' },
+        { name: 'Project', value: 'project' },
+      ))
+    .addStringOption(opt => opt
+      .setName('project')
+      .setDescription('Project ID or exact name (for scope=project)')
+      .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('show')
     .setDescription('Show your current sprint wordcount'))

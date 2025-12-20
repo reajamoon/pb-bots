@@ -1,4 +1,4 @@
-// Dean voice: dry humor, practical, no em-dashes.
+// Dean voice: dry humor, practical, kinda a butthead
 
 export function wcScopePickerPromptText() {
   return "Alright. What are we messing with?\nPick one: Sprint or Project.";
@@ -23,6 +23,17 @@ export function wcConfirmSetPromptText({ targetLabel, newX, currentNet, deltaSig
     `New value: ${newX ?? '?'}\n` +
     `Current net: ${currentNet ?? '?'}\n` +
     `Delta: ${deltaSigned ?? '?'}\n\n` +
+    "Hit confirm if that's right. If not, cancel and try again."
+  ).trim();
+}
+
+export function wcConfirmAddPromptText({ targetLabel, addingN, currentNet, newX } = {}) {
+  return (
+    `Confirm /wc add\n` +
+    `Target: ${targetLabel ?? 'Unknown'}\n\n` +
+    `Adding: ${addingN ?? '?'}\n` +
+    `Current net: ${currentNet ?? '?'}\n` +
+    `New value: ${newX ?? '?'}\n\n` +
     "Hit confirm if that's right. If not, cancel and try again."
   ).trim();
 }

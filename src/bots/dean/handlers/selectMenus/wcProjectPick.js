@@ -40,7 +40,7 @@ export async function execute(interaction) {
     return;
   }
 
-  await interaction.update({ content: 'Got it. Setting project total.', components: [] });
+  await interaction.update({ content: 'Got it. Updating that project.', components: [] });
 
   return handleWc(interaction, {
     guildId: state.guildId,
