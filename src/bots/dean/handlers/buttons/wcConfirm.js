@@ -50,7 +50,7 @@ export async function execute(interaction) {
         }
 
         try {
-          await interaction.update({ components: getDisabledComponents(interaction.message) });
+          await interaction.update({ components: [] });
         } catch {
           // If we can't update (message deleted/changed), continue anyway.
           await interaction.deferUpdate();
@@ -83,7 +83,7 @@ export async function execute(interaction) {
 
   // Confirm
   try {
-    await interaction.update({ components: getDisabledComponents(interaction.message) });
+    await interaction.update({ components: [] });
   } catch {
     // If we can't update (message deleted/changed), fall back.
     await interaction.deferUpdate();
