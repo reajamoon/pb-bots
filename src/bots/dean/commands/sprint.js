@@ -170,6 +170,7 @@ export async function execute(interaction) {
     }
     await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
     await scheduleSprintNotifications(sprint, interaction.client);
+    return;
   } else if (sub === 'host') {
     const minutes = interaction.options.getInteger('minutes');
     const startInRaw = interaction.options.getInteger('start_in');
@@ -209,6 +210,7 @@ export async function execute(interaction) {
     }
     await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] } });
     await scheduleSprintNotifications(hostRow, interaction.client);
+    return;
   } else if (sub === 'join') {
     const codeRaw = interaction.options.getString('code');
     const provided = codeRaw ? codeRaw.toUpperCase() : undefined;
@@ -251,6 +253,7 @@ export async function execute(interaction) {
     const sprintIdentifier = formatSprintIdentifier({ type: host.type, groupId: host.groupId, label: host.label, startedAt: host.startedAt });
     await interaction.editReply({ content: sprintJoinText({ sprintIdentifier, durationMinutes: host.durationMinutes }), allowedMentions: { parse: [] } });
     await interaction.followUp({ content: baselineNudgeText(), flags: MessageFlags.Ephemeral });
+    return;
   } else if (sub === 'end') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
@@ -355,6 +358,7 @@ export async function execute(interaction) {
         console.warn('[dean] failed to record end summary ref (solo):', e?.message || e);
       }
     }
+    return;
   } else if (sub === 'status') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing' } });
@@ -386,6 +390,7 @@ export async function execute(interaction) {
       }),
       allowedMentions: { parse: [] },
     });
+    return;
   } else if (sub === 'leave') {
     const discordId = interaction.user.id;
     const active = await DeanSprints.findOne({ where: { userId: discordId, guildId, status: 'processing', type: 'team' } });
@@ -403,6 +408,7 @@ export async function execute(interaction) {
       await active.update({ status: 'done', endNotified: true });
     }
     await interaction.editReply({ content: sprintLeaveText({ sprintIdentifier }), allowedMentions: { parse: [] } });
+    return;
   } else if (sub === 'list') {
     const sprints = await DeanSprints.findAll({ where: { guildId, channelId, status: 'processing' }, order: [['startedAt', 'DESC']] });
     const lines = sprints.map(s => {
@@ -417,6 +423,7 @@ export async function execute(interaction) {
     });
     const embed = listEmbeds(lines);
     await interaction.editReply({ embeds: [embed] });
+    return;
   } else if (subGroup === 'wc') {
     return handleSprintWc(interaction, { guildId });
   } else if (subGroup === 'project') {
