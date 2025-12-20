@@ -6,6 +6,19 @@ import { handleWc } from '../../utils/handleWc.js';
 
 const EPHEMERAL_FLAG = typeof MessageFlags !== 'undefined' && MessageFlags.Ephemeral ? MessageFlags.Ephemeral : 64;
 
+function getDisabledComponents(message) {
+  const rows = message?.components;
+  if (!Array.isArray(rows) || !rows.length) return [];
+  return rows.map(row => {
+    const json = typeof row.toJSON === 'function' ? row.toJSON() : row;
+    const comps = Array.isArray(json.components) ? json.components : [];
+    return {
+      ...json,
+      components: comps.map(c => ({ ...c, disabled: true })),
+    };
+  });
+}
+
 export async function execute(interaction) {
   const customId = interaction.customId || '';
   const parts = customId.split('_');
@@ -36,7 +49,12 @@ export async function execute(interaction) {
           return;
         }
 
-        await interaction.deferUpdate();
+        try {
+          await interaction.update({ components: getDisabledComponents(interaction.message) });
+        } catch {
+          // If we can't update (message deleted/changed), continue anyway.
+          await interaction.deferUpdate();
+        }
         return handleWc(interaction, {
           guildId: interaction.guildId,
           forcedTargetId: sprintId,
@@ -64,7 +82,12 @@ export async function execute(interaction) {
   }
 
   // Confirm
-  await interaction.deferUpdate();
+  try {
+    await interaction.update({ components: getDisabledComponents(interaction.message) });
+  } catch {
+    // If we can't update (message deleted/changed), fall back.
+    await interaction.deferUpdate();
+  }
   return handleWc(interaction, {
     guildId: state.guildId,
     forcedScope: state.scope,
