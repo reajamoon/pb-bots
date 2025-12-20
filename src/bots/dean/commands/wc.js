@@ -43,7 +43,19 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('show')
-    .setDescription('Show your current sprint wordcount'))
+    .setDescription('Show your current wordcount')
+    .addStringOption(opt => opt
+      .setName('scope')
+      .setDescription('What you are viewing')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Sprint', value: 'sprint' },
+        { name: 'Project', value: 'project' },
+      ))
+    .addStringOption(opt => opt
+      .setName('project')
+      .setDescription('Project ID or exact name (for scope=project)')
+      .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('summary')
     .setDescription('Show sprint totals so far'))

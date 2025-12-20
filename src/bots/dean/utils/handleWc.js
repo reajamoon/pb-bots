@@ -120,11 +120,11 @@ export async function handleWc(
   const discordId = interaction.user.id;
   const subName = forcedSubcommand ?? interaction.options?.getSubcommand?.();
 
-  // Only /wc set, /wc add, and /wc undo need scope right now; all other subcommands remain sprint-scoped.
+  // Only /wc set, /wc add, /wc undo, and /wc show need scope right now; all other subcommands remain sprint-scoped.
   const scopeRaw = forcedScope ?? (forcedOptions?.scope ?? interaction.options?.getString?.('scope'));
   const scope = (typeof scopeRaw === 'string' && scopeRaw) ? scopeRaw.toLowerCase() : 'sprint';
 
-  if (!((subName === 'set' || subName === 'add' || subName === 'undo') && scope === 'project')) {
+  if (!((subName === 'set' || subName === 'add' || subName === 'undo' || subName === 'show') && scope === 'project')) {
     return handleSprintWc(interaction, {
       guildId,
       forcedTargetId,
@@ -161,6 +161,10 @@ export async function handleWc(
       await interaction.followUp({ content: 'That has to be a positive number, champ.', flags: MessageFlags.Ephemeral });
       return;
     }
+  }
+
+  if (subName === 'show') {
+    // No numeric inputs.
   }
 
   let project = null;
@@ -226,6 +230,17 @@ export async function handleWc(
 
   const rows = await Wordcount.findAll({ where: { projectId: project.id, userId: discordId }, order: [['recordedAt', 'ASC']] }).catch(() => []);
   const currentNet = sumNet(rows);
+
+  if (subName === 'show') {
+    const last = await Wordcount.findOne({ where: { projectId: project.id, userId: discordId }, order: [['recordedAt', 'DESC']] }).catch(() => null);
+    const lastAt = last?.recordedAt ? new Date(last.recordedAt) : null;
+    const lastLine = lastAt ? `\nLast update: ${lastAt.toLocaleString()}` : '\nLast update: none yet';
+    return interaction.editReply({
+      content: `Project: **${project.name}**\nCurrent total: **${currentNet}**${lastLine}`,
+      components: [],
+      allowedMentions: { parse: [] },
+    });
+  }
 
   if (subName === 'undo') {
     const last = forcedUndoWordcountId
