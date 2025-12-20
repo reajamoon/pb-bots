@@ -27,6 +27,10 @@ function makeToken(length = 12) {
 function getSprintEndedAtCandidate(sprintRow) {
   if (!sprintRow) return null;
   if (sprintRow.endedAt) return new Date(sprintRow.endedAt);
+  // If the sprint is marked done but we failed to persist endedAt,
+  // fall back to the row update timestamp (covers manual early ends
+  // and other edge cases where startedAt+duration isn't reliable).
+  if (sprintRow.status === 'done' && sprintRow.updatedAt) return new Date(sprintRow.updatedAt);
   if (sprintRow.startedAt && sprintRow.durationMinutes) {
     return new Date(new Date(sprintRow.startedAt).getTime() + sprintRow.durationMinutes * 60000);
   }
@@ -48,7 +52,10 @@ async function buildCandidateTargets({ guildId, discordId, windowMinutes }) {
     for (const row of ended) {
       const endedAt = getSprintEndedAtCandidate(row);
       if (!endedAt) continue;
-      const withinWindow = (Date.now() - endedAt.getTime()) <= windowMinutes * 60000;
+      const endedMs = endedAt.getTime();
+      const nowMs = Date.now();
+      if (nowMs < endedMs) continue;
+      const withinWindow = (nowMs - endedMs) <= windowMinutes * 60000;
       if (withinWindow) candidates.push({ row, kind: 'ended' });
     }
   }
@@ -184,7 +191,10 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     const windowMinutes = await getLateLogWindowMinutes();
     const endedAt = getSprintEndedAtCandidate(sprintRow);
     if (!endedAt) return;
-    if ((Date.now() - endedAt.getTime()) > windowMinutes * 60000) return;
+    const endedMs = endedAt.getTime();
+    const nowMs = Date.now();
+    if (nowMs < endedMs) return;
+    if ((nowMs - endedMs) > windowMinutes * 60000) return;
 
     const ref = await getEndSummaryRef(sprintRow);
     if (!ref) return;
