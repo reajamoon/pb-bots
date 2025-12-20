@@ -365,7 +365,12 @@ export async function execute(interaction) {
       const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
       const leaderboardLines = await buildLeaderboardLines(participants);
       // End the team (host + all participants)
-      await DeanSprints.update({ status: 'done', endNotified: true }, { where: { guildId, groupId: active.groupId, status: 'processing' } });
+      // Persist endedAt immediately so /wc late logs can target the just-ended sprint without racing
+      // the follow-up update that captures end summary message refs.
+      await DeanSprints.update(
+        { status: 'done', endNotified: true, endedAt },
+        { where: { guildId, groupId: active.groupId, status: 'processing' } }
+      );
       try {
         const fireTrigger = (await import('../../../shared/hunts/triggerEngine.js')).default;
         const makeDeanAnnouncer = (await import('../utils/huntsAnnouncer.js')).default;
@@ -401,7 +406,11 @@ export async function execute(interaction) {
         await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null, endedAt });
       } catch (e) {
         console.warn('[dean] failed to persist endedAt on solo end:', e?.message || e);
-        await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null });
+        try {
+          await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null, endedAt });
+        } catch {
+          await active.update({ status: 'done', endNotified: true, wordcountEnd: active.wordcountEnd ?? null });
+        }
       }
       // Fire Hunt trigger on solo sprint completion
       try {
@@ -475,7 +484,11 @@ export async function execute(interaction) {
       await active.update({ status: 'done', endNotified: true, endedAt: new Date() });
     } catch (e) {
       console.warn('[dean] failed to persist endedAt on leave:', e?.message || e);
-      await active.update({ status: 'done', endNotified: true });
+      try {
+        await active.update({ status: 'done', endNotified: true, endedAt: new Date() });
+      } catch {
+        await active.update({ status: 'done', endNotified: true });
+      }
     }
     await interaction.editReply({ content: sprintLeaveText({ sprintIdentifier }), allowedMentions: { parse: [] } });
     return;

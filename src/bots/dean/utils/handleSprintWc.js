@@ -98,6 +98,9 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
   }
 
   function clampInt(value, min, max, fallback) {
+    // Important: Number(null) === 0, so treat null/undefined as "missing"
+    // and use fallback rather than accidentally disabling features.
+    if (value === null || value === undefined) return fallback;
     const n = Number(value);
     if (!Number.isFinite(n)) return fallback;
     return Math.max(min, Math.min(max, Math.trunc(n)));
