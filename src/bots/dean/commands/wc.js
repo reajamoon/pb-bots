@@ -49,7 +49,19 @@ export const data = new SlashCommandBuilder()
     .setDescription('Show sprint totals so far'))
   .addSubcommand(sub => sub
     .setName('undo')
-    .setDescription('Undo your last wordcount entry'));
+    .setDescription('Undo your last wordcount entry')
+    .addStringOption(opt => opt
+      .setName('scope')
+      .setDescription('What you are undoing')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Sprint', value: 'sprint' },
+        { name: 'Project', value: 'project' },
+      ))
+    .addStringOption(opt => opt
+      .setName('project')
+      .setDescription('Project ID or exact name (for scope=project)')
+      .setRequired(false)));
 
 export async function execute(interaction) {
   try {

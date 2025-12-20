@@ -15,6 +15,7 @@ import {
   wcNoProjectsText,
   wcConfirmSetPromptText,
   wcConfirmAddPromptText,
+  wcConfirmUndoPromptText,
 } from '../text/wcText.js';
 import { setInteractionState } from './interactionState.js';
 import { handleSprintWc } from './handleSprintWc.js';
@@ -119,11 +120,11 @@ export async function handleWc(
   const discordId = interaction.user.id;
   const subName = forcedSubcommand ?? interaction.options?.getSubcommand?.();
 
-  // Only /wc set and /wc add need scope right now; all other subcommands remain sprint-scoped.
+  // Only /wc set, /wc add, and /wc undo need scope right now; all other subcommands remain sprint-scoped.
   const scopeRaw = forcedScope ?? (forcedOptions?.scope ?? interaction.options?.getString?.('scope'));
   const scope = (typeof scopeRaw === 'string' && scopeRaw) ? scopeRaw.toLowerCase() : 'sprint';
 
-  if (!((subName === 'set' || subName === 'add') && scope === 'project')) {
+  if (!((subName === 'set' || subName === 'add' || subName === 'undo') && scope === 'project')) {
     return handleSprintWc(interaction, {
       guildId,
       forcedTargetId,
@@ -225,6 +226,57 @@ export async function handleWc(
 
   const rows = await Wordcount.findAll({ where: { projectId: project.id, userId: discordId }, order: [['recordedAt', 'ASC']] }).catch(() => []);
   const currentNet = sumNet(rows);
+
+  if (subName === 'undo') {
+    const last = forcedUndoWordcountId
+      ? await Wordcount.findOne({ where: { id: forcedUndoWordcountId, projectId: project.id, userId: discordId } }).catch(() => null)
+      : await Wordcount.findOne({ where: { projectId: project.id, userId: discordId }, order: [['recordedAt', 'DESC']] }).catch(() => null);
+
+    if (!last) {
+      await interaction.followUp({ content: 'No wordcount to undo for that project, partner.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    if (!confirmed) {
+      const token = makeToken();
+      const entryAmountSigned = `${last.delta >= 0 ? '+' : ''}${last.delta}`;
+      const entryTimestamp = (last.recordedAt ? new Date(last.recordedAt) : new Date()).toLocaleString();
+      const prompt = wcConfirmUndoPromptText({
+        targetLabel: project.name,
+        entryType: 'WC',
+        entryAmountSigned,
+        entryTimestamp,
+      });
+
+      setInteractionState(token, {
+        guildId: guildId ?? interaction.guildId,
+        userId: discordId,
+        scope: 'project',
+        projectId: project.id,
+        subcommand: 'undo',
+        options: {
+          scope: 'project',
+          count: null,
+          newWords: null,
+          project: project.id,
+        },
+        undoWordcountId: last.id,
+      });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`wcConfirm_confirm_${token}`).setLabel('Confirm').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`wcConfirm_cancel_${token}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+      );
+
+      return interaction.editReply({ content: prompt, components: [row], allowedMentions: { parse: [] } });
+    }
+
+    await last.destroy();
+    const remaining = await Wordcount.findAll({ where: { projectId: project.id, userId: discordId }, order: [['recordedAt', 'ASC']] }).catch(() => []);
+    const next = sumNet(remaining);
+    return interaction.editReply({ content: `Undone. **${project.name}** is now at **${next}**.`, components: [], allowedMentions: { parse: [] } });
+  }
+
   if (subName === 'set') {
     const delta = count - currentNet;
     const deltaSigned = `${delta >= 0 ? '+' : ''}${delta}`;
