@@ -331,6 +331,68 @@ export function sprintEndedEmbed({
   };
 }
 
+export function sprintEndedMixedEmbed({
+  sprintIdentifier,
+  durationMinutes,
+  participantLines = [],
+} = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+
+  const participants = participantLines.length ? participantLines : ['No participants found.'];
+  const participantChunks = chunkLinesForEmbed(participants, 1024);
+
+  const fields = [];
+  for (let i = 0; i < participantChunks.length; i++) {
+    fields.push({
+      name: i === 0 ? 'Participants (host first, then join order)' : 'Participants (cont.)',
+      value: participantChunks[i],
+      inline: false,
+    });
+  }
+
+  fields.push({
+    name: 'Late logging',
+    value: `${lateLogLine()}\nNote: This summary might update if late logs roll in.`,
+    inline: false,
+  });
+
+  return {
+    title: `Sprint's over: ${id}`,
+    description: `Duration: ${dur}`,
+    color: colors.success,
+    fields,
+  };
+}
+
+export function sprintEndedTimeEmbed({
+  sprintIdentifier,
+  durationMinutes,
+  participantLines = [],
+} = {}) {
+  const id = sprintIdentifier || 'Unknown sprint';
+  const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+
+  const participants = participantLines.length ? participantLines : ['No participants found.'];
+  const participantChunks = chunkLinesForEmbed(participants, 1024);
+
+  const fields = [];
+  for (let i = 0; i < participantChunks.length; i++) {
+    fields.push({
+      name: i === 0 ? 'Participants (host first, then join order)' : 'Participants (cont.)',
+      value: participantChunks[i],
+      inline: false,
+    });
+  }
+
+  return {
+    title: `Sprint's over: ${id}`,
+    description: `Duration: ${dur}`,
+    color: colors.success,
+    fields,
+  };
+}
+
 export function sprintEndedMixedText({
   pingLine = '',
   sprintIdentifier,
@@ -473,7 +535,7 @@ export function sprintJoinTrackTimeText({ sprintIdentifier, durationMinutes } = 
   return (
     `You're in (time track): ${id}\n` +
     `Timer: ${dur}\n\n` +
-    "You're here for vibes and minutes. If you end up logging words, I'll count you in the leaderboard too."
+    "You're here for vibes and minutes. Wordcounts are off for you in this sprint."
   ).trim();
 }
 

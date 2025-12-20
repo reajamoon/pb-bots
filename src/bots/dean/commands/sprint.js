@@ -2,7 +2,7 @@ import Discord from 'discord.js';
 const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits } = Discord;
 import { DeanSprints, GuildSprintSettings, User, sequelize, Wordcount, Project, ProjectMember } from '../../../models/index.js';
 import { Op } from 'sequelize';
-import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintLeaveText, sprintStatusWordsText, sprintEndedWordsText, sprintEndedEmbed } from '../text/sprintText.js';
+import { startSoloEmbed, hostTeamEmbed, listEmbeds, formatListLine, notEnabledInChannelText, noActiveTeamText, alreadyActiveSprintText, noActiveSprintText, notInTeamSprintText, hostsUseEndText, selectAChannelText, onlyStaffSetChannelText, sprintChannelSetText, formatSprintIdentifier, sprintJoinText, sprintJoinTrackTimeText, sprintLeaveText, sprintStatusWordsText, sprintStatusTimeText, sprintStatusMixedText, sprintEndedWordsText, sprintEndedEmbed } from '../text/sprintText.js';
 import { scheduleSprintNotifications } from '../sprintScheduler.js';
 import { handleSprintWc } from '../utils/handleSprintWc.js';
 import { setInteractionState } from '../utils/interactionState.js';
@@ -169,6 +169,14 @@ export const data = new SlashCommandBuilder()
     .setDescription('Start a sprint in this channel')
     .addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true))
     .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1; set to 0 to start now)').setRequired(false))
+    .addStringOption(opt => opt.setName('mode')
+      .setDescription('Sprint mode (default: words)')
+      .addChoices(
+        { name: 'words', value: 'words' },
+        { name: 'time', value: 'time' },
+        { name: 'mixed', value: 'mixed' },
+      )
+      .setRequired(false))
     .addStringOption(opt => opt.setName('label').setDescription('Optional label')))
   .addSubcommand(sub => sub
     .setName('host')
@@ -176,11 +184,26 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true))
     .addIntegerOption(opt => opt.setName('start_in').setDescription('Delay start by N minutes (default 1; set to 0 to start now)').setRequired(false))
     .addBooleanOption(opt => opt.setName('pings').setDescription('Enable pre-start reminder pings during the delay (team only)').setRequired(false))
+    .addStringOption(opt => opt.setName('mode')
+      .setDescription('Sprint mode (default: words)')
+      .addChoices(
+        { name: 'words', value: 'words' },
+        { name: 'time', value: 'time' },
+        { name: 'mixed', value: 'mixed' },
+      )
+      .setRequired(false))
     .addStringOption(opt => opt.setName('label').setDescription('Optional label')))
   .addSubcommand(sub => sub
     .setName('join')
     .setDescription('Join the active team sprint in this channel')
-    .addStringOption(opt => opt.setName('code').setDescription('Host code').setRequired(true)))
+    .addStringOption(opt => opt.setName('code').setDescription('Host code').setRequired(true))
+    .addStringOption(opt => opt.setName('track')
+      .setDescription('How you want to track this sprint (only used for words-mode team sprints)')
+      .addChoices(
+        { name: 'words', value: 'words' },
+        { name: 'time', value: 'time' },
+      )
+      .setRequired(false)))
   .addSubcommand(sub => sub
     .setName('end')
     .setDescription('End your active sprint'))
@@ -293,10 +316,22 @@ export async function execute(interaction) {
     return "Quick heads up: if you're using absolute totals, set a baseline with `/sprint wc baseline count:YOUR_START` so `/sprint wc set` doesn't count your whole draft as sprint words.";
   }
 
+  function normalizeMode(raw) {
+    const v = String(raw || '').trim().toLowerCase();
+    if (v === 'time' || v === 'mixed' || v === 'words') return v;
+    return 'words';
+  }
+
+  function defaultTrackForMode(mode) {
+    return mode === 'time' ? 'time' : 'words';
+  }
+
   if (sub === 'start') {
     const minutes = interaction.options.getInteger('minutes');
     const startInRaw = interaction.options.getInteger('start_in');
     const startDelayMinutes = Math.max(0, Math.min(180, (typeof startInRaw === 'number' ? startInRaw : 1)));
+    const mode = normalizeMode(interaction.options.getString('mode'));
+    const track = defaultTrackForMode(mode);
     const label = interaction.options.getString('label') ?? undefined;
 
     // Upsert the user row if needed (using discordId)
@@ -312,6 +347,8 @@ export async function execute(interaction) {
       threadId,
       type: 'solo',
       visibility: 'public',
+      mode,
+      track,
       startedAt,
       durationMinutes: minutes,
       status: 'processing',
@@ -322,7 +359,9 @@ export async function execute(interaction) {
     });
 
     await interaction.editReply({ embeds: [startSoloEmbed(minutes, label, 'public', startDelayMinutes)] });
-    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
+    if (mode !== 'time') {
+      await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
+    }
     await scheduleSprintNotifications(sprint, interaction.client);
     return;
   } else if (sub === 'host') {
@@ -330,6 +369,8 @@ export async function execute(interaction) {
     const startInRaw = interaction.options.getInteger('start_in');
     const startDelayMinutes = Math.max(0, Math.min(180, (typeof startInRaw === 'number' ? startInRaw : 1)));
     const preStartPingsEnabled = interaction.options.getBoolean('pings') ?? false;
+    const mode = normalizeMode(interaction.options.getString('mode'));
+    const track = defaultTrackForMode(mode);
     const label = interaction.options.getString('label') ?? undefined;
     const discordId = interaction.user.id;
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
@@ -347,6 +388,8 @@ export async function execute(interaction) {
       threadId,
       type: 'team',
       visibility: 'public',
+      mode,
+      track,
       startedAt,
       durationMinutes: minutes,
       status: 'processing',
@@ -356,12 +399,16 @@ export async function execute(interaction) {
       preStartPingsEnabled,
     });
     await interaction.editReply({ embeds: [hostTeamEmbed(minutes, label, groupId, startDelayMinutes)] });
-    await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
+    if (mode !== 'time') {
+      await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
+    }
     await scheduleSprintNotifications(hostRow, interaction.client);
     return;
   } else if (sub === 'join') {
     const codeRaw = interaction.options.getString('code');
     const provided = codeRaw ? codeRaw.toUpperCase() : undefined;
+    const requestedTrackRaw = interaction.options.getString('track');
+    const requestedTrack = requestedTrackRaw ? String(requestedTrackRaw).trim().toLowerCase() : null;
     const discordId = interaction.user.id;
     await User.findOrCreate({ where: { discordId }, defaults: { username: interaction.user.username } });
 
@@ -369,6 +416,11 @@ export async function execute(interaction) {
     if (!host) {
       return interaction.editReply({ content: noActiveTeamText() });
     }
+
+    const hostMode = normalizeMode(host.mode);
+    const effectiveTrack = hostMode === 'words'
+      ? (requestedTrack === 'time' ? 'time' : 'words')
+      : defaultTrackForMode(hostMode);
     const existingInThisTeam = await DeanSprints.findOne({
       where: { userId: discordId, guildId, status: 'processing', type: 'team', groupId: host.groupId },
     });
@@ -385,6 +437,8 @@ export async function execute(interaction) {
       threadId: host.threadId ?? null,
       type: 'team',
       visibility: host.visibility,
+      mode: hostMode,
+      track: effectiveTrack,
       startedAt: host.startedAt,
       durationMinutes: host.durationMinutes,
       status: 'processing',
@@ -401,8 +455,13 @@ export async function execute(interaction) {
       console.warn('[hunts] dean.team.joined trigger failed:', huntErr);
     }
     const sprintIdentifier = formatSprintIdentifier({ type: host.type, groupId: host.groupId, label: host.label, startedAt: host.startedAt });
-    await interaction.editReply({ content: sprintJoinText({ sprintIdentifier, durationMinutes: host.durationMinutes }), allowedMentions: { parse: [] } });
-    await interaction.followUp({ content: baselineNudgeText(), flags: MessageFlags.Ephemeral });
+    const joinText = (hostMode === 'time' || (hostMode === 'words' && effectiveTrack === 'time'))
+      ? sprintJoinTrackTimeText({ sprintIdentifier, durationMinutes: host.durationMinutes })
+      : sprintJoinText({ sprintIdentifier, durationMinutes: host.durationMinutes });
+    await interaction.editReply({ content: joinText, allowedMentions: { parse: [] } });
+    if (hostMode !== 'time' && effectiveTrack !== 'time') {
+      await interaction.followUp({ content: baselineNudgeText(), flags: MessageFlags.Ephemeral });
+    }
     return;
   } else if (sub === 'end') {
     const discordId = interaction.user.id;
@@ -633,8 +692,39 @@ export async function execute(interaction) {
     const remainingMs = endsAt.getTime() - nowMs;
     const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
     const elapsedMin = Math.max(0, Math.floor((nowMs - startsAtMs) / 60000));
+
+    const mode = normalizeMode(active.mode);
+    const track = String(active.track || '').trim().toLowerCase();
+
+    if (mode === 'time' || track === 'time') {
+      await interaction.editReply({
+        content: sprintStatusTimeText({
+          sprintIdentifier,
+          timeLeftMinutes: remainingMin,
+          yourMinutesSoFar: elapsedMin,
+        }),
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
+
     const rows = await Wordcount.findAll({ where: { sprintId: active.id, userId: discordId }, order: [['recordedAt', 'ASC']] });
     const sprintTotal = sumNet(rows);
+
+    if (mode === 'mixed') {
+      const hasAnyWordcount = Array.isArray(rows) && rows.length > 0;
+      await interaction.editReply({
+        content: sprintStatusMixedText({
+          sprintIdentifier,
+          timeLeftMinutes: remainingMin,
+          yourMinutesSoFar: elapsedMin,
+          yourNetWordsSoFar: hasAnyWordcount ? sprintTotal : null,
+        }),
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
+
     await interaction.editReply({
       content: sprintStatusWordsText({
         sprintIdentifier,

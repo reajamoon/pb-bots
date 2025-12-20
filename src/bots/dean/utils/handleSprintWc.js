@@ -9,7 +9,7 @@ const {
 } = Discord;
 import { Op } from 'sequelize';
 import { DeanSprints, User, Wordcount, Project, GuildSprintSettings } from '../../../models/index.js';
-import { formatSprintIdentifier, noActiveSprintText, sprintEndedWordsText, sprintEndedEmbed } from '../text/sprintText.js';
+import { formatSprintIdentifier, noActiveSprintText, sprintEndedWordsText, sprintEndedEmbed, sprintEndedMixedEmbed } from '../text/sprintText.js';
 import { wcSprintPickerPromptText, wcConfirmSetPromptText, wcConfirmUndoPromptText, wcConfirmBaselinePromptText } from '../text/wcText.js';
 import { setInteractionState } from './interactionState.js';
 
@@ -111,6 +111,12 @@ async function buildCandidateTargets({ guildId, discordId, windowMinutes }) {
 export async function handleSprintWc(interaction, { guildId, forcedTargetId, forcedSubcommand, forcedOptions, forcedUndoWordcountId, confirmed } = {}) {
   const discordId = interaction.user.id;
   const effectiveGuildId = guildId ?? interaction.guildId;
+
+  function normalizeMode(raw) {
+    const v = String(raw || '').trim().toLowerCase();
+    if (v === 'time' || v === 'mixed' || v === 'words') return v;
+    return 'words';
+  }
 
   async function resolveEffectiveTimeZone() {
     let userZone = null;
@@ -224,6 +230,15 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     return { ambiguous: 'multiple-recent', lateLogWindowMinutes: windowMinutes };
   }
 
+  function isTimeOnlyTarget(targetRow) {
+    if (!targetRow) return false;
+    const mode = normalizeMode(targetRow.mode);
+    const track = String(targetRow.track || '').trim().toLowerCase();
+    // Time-only sprint, or user explicitly joined as time-tracking.
+    // (Mixed mode remains wordcount-capable.)
+    return mode === 'time' || track === 'time';
+  }
+
   async function safeName(userId, guild) {
     try {
       const member = await guild.members.fetch(userId);
@@ -261,6 +276,16 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
     return null;
   }
 
+  async function guardAgainstTimeOnly(targetRow) {
+    if (!targetRow) return false;
+    if (!isTimeOnlyTarget(targetRow)) return false;
+    await interaction.editReply({
+      content: "This sprint is tracking time only. Wordcounts are disabled for it.",
+      allowedMentions: { parse: [] },
+    });
+    return true;
+  }
+
   async function maybeEditEndSummary(sprintRow) {
     if (!sprintRow || sprintRow.status !== 'done') return;
 
@@ -286,11 +311,47 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
         : [sprintRow];
       const participantIds = [...new Set(participants.map(p => p.userId))];
       const sprintIdentifier = formatSprintIdentifier({ type: sprintRow.type, groupId: sprintRow.groupId, label: sprintRow.label, startedAt: sprintRow.startedAt });
-      const leaderboardLines = await buildLeaderboardLines(participants, interaction.guild);
+      const mode = normalizeMode(sprintRow.mode);
+
+      if (mode === 'mixed') {
+        const participantLines = [];
+        for (const p of participants) {
+          const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+          const total = sumNet(wcRows);
+          const hasAnyWordcount = Array.isArray(wcRows) && wcRows.length > 0;
+          const wordsPart = hasAnyWordcount ? ` - words NET ${total || 0}` : '';
+          participantLines.push(`<@${p.userId}>: minutes ${sprintRow.durationMinutes || 0}${wordsPart}`);
+        }
+        await msg.edit({
+          content: msg.content || '',
+          embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, participantLines })],
+          allowedMentions: { parse: [] },
+        });
+        return;
+      }
+
+      const scores = [];
+      const alsoParticipatedLines = [];
+      for (const p of participants) {
+        const track = String(p.track || '').trim().toLowerCase();
+        const pMode = normalizeMode(p.mode);
+        if (track === 'time' || pMode === 'time') {
+          alsoParticipatedLines.push(`<@${p.userId}> - minutes ${sprintRow.durationMinutes || 0}`);
+          continue;
+        }
+        const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+        const total = sumNet(wcRows);
+        scores.push({ userId: p.userId, total });
+      }
+      scores.sort((a, b) => (b.total || 0) - (a.total || 0));
+      const leaderboardLines = [];
+      for (let i = 0; i < scores.length; i++) {
+        leaderboardLines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
+      }
 
       await msg.edit({
         content: msg.content || '',
-        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines })],
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines, alsoParticipatedLines })],
         allowedMentions: { parse: [] },
       });
     } catch (e) {
@@ -392,6 +453,10 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
   }
 
   const subName = forcedSubcommand ?? interaction.options?.getSubcommand?.();
+
+  if (await guardAgainstTimeOnly(target)) {
+    return;
+  }
 
   if (subName === 'baseline') {
     const count = getIntOption('count');

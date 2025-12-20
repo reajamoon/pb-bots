@@ -1,7 +1,13 @@
-import { summaryEmbed, formatSprintIdentifier, sprintCheckInWordsText, sprintEndedWordsText, startSoloEmbed, hostTeamEmbed, sprintEndedEmbed } from './text/sprintText.js';
+import { summaryEmbed, formatSprintIdentifier, sprintCheckInWordsText, sprintCheckInMixedText, sprintCheckInTimeText, sprintEndedWordsText, startSoloEmbed, hostTeamEmbed, sprintEndedEmbed, sprintEndedMixedEmbed, sprintEndedTimeEmbed } from './text/sprintText.js';
 import { DeanSprints, GuildSprintSettings, Wordcount, Project } from '../../models/index.js';
 import fireTrigger from '../../shared/hunts/triggerEngine.js';
 import { sumNet } from '../../shared/utils/wordcountMath.js';
+
+function normalizeMode(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  if (v === 'time' || v === 'mixed' || v === 'words') return v;
+  return 'words';
+}
 
 function getChannelFromIds(client, guildId, channelId, threadId) {
   const guild = client.guilds.cache.get(guildId);
@@ -96,16 +102,57 @@ export async function scheduleSprintNotifications(sprint, client) {
         const sprintIdentifier = formatSprintIdentifier({ type: fresh.type, groupId: fresh.groupId, label: fresh.label, startedAt: fresh.startedAt });
         const endsAt = new Date(new Date(fresh.startedAt).getTime() + (fresh.durationMinutes || 0) * 60000);
         const remainingMin = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 60000));
+        const elapsedMin = Math.max(0, Math.floor((Date.now() - new Date(fresh.startedAt).getTime()) / 60000));
 
         const participants = (fresh.type === 'team' && fresh.groupId)
           ? await DeanSprints.findAll({ where: { guildId: fresh.guildId, groupId: fresh.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] })
           : [fresh];
 
+        const mode = normalizeMode(fresh.mode);
+
+        if (mode === 'time') {
+          const participantLines = [];
+          for (const p of participants) {
+            const name = await safeDisplayName(p.userId);
+            participantLines.push(`${name}: minutes ${elapsedMin}`);
+          }
+          await targetChannel.send({
+            content: sprintCheckInTimeText({ sprintIdentifier, timeLeftMinutes: remainingMin, participantLines }),
+            allowedMentions: { parse: [] },
+          });
+          await fresh.update({ midpointNotified: true });
+          return;
+        }
+
+        if (mode === 'mixed') {
+          const participantLines = [];
+          for (const p of participants) {
+            const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+            const total = sumNet(wcRows);
+            const hasAnyWordcount = Array.isArray(wcRows) && wcRows.length > 0;
+            const name = await safeDisplayName(p.userId);
+            const wordsPart = hasAnyWordcount ? ` - words NET ${total || 0}` : '';
+            participantLines.push(`${name}: minutes ${elapsedMin}${wordsPart}`);
+          }
+          await targetChannel.send({
+            content: sprintCheckInMixedText({ sprintIdentifier, timeLeftMinutes: remainingMin, participantLines }),
+            allowedMentions: { parse: [] },
+          });
+          await fresh.update({ midpointNotified: true });
+          return;
+        }
+
         const progressLines = [];
         for (const p of participants) {
+          const name = await safeDisplayName(p.userId);
+          const track = String(p.track || '').trim().toLowerCase();
+          const pMode = normalizeMode(p.mode);
+          if (track === 'time' || pMode === 'time') {
+            progressLines.push(`${name}: minutes ${elapsedMin} (time)`);
+            continue;
+          }
           const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
           const total = sumNet(wcRows);
-          const name = await safeDisplayName(p.userId);
           progressLines.push(`${name}: NET ${total || 0}`);
         }
 
@@ -195,17 +242,19 @@ async function buildSummaries(sprint) {
     // Sum Wordcount rows recorded for this sprint/user
     const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
     const total = sumNet(wcRows);
+    const hasAnyWordcount = Array.isArray(wcRows) && wcRows.length > 0;
     let projectName = null;
     if (p.projectId) {
       const proj = await Project.findByPk(p.projectId).catch(() => null);
       projectName = proj?.name || null;
     }
-    memberSummaries.push({ userId: p.userId, total, projectName });
+    memberSummaries.push({ userId: p.userId, total, hasAnyWordcount, projectName, track: p.track, mode: p.mode });
   }
   return {
     isTeam,
     label: sprint.label,
     durationMinutes: sprint.durationMinutes,
+    mode: normalizeMode(sprint.mode),
     members: memberSummaries,
   };
 }
@@ -265,26 +314,63 @@ export async function startSprintWatchdog(client) {
                 const participantIds = [...new Set(participants.map(p => p.userId))];
                 const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
 
-                const scores = [];
-                for (const p of participants) {
-                  const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-                  const total = sumNet(wcRows);
-                  scores.push({ userId: p.userId, total });
-                }
-                scores.sort((a, b) => (b.total || 0) - (a.total || 0));
-                const leaderboardLines = [];
-                for (let i = 0; i < scores.length; i++) {
-                  leaderboardLines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
-                }
+                const mode = normalizeMode(s.mode);
 
-                const endMessage = await channel.send({
-                  content: pingLine,
-                  embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines })],
-                  allowedMentions: { users: participantIds, parse: [] },
-                });
+                let endMessage = null;
+
+                if (mode === 'time') {
+                  const participantLines = [];
+                  for (const p of participants) {
+                    participantLines.push(`<@${p.userId}>: minutes ${s.durationMinutes || 0}`);
+                  }
+                  endMessage = await channel.send({
+                    content: pingLine,
+                    embeds: [sprintEndedTimeEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines })],
+                    allowedMentions: { users: participantIds, parse: [] },
+                  });
+                } else if (mode === 'mixed') {
+                  const participantLines = [];
+                  for (const p of participants) {
+                    const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+                    const total = sumNet(wcRows);
+                    const hasAnyWordcount = Array.isArray(wcRows) && wcRows.length > 0;
+                    const wordsPart = hasAnyWordcount ? ` - words NET ${total || 0}` : '';
+                    participantLines.push(`<@${p.userId}>: minutes ${s.durationMinutes || 0}${wordsPart}`);
+                  }
+                  endMessage = await channel.send({
+                    content: pingLine,
+                    embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines })],
+                    allowedMentions: { users: participantIds, parse: [] },
+                  });
+                } else {
+                  const scores = [];
+                  const alsoParticipatedLines = [];
+                  for (const p of participants) {
+                    const track = String(p.track || '').trim().toLowerCase();
+                    const pMode = normalizeMode(p.mode);
+                    if (track === 'time' || pMode === 'time') {
+                      alsoParticipatedLines.push(`<@${p.userId}> - minutes ${s.durationMinutes || 0}`);
+                      continue;
+                    }
+                    const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
+                    const total = sumNet(wcRows);
+                    scores.push({ userId: p.userId, total });
+                  }
+                  scores.sort((a, b) => (b.total || 0) - (a.total || 0));
+                  const leaderboardLines = [];
+                  for (let i = 0; i < scores.length; i++) {
+                    leaderboardLines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
+                  }
+
+                  endMessage = await channel.send({
+                    content: pingLine,
+                    embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines, alsoParticipatedLines })],
+                    allowedMentions: { users: participantIds, parse: [] },
+                  });
+                }
 
                 endSummaryChannelId = channel.id;
-                endSummaryMessageId = endMessage.id;
+                endSummaryMessageId = endMessage?.id || null;
               }
             } catch (e) {
               console.warn('[dean] watchdog end notify failed', (e && e.message) || e);
@@ -338,20 +424,56 @@ export async function startSprintWatchdog(client) {
     const summaryIdentifier = formatSprintIdentifier({ type: s.type, groupId: s.groupId, label: sum.label ?? s.label, startedAt: s.startedAt });
     const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, summaryIdentifier, sum.isTeam);
 
-    // Put the leaderboard into the embed. Mentions inside embeds do not ping.
-    const lines = [];
-    for (const m of sum.members) {
-      const proj = m.projectName ? ` (${m.projectName})` : '';
-      lines.push(`<@${m.userId}>: NET ${m.total || 0}${proj}`);
-    }
-    if (lines.length) {
-      embed.fields = [
-        {
-          name: 'Leaderboard (NET)',
-          value: lines.join('\n').slice(0, 1024),
-          inline: false,
-        },
-      ];
+    const mode = normalizeMode(sum.mode ?? s.mode);
+
+    if (mode === 'time') {
+      const lines = sum.members.map(m => `<@${m.userId}>: minutes ${s.durationMinutes || 0}`);
+      if (lines.length) {
+        embed.fields = [
+          {
+            name: 'Participants (time)',
+            value: lines.join('\n').slice(0, 1024),
+            inline: false,
+          },
+        ];
+      }
+    } else if (mode === 'mixed') {
+      const lines = [];
+      for (const m of sum.members) {
+        const wordsPart = m.hasAnyWordcount ? ` - words NET ${m.total || 0}` : '';
+        lines.push(`<@${m.userId}>: minutes ${s.durationMinutes || 0}${wordsPart}`);
+      }
+      if (lines.length) {
+        embed.fields = [
+          {
+            name: 'Participants (mixed)',
+            value: lines.join('\n').slice(0, 1024),
+            inline: false,
+          },
+        ];
+      }
+    } else {
+      // Put the leaderboard into the embed. Mentions inside embeds do not ping.
+      const leaderboard = [];
+      const also = [];
+      for (const m of sum.members) {
+        const track = String(m.track || '').trim().toLowerCase();
+        const memberMode = normalizeMode(m.mode);
+        const proj = m.projectName ? ` (${m.projectName})` : '';
+        if (track === 'time' || memberMode === 'time') {
+          also.push(`<@${m.userId}>: minutes ${s.durationMinutes || 0}${proj}`);
+        } else {
+          leaderboard.push(`<@${m.userId}>: NET ${m.total || 0}${proj}`);
+        }
+      }
+      const fields = [];
+      if (leaderboard.length) {
+        fields.push({ name: 'Leaderboard (NET)', value: leaderboard.join('\n').slice(0, 1024), inline: false });
+      }
+      if (also.length) {
+        fields.push({ name: 'Also participated (time)', value: also.join('\n').slice(0, 1024), inline: false });
+      }
+      if (fields.length) embed.fields = fields;
     }
 
     await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
