@@ -109,7 +109,16 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
   async function getLateLogWindowMinutes() {
     try {
       const u = await User.findOne({ where: { discordId } });
-      return clampInt(u?.sprintRecentlyEndedWindowMinutes, 0, 360, 15);
+      const minutes = clampInt(u?.sprintRecentlyEndedWindowMinutes, 0, 360, 15);
+      // Safety: if this value is 0 (or missing), late logging looks "broken".
+      // Treat 0 as "use default" until we have an explicit disable setting.
+      if (minutes <= 0) {
+        try {
+          if (u) await u.update({ sprintRecentlyEndedWindowMinutes: 15 });
+        } catch {}
+        return 15;
+      }
+      return minutes;
     } catch {
       return 15;
     }
