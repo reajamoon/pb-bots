@@ -1,4 +1,4 @@
-import { summaryEmbed, formatSprintIdentifier, sprintCheckInWordsText, sprintCheckInMixedText, sprintCheckInTimeText, sprintEndedWordsText, startSoloEmbed, hostTeamEmbed, sprintEndedEmbed, sprintEndedMixedEmbed, sprintEndedTimeEmbed } from './text/sprintText.js';
+import { summaryEmbed, formatSprintIdentifier, startSoloEmbed, hostTeamEmbed, sprintEndedEmbed, sprintEndedMixedEmbed, sprintEndedTimeEmbed } from './text/sprintText.js';
 import { DeanSprints, GuildSprintSettings, Wordcount, Project } from '../../models/index.js';
 import fireTrigger from '../../shared/hunts/triggerEngine.js';
 import { sumNet } from '../../shared/utils/wordcountMath.js';
@@ -28,7 +28,6 @@ export async function scheduleSprintNotifications(sprint, client) {
   const startedAtMs = new Date(sprint.startedAt).getTime();
   const now = Date.now();
   const startsInMs = startedAtMs - now;
-  const midpointDelay = Math.max(0, startedAtMs + durationMs / 2 - now);
 
   const targetChannel = getChannelFromIds(client, sprint.guildId, sprint.channelId, sprint.threadId);
   if (!targetChannel) return;
@@ -61,111 +60,7 @@ export async function scheduleSprintNotifications(sprint, client) {
     }, Math.max(0, startsInMs));
   }
 
-  async function safeDisplayName(userId) {
-    try {
-      if (targetChannel.guild && targetChannel.guild.members) {
-        const m = await targetChannel.guild.members.fetch(userId);
-        return m?.displayName || m?.user?.username || userId;
-      }
-    } catch {}
-    return userId;
-  }
-
-  async function buildLeaderboardLines(participantRows) {
-    const scores = [];
-    for (const p of participantRows) {
-      const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-      const total = sumNet(wcRows);
-      scores.push({ userId: p.userId, total });
-    }
-    scores.sort((a, b) => (b.total || 0) - (a.total || 0));
-    const lines = [];
-    for (let i = 0; i < scores.length; i++) {
-      const name = await safeDisplayName(scores[i].userId);
-      lines.push(`${i + 1}) ${name} - NET ${scores[i].total || 0}`);
-    }
-    return lines;
-  }
-
-  // Midpoint notification (dedupe: only host for team; Set guard)
-  const firedKeySet = scheduleSprintNotifications._midKeys || (scheduleSprintNotifications._midKeys = new Set());
-  const midKey = isTeamHost ? `${sprint.guildId}:${sprint.groupId}` : `${sprint.guildId}:${sprint.id}`;
-  if (!sprint.midpointNotified && !firedKeySet.has(midKey)) {
-    firedKeySet.add(midKey);
-    setTimeout(async () => {
-      try {
-        const fresh = await DeanSprints.findByPk(sprint.id);
-        if (!fresh || fresh.status !== 'processing') return;
-        // For team sprints, only host posts midpoint to avoid duplicates
-        if (fresh.type === 'team' && fresh.role !== 'host') return;
-
-        const sprintIdentifier = formatSprintIdentifier({ type: fresh.type, groupId: fresh.groupId, label: fresh.label, startedAt: fresh.startedAt });
-        const endsAt = new Date(new Date(fresh.startedAt).getTime() + (fresh.durationMinutes || 0) * 60000);
-        const remainingMin = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 60000));
-        const elapsedMin = Math.max(0, Math.floor((Date.now() - new Date(fresh.startedAt).getTime()) / 60000));
-
-        const participants = (fresh.type === 'team' && fresh.groupId)
-          ? await DeanSprints.findAll({ where: { guildId: fresh.guildId, groupId: fresh.groupId, status: 'processing' }, order: [['createdAt', 'ASC']] })
-          : [fresh];
-
-        const mode = normalizeMode(fresh.mode);
-
-        if (mode === 'time') {
-          const participantLines = [];
-          for (const p of participants) {
-            const name = await safeDisplayName(p.userId);
-            participantLines.push(`${name}: minutes ${elapsedMin}`);
-          }
-          await targetChannel.send({
-            content: sprintCheckInTimeText({ sprintIdentifier, timeLeftMinutes: remainingMin, participantLines }),
-            allowedMentions: { parse: [] },
-          });
-          await fresh.update({ midpointNotified: true });
-          return;
-        }
-
-        if (mode === 'mixed') {
-          const participantLines = [];
-          for (const p of participants) {
-            const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-            const total = sumNet(wcRows);
-            const hasAnyWordcount = Array.isArray(wcRows) && wcRows.length > 0;
-            const name = await safeDisplayName(p.userId);
-            const wordsPart = hasAnyWordcount ? ` - words NET ${total || 0}` : '';
-            participantLines.push(`${name}: minutes ${elapsedMin}${wordsPart}`);
-          }
-          await targetChannel.send({
-            content: sprintCheckInMixedText({ sprintIdentifier, timeLeftMinutes: remainingMin, participantLines }),
-            allowedMentions: { parse: [] },
-          });
-          await fresh.update({ midpointNotified: true });
-          return;
-        }
-
-        const progressLines = [];
-        for (const p of participants) {
-          const name = await safeDisplayName(p.userId);
-          const track = String(p.track || '').trim().toLowerCase();
-          const pMode = normalizeMode(p.mode);
-          if (track === 'time' || pMode === 'time') {
-            progressLines.push(`${name}: minutes ${elapsedMin} (time)`);
-            continue;
-          }
-          const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
-          const total = sumNet(wcRows);
-          progressLines.push(`${name}: NET ${total || 0}`);
-        }
-
-        await targetChannel.send({
-          content: sprintCheckInWordsText({ sprintIdentifier, timeLeftMinutes: remainingMin, progressLines }),
-          allowedMentions: { parse: [] },
-        });
-        await fresh.update({ midpointNotified: true });
-      } catch (e) {
-        console.warn('[dean] midpoint notify failed', (e && e.message) || e);
-      }
-    }, midpointDelay);
-  }
+  // Midpoint check-ins were removed (nobody used them).
 
   // Optional pre-start reminder pings (team host only)
   // Dedupe uses DB flags so rescheduling after restart won't re-ping.
@@ -268,7 +163,6 @@ export async function startSprintWatchdog(client) {
     for (const s of active) {
       const endsAt = new Date(s.startedAt).getTime() + s.durationMinutes * 60000;
       try {
-        // Midpoint notifications are handled by scheduleSprintNotifications.
         // End notifications are handled here, with an atomic status update guard to avoid duplicates.
         if (!s.endNotified && now >= endsAt) {
           const endedAt = new Date();
