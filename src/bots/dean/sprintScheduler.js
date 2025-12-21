@@ -160,6 +160,10 @@ export async function startSprintWatchdog(client) {
   async function tick() {
     const now = Date.now();
     const active = await DeanSprints.findAll({ where: { status: 'processing' }, limit: 100 });
+
+    // Prevent chat spam: handle each team sprint (groupId) at most once per tick.
+    const handledTeamGroups = new Set();
+
     for (const s of active) {
       const endsAt = new Date(s.startedAt).getTime() + s.durationMinutes * 60000;
       try {
@@ -167,59 +171,46 @@ export async function startSprintWatchdog(client) {
         if (!s.endNotified && now >= endsAt) {
           const endedAt = new Date();
 
-          // For team sprints, only host triggers channel notifications.
-          // Non-host rows still get marked done.
-          const isTeam = s.type === 'team' && s.groupId;
-          const isTeamHost = isTeam && s.role === 'host';
-          if (isTeam && !isTeamHost) {
-            await DeanSprints.update(
-              { endNotified: true, status: 'done', endedAt },
-              { where: { id: s.id, status: 'processing' } }
-            ).catch(() => null);
-            continue;
-          }
+          // Treat rows with a groupId as team participation, even if older data has type drift.
+          const isTeam = Boolean(s.groupId);
 
-          const shouldNotify = s.type === 'solo' || isTeamHost;
+          if (isTeam) {
+            const groupKey = `${s.guildId}:${s.groupId}`;
+            if (handledTeamGroups.has(groupKey)) continue;
+            handledTeamGroups.add(groupKey);
 
-          // Atomic guard: only one worker should move the sprint(s) to done.
-          const [updated] = isTeam
-            ? await DeanSprints.update(
+            // Atomic guard: only one worker should move the sprint to done.
+            const [updated] = await DeanSprints.update(
               { endNotified: true, status: 'done', endedAt },
-              { where: { guildId: s.guildId, groupId: s.groupId, status: 'processing' } }
-            ).catch(() => [0])
-            : await DeanSprints.update(
-              { endNotified: true, status: 'done', endedAt },
-              { where: { id: s.id, status: 'processing', endNotified: false } }
+              { where: { guildId: s.guildId, groupId: s.groupId, status: 'processing', endNotified: false } }
             ).catch(() => [0]);
+            if (!updated) continue;
 
-          if (!updated) continue;
+            // Use the host row (if present) for channel/thread/mode; else fall back to any row.
+            const hostRow = await DeanSprints.findOne({ where: { guildId: s.guildId, groupId: s.groupId, role: 'host' } }).catch(() => null)
+              || await DeanSprints.findOne({ where: { guildId: s.guildId, groupId: s.groupId }, order: [['createdAt', 'ASC']] }).catch(() => null)
+              || s;
 
-          let endSummaryChannelId = null;
-          let endSummaryMessageId = null;
+            const participants = await DeanSprints.findAll({ where: { guildId: s.guildId, groupId: s.groupId }, order: [['createdAt', 'ASC']] }).catch(() => []);
+            const participantIds = [...new Set(participants.map(p => p.userId))];
+            const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
 
-          if (shouldNotify) {
+            let endSummaryChannelId = null;
+            let endSummaryMessageId = null;
+
             try {
-              const channel = await client.channels.fetch(s.threadId || s.channelId).catch(() => null);
+              const channel = await client.channels.fetch(hostRow.threadId || hostRow.channelId).catch(() => null);
               if (channel) {
-                const sprintIdentifier = formatSprintIdentifier({ type: s.type, groupId: s.groupId, label: s.label, startedAt: s.startedAt });
-                const participants = isTeam
-                  ? await DeanSprints.findAll({ where: { guildId: s.guildId, groupId: s.groupId }, order: [['createdAt', 'ASC']] })
-                  : [s];
-                const participantIds = [...new Set(participants.map(p => p.userId))];
-                const pingLine = participantIds.length ? participantIds.map(id => `<@${id}>`).join(' ') : '';
-
-                const mode = normalizeMode(s.mode);
+                const sprintIdentifier = formatSprintIdentifier({ type: 'team', groupId: hostRow.groupId, label: hostRow.label, startedAt: hostRow.startedAt });
+                const mode = normalizeMode(hostRow.mode);
 
                 let endMessage = null;
 
                 if (mode === 'time') {
-                  const participantLines = [];
-                  for (const p of participants) {
-                    participantLines.push(`<@${p.userId}>: minutes ${s.durationMinutes || 0}`);
-                  }
+                  const participantLines = participants.map(p => `<@${p.userId}>: minutes ${hostRow.durationMinutes || 0}`);
                   endMessage = await channel.send({
                     content: pingLine,
-                    embeds: [sprintEndedTimeEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines, mode })],
+                    embeds: [sprintEndedTimeEmbed({ sprintIdentifier, durationMinutes: hostRow.durationMinutes, participantLines, mode })],
                     allowedMentions: { users: participantIds, parse: [] },
                   });
                 } else if (mode === 'mixed') {
@@ -229,11 +220,11 @@ export async function startSprintWatchdog(client) {
                     const total = sumNet(wcRows);
                     const hasAnyWordcount = Array.isArray(wcRows) && wcRows.length > 0;
                     const wordsPart = hasAnyWordcount ? ` - words NET ${total || 0}` : '';
-                    participantLines.push(`<@${p.userId}>: minutes ${s.durationMinutes || 0}${wordsPart}`);
+                    participantLines.push(`<@${p.userId}>: minutes ${hostRow.durationMinutes || 0}${wordsPart}`);
                   }
                   endMessage = await channel.send({
                     content: pingLine,
-                    embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines, mode })],
+                    embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: hostRow.durationMinutes, participantLines, mode })],
                     allowedMentions: { users: participantIds, parse: [] },
                   });
                 } else {
@@ -243,7 +234,7 @@ export async function startSprintWatchdog(client) {
                     const track = String(p.track || '').trim().toLowerCase();
                     const pMode = normalizeMode(p.mode);
                     if (track === 'time' || pMode === 'time') {
-                      alsoParticipatedLines.push(`<@${p.userId}> - minutes ${s.durationMinutes || 0}`);
+                      alsoParticipatedLines.push(`<@${p.userId}> - minutes ${hostRow.durationMinutes || 0}`);
                       continue;
                     }
                     const wcRows = await Wordcount.findAll({ where: { sprintId: p.id, userId: p.userId }, order: [['recordedAt', 'ASC']] });
@@ -255,10 +246,9 @@ export async function startSprintWatchdog(client) {
                   for (let i = 0; i < scores.length; i++) {
                     leaderboardLines.push(`${i + 1}) <@${scores[i].userId}> - NET ${scores[i].total || 0}`);
                   }
-
                   endMessage = await channel.send({
                     content: pingLine,
-                    embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines, alsoParticipatedLines, mode })],
+                    embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: hostRow.durationMinutes, leaderboardLines, alsoParticipatedLines, mode })],
                     allowedMentions: { users: participantIds, parse: [] },
                   });
                 }
@@ -273,29 +263,90 @@ export async function startSprintWatchdog(client) {
             // Also send to summary channel if configured
             const settings = await GuildSprintSettings.findOne({ where: { guildId: s.guildId } });
             if (settings && settings.defaultSummaryChannelId) {
-              await notifySummary(client, s, settings.defaultSummaryChannelId);
+              await notifySummary(client, hostRow, settings.defaultSummaryChannelId);
             }
-          }
 
-          // Best-effort persist end refs for late logging edits
-          if (endSummaryChannelId && endSummaryMessageId) {
-            if (isTeam) {
+            // Best-effort persist end refs for late logging edits
+            if (endSummaryChannelId && endSummaryMessageId) {
               await DeanSprints.update(
                 { endSummaryChannelId, endSummaryMessageId },
                 { where: { guildId: s.guildId, groupId: s.groupId } }
               ).catch(() => null);
-            } else {
-              await DeanSprints.update(
-                { endSummaryChannelId, endSummaryMessageId },
-                { where: { id: s.id } }
-              ).catch(() => null);
             }
+
+            // Fire hunt trigger once per team sprint.
+            try {
+              const ch = await client.channels.fetch(hostRow.threadId || hostRow.channelId).catch(() => null);
+              await fireTrigger('dean.sprint.completed', { userId: hostRow.userId, channel: ch });
+            } catch {}
+
+            continue;
           }
 
-          // Fire hunt trigger for sprint completion in watchdog path
+          // Solo sprint end.
+          const [updated] = await DeanSprints.update(
+            { endNotified: true, status: 'done', endedAt },
+            { where: { id: s.id, status: 'processing', endNotified: false } }
+          ).catch(() => [0]);
+          if (!updated) continue;
+
+          let endSummaryChannelId = null;
+          let endSummaryMessageId = null;
           try {
             const channel = await client.channels.fetch(s.threadId || s.channelId).catch(() => null);
-            await fireTrigger('dean.sprint.completed', { userId: s.userId, channel });
+            if (channel) {
+              const sprintIdentifier = formatSprintIdentifier({ type: s.type, groupId: s.groupId, label: s.label, startedAt: s.startedAt });
+              const participantIds = [s.userId];
+              const pingLine = `<@${s.userId}>`;
+              const mode = normalizeMode(s.mode);
+
+              let endMessage = null;
+              if (mode === 'time') {
+                const participantLines = [`<@${s.userId}>: minutes ${s.durationMinutes || 0}`];
+                endMessage = await channel.send({
+                  content: pingLine,
+                  embeds: [sprintEndedTimeEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines, mode })],
+                  allowedMentions: { users: participantIds, parse: [] },
+                });
+              } else if (mode === 'mixed') {
+                const wcRows = await Wordcount.findAll({ where: { sprintId: s.id, userId: s.userId }, order: [['recordedAt', 'ASC']] });
+                const total = sumNet(wcRows);
+                const hasAnyWordcount = Array.isArray(wcRows) && wcRows.length > 0;
+                const wordsPart = hasAnyWordcount ? ` - words NET ${total || 0}` : '';
+                const participantLines = [`<@${s.userId}>: minutes ${s.durationMinutes || 0}${wordsPart}`];
+                endMessage = await channel.send({
+                  content: pingLine,
+                  embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines, mode })],
+                  allowedMentions: { users: participantIds, parse: [] },
+                });
+              } else {
+                const wcRows = await Wordcount.findAll({ where: { sprintId: s.id, userId: s.userId }, order: [['recordedAt', 'ASC']] });
+                const total = sumNet(wcRows);
+                const leaderboardLines = [`1) <@${s.userId}> - NET ${total || 0}`];
+                endMessage = await channel.send({
+                  content: pingLine,
+                  embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines, mode })],
+                  allowedMentions: { users: participantIds, parse: [] },
+                });
+              }
+
+              endSummaryChannelId = channel.id;
+              endSummaryMessageId = endMessage?.id || null;
+            }
+          } catch (e) {
+            console.warn('[dean] watchdog end notify failed', (e && e.message) || e);
+          }
+
+          if (endSummaryChannelId && endSummaryMessageId) {
+            await DeanSprints.update(
+              { endSummaryChannelId, endSummaryMessageId },
+              { where: { id: s.id } }
+            ).catch(() => null);
+          }
+
+          try {
+            const ch = await client.channels.fetch(s.threadId || s.channelId).catch(() => null);
+            await fireTrigger('dean.sprint.completed', { userId: s.userId, channel: ch });
           } catch {}
         }
       } catch (e) {
