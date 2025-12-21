@@ -51,8 +51,8 @@ export async function scheduleSprintNotifications(sprint, client) {
         if (!ch) return;
 
         const embed = fresh.type === 'team'
-          ? hostTeamEmbed(fresh.durationMinutes, fresh.label, fresh.groupId, 0)
-          : startSoloEmbed(fresh.durationMinutes, fresh.label, fresh.visibility, 0);
+          ? hostTeamEmbed(fresh.durationMinutes, fresh.label, fresh.groupId, 0, normalizeMode(fresh.mode))
+          : startSoloEmbed(fresh.durationMinutes, fresh.label, fresh.visibility, 0, normalizeMode(fresh.mode));
 
         await ch.send({ embeds: [embed], allowedMentions: { parse: [] } });
       } catch (e) {
@@ -325,7 +325,7 @@ export async function startSprintWatchdog(client) {
                   }
                   endMessage = await channel.send({
                     content: pingLine,
-                    embeds: [sprintEndedTimeEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines })],
+                    embeds: [sprintEndedTimeEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines, mode })],
                     allowedMentions: { users: participantIds, parse: [] },
                   });
                 } else if (mode === 'mixed') {
@@ -339,7 +339,7 @@ export async function startSprintWatchdog(client) {
                   }
                   endMessage = await channel.send({
                     content: pingLine,
-                    embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines })],
+                    embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, participantLines, mode })],
                     allowedMentions: { users: participantIds, parse: [] },
                   });
                 } else {
@@ -364,7 +364,7 @@ export async function startSprintWatchdog(client) {
 
                   endMessage = await channel.send({
                     content: pingLine,
-                    embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines, alsoParticipatedLines })],
+                    embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: s.durationMinutes, leaderboardLines, alsoParticipatedLines, mode })],
                     allowedMentions: { users: participantIds, parse: [] },
                   });
                 }
@@ -422,9 +422,8 @@ export async function startSprintWatchdog(client) {
     if (!channel) return;
     const sum = await buildSummaries(s);
     const summaryIdentifier = formatSprintIdentifier({ type: s.type, groupId: s.groupId, label: sum.label ?? s.label, startedAt: s.startedAt });
-    const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, summaryIdentifier, sum.isTeam);
-
     const mode = normalizeMode(sum.mode ?? s.mode);
+    const embed = summaryEmbed(`<#${s.threadId || s.channelId}>`, summaryIdentifier, sum.isTeam, mode);
 
     if (mode === 'time') {
       const lines = sum.members.map(m => `<@${m.userId}>: minutes ${s.durationMinutes || 0}`);

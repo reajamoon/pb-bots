@@ -324,7 +324,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
         }
         await msg.edit({
           content: msg.content || '',
-          embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, participantLines })],
+          embeds: [sprintEndedMixedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, participantLines, mode })],
           allowedMentions: { parse: [] },
         });
         return;
@@ -351,7 +351,7 @@ export async function handleSprintWc(interaction, { guildId, forcedTargetId, for
 
       await msg.edit({
         content: msg.content || '',
-        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines, alsoParticipatedLines })],
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: sprintRow.durationMinutes, leaderboardLines, alsoParticipatedLines, mode })],
         allowedMentions: { parse: [] },
       });
     } catch (e) {

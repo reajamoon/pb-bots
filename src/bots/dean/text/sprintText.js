@@ -45,34 +45,36 @@ function maybeEndearment() {
   return '';
 }
 
-export function startSoloEmbed(minutes, label, visibility, startDelayMinutes = 0) {
+export function startSoloEmbed(minutes, label, visibility, startDelayMinutes = 0, mode) {
+  const modeLine = mode ? `\nMode: ${mode}` : '';
   if (startDelayMinutes > 0) {
     const startAtUnix = Math.floor((Date.now() + startDelayMinutes * 60000) / 1000);
     return {
       title: 'Sprint queued',
-      description: `Starts in ${startDelayMinutes} minute${startDelayMinutes === 1 ? '' : 's'} (at <t:${startAtUnix}:t>). Timer: ${minutes} minute${minutes === 1 ? '' : 's'} once it kicks off.${label ? `\nLabel: ${label}` : ''}`,
+      description: `Starts in ${startDelayMinutes} minute${startDelayMinutes === 1 ? '' : 's'} (at <t:${startAtUnix}:t>). Timer: ${minutes} minute${minutes === 1 ? '' : 's'} once it kicks off.${modeLine}${label ? `\nLabel: ${label}` : ''}`,
       color: colors.info,
     };
   }
   return {
     title: 'Sprint started',
-    description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${pick(soloBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
+    description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${pick(soloBoosters)}${maybeEndearment()}${modeLine}${label ? `\nLabel: ${label}` : ''}`,
     color: colors.info,
   };
 }
 
-export function hostTeamEmbed(minutes, label, groupId, startDelayMinutes = 0) {
+export function hostTeamEmbed(minutes, label, groupId, startDelayMinutes = 0, mode) {
+  const modeLine = mode ? `\nMode: ${mode}` : '';
   if (startDelayMinutes > 0) {
     const startAtUnix = Math.floor((Date.now() + startDelayMinutes * 60000) / 1000);
     return {
       title: 'Team sprint queued',
-      description: `${hostTeamCodeLine(groupId)} Starts in ${startDelayMinutes} minute${startDelayMinutes === 1 ? '' : 's'} (at <t:${startAtUnix}:t>). Timer: ${minutes} minute${minutes === 1 ? '' : 's'} once it kicks off.${label ? `\nLabel: ${label}` : ''}`,
+      description: `${hostTeamCodeLine(groupId)} Starts in ${startDelayMinutes} minute${startDelayMinutes === 1 ? '' : 's'} (at <t:${startAtUnix}:t>). Timer: ${minutes} minute${minutes === 1 ? '' : 's'} once it kicks off.${modeLine}${label ? `\nLabel: ${label}` : ''}`,
       color: colors.info,
     };
   }
   return {
     title: 'Team sprint started',
-    description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${hostTeamCodeLine(groupId)} ${pick(teamBoosters)}${maybeEndearment()}${label ? `\nLabel: ${label}` : ''}`,
+    description: `Clock's on for ${minutes} minute${minutes === 1 ? '' : 's'}. ${hostTeamCodeLine(groupId)} ${pick(teamBoosters)}${maybeEndearment()}${modeLine}${label ? `\nLabel: ${label}` : ''}`,
     color: colors.info,
   };
 }
@@ -158,12 +160,13 @@ export function completeEmbed() {
   };
 }
 
-export function summaryEmbed(channelMention, label, isTeam) {
+export function summaryEmbed(channelMention, label, isTeam, mode) {
   const who = isTeam ? 'Team sprint' : 'Sprint';
   const lbl = label ? ` (${label})` : '';
+  const modeLine = mode ? `\nMode: ${mode}` : '';
   return {
     title: 'Sprint summary',
-    description: `${who} complete${lbl} in ${channelMention}. Nice pull.`,
+    description: `${who} complete${lbl} in ${channelMention}. Nice pull.${modeLine}`,
     color: colors.info,
   };
 }
@@ -290,11 +293,13 @@ export function sprintEndedWordsText({
 export function sprintEndedEmbed({
   sprintIdentifier,
   durationMinutes,
+  mode,
   leaderboardLines = [],
   alsoParticipatedLines = [],
 } = {}) {
   const id = sprintIdentifier || 'Unknown sprint';
   const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+  const modeLine = mode ? `\nMode: ${mode}` : '';
 
   const leaderboard = leaderboardLines.length ? leaderboardLines : ['No word logs yet.'];
   const leaderboardChunks = chunkLinesForEmbed(leaderboard, 1024);
@@ -325,7 +330,7 @@ export function sprintEndedEmbed({
 
   return {
     title: `Sprint's over: ${id}`,
-    description: `Duration: ${dur}`,
+    description: `Duration: ${dur}${modeLine}`,
     color: colors.success,
     fields,
   };
@@ -334,10 +339,12 @@ export function sprintEndedEmbed({
 export function sprintEndedMixedEmbed({
   sprintIdentifier,
   durationMinutes,
+  mode,
   participantLines = [],
 } = {}) {
   const id = sprintIdentifier || 'Unknown sprint';
   const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+  const modeLine = mode ? `\nMode: ${mode}` : '\nMode: mixed';
 
   const participants = participantLines.length ? participantLines : ['No participants found.'];
   const participantChunks = chunkLinesForEmbed(participants, 1024);
@@ -359,7 +366,7 @@ export function sprintEndedMixedEmbed({
 
   return {
     title: `Sprint's over: ${id}`,
-    description: `Duration: ${dur}`,
+    description: `Duration: ${dur}${modeLine}`,
     color: colors.success,
     fields,
   };
@@ -368,10 +375,12 @@ export function sprintEndedMixedEmbed({
 export function sprintEndedTimeEmbed({
   sprintIdentifier,
   durationMinutes,
+  mode,
   participantLines = [],
 } = {}) {
   const id = sprintIdentifier || 'Unknown sprint';
   const dur = Number.isFinite(durationMinutes) ? `${durationMinutes}m` : 'Unknown';
+  const modeLine = mode ? `\nMode: ${mode}` : '\nMode: time';
 
   const participants = participantLines.length ? participantLines : ['No participants found.'];
   const participantChunks = chunkLinesForEmbed(participants, 1024);
@@ -387,7 +396,7 @@ export function sprintEndedTimeEmbed({
 
   return {
     title: `Sprint's over: ${id}`,
-    description: `Duration: ${dur}`,
+    description: `Duration: ${dur}${modeLine}`,
     color: colors.success,
     fields,
   };

@@ -15,6 +15,12 @@ function getToken(customId) {
   return parts.length >= 2 ? parts[1] : null;
 }
 
+function normalizeMode(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  if (v === 'time' || v === 'mixed' || v === 'words') return v;
+  return 'words';
+}
+
 async function safeName(guild, userId) {
   try {
     if (!guild) return userId;
@@ -136,7 +142,7 @@ export async function execute(interaction) {
 
         return interaction.update({
           content: pingLine,
-          embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines })],
+          embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines, mode: normalizeMode(target.mode) })],
           components: [],
           allowedMentions: { users: participantIds, parse: [] },
         });
@@ -159,7 +165,7 @@ export async function execute(interaction) {
 
       return interaction.update({
         content: pingLine,
-        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines })],
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: target.durationMinutes, leaderboardLines, mode: normalizeMode(target.mode) })],
         components: [],
         allowedMentions: { users: participantIds, parse: [] },
       });

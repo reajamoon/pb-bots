@@ -358,7 +358,7 @@ export async function execute(interaction) {
       preStartPingsEnabled: false,
     });
 
-    await interaction.editReply({ embeds: [startSoloEmbed(minutes, label, 'public', startDelayMinutes)] });
+    await interaction.editReply({ embeds: [startSoloEmbed(minutes, label, 'public', startDelayMinutes, mode)] });
     if (mode !== 'time') {
       await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
     }
@@ -398,7 +398,7 @@ export async function execute(interaction) {
       startDelayMinutes,
       preStartPingsEnabled,
     });
-    await interaction.editReply({ embeds: [hostTeamEmbed(minutes, label, groupId, startDelayMinutes)] });
+    await interaction.editReply({ embeds: [hostTeamEmbed(minutes, label, groupId, startDelayMinutes, mode)] });
     if (mode !== 'time') {
       await interaction.followUp({ content: baselineNudgeText(), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
     }
@@ -566,7 +566,7 @@ export async function execute(interaction) {
       }
       await interaction.editReply({
         content: pingLine,
-        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines })],
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines, mode: normalizeMode(active.mode) })],
         allowedMentions: { users: participantIds, parse: [] },
       });
 
@@ -609,7 +609,7 @@ export async function execute(interaction) {
       }
       await interaction.editReply({
         content: pingLine,
-        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines })],
+        embeds: [sprintEndedEmbed({ sprintIdentifier, durationMinutes: active.durationMinutes, leaderboardLines, mode: normalizeMode(active.mode) })],
         allowedMentions: { users: participantIds, parse: [] },
       });
 
