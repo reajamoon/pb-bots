@@ -382,6 +382,11 @@ async function getLoggedInAO3Page(ficUrl) {
         }
         
         logBrowserEvent('[AO3] DEBUG: Login page form structure:\n' + debugFormStructure);
+        
+        let loginSuccess = false;
+        let usedMainForm = false;
+        
+        // Try main form first
         try {
             logBrowserEvent('[AO3] Attempting login with main form.');
             await page.type(MAIN_SELECTOR, username);
