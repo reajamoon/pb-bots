@@ -282,6 +282,8 @@ async function getLoggedInAO3Page(ficUrl) {
         throw lastErr || new Error('AO3 login navigation failed after retries');
     };
     await gotoLogin();
+    // Give page time to load any dynamic content
+    await new Promise(res => setTimeout(res, 3000));
     let loginError = null;
     try {
         // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
@@ -314,6 +316,12 @@ async function getLoggedInAO3Page(ficUrl) {
         const MAIN_PASSWORD = '#user_password';
         const SMALL_SELECTOR = '#user_session_login_small';
         const SMALL_PASSWORD = '#user_session_password_small';
+
+        // DEBUG: Log page details before checking forms
+        const pageTitle = await page.title();
+        const pageUrl = page.url();
+        logBrowserEvent(`[AO3] DEBUG: Page title: "${pageTitle}"`);
+        logBrowserEvent(`[AO3] DEBUG: Page URL: ${pageUrl}`);
         
         // DEBUG: Log the actual form structure on login page
         const debugFormStructure = await page.evaluate(() => {
@@ -334,12 +342,15 @@ async function getLoggedInAO3Page(ficUrl) {
             allInputs.forEach(input => {
                 formInfo += `  name="${input.name}" id="${input.id}" placeholder="${input.placeholder}"\n`;
             });
-            return formInfo;
-        });
-        logBrowserEvent('[AO3] DEBUG: Login page form structure:\n' + debugFormStructure);
-        
-        let loginSuccess = false;
-        let usedMainForm = false;
+            
+            // If no forms found, log more page content for debugging
+            if (forms.length === 0) {
+                formInfo += '\nNo forms found. Page content snippet (first 2000 chars):\n';
+                formInfo += document.body ? document.body.innerText.slice(0, 2000) : 'No body element';
+                formInfo += '\n\nFull HTML (first 3000 chars):\n';
+                formInfo += document.documentElement ? document.documentElement.outerHTML.slice(0, 3000) : 'No document element';
+            }
+            
         
         // Try main form first
         try {
