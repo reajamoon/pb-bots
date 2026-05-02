@@ -287,7 +287,7 @@ async function getLoggedInAO3Page(ficUrl) {
     let loginError = null;
     try {
         // AO3-specific: detect rate-limiting or CAPTCHA/anti-bot pages (title and error containers only)
-        const pageTitle = await page.title();
+        let pageTitle = await page.title();
         const errorText = await page.evaluate(() => {
             // Check for AO3 error/notice/captcha containers
             const selectors = ['.error', '.notice', 'h1', 'h2', '#main .wrapper h1', '#main .wrapper h2'];
