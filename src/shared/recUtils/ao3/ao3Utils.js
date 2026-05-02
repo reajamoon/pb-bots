@@ -309,11 +309,11 @@ async function getLoggedInAO3Page(ficUrl) {
             await gotoLogin();
             pageContent = await page.content();
         }
-        // More robust: try main login form selector with retries
+        // More robust: try main login form first, fallback to small form
         const MAIN_SELECTOR = '#user_login';
+        const MAIN_PASSWORD = '#user_password';
         const SMALL_SELECTOR = '#user_session_login_small';
-        const SELECTOR_RETRIES = 3;
-        const SELECTOR_WAIT = 10000; // 10 seconds per try
+        const SMALL_PASSWORD = '#user_session_password_small';
         
         // DEBUG: Log the actual form structure on login page
         const debugFormStructure = await page.evaluate(() => {
@@ -338,111 +338,79 @@ async function getLoggedInAO3Page(ficUrl) {
         });
         logBrowserEvent('[AO3] DEBUG: Login page form structure:\n' + debugFormStructure);
         
-        let mainLoginExists = false;
-        for (let i = 0; i < SELECTOR_RETRIES; i++) {
-            // Always wait 20s before each login form attempt to give AO3 time to load and avoid rapid retries
-            if (i > 0) {
-                logBrowserEvent(`[AO3] Waiting 20s before login form retry (attempt ${i+1})...`);
-                await new Promise(res => setTimeout(res, 20000));
-            }
-            try {
-                await page.waitForSelector(MAIN_SELECTOR, { timeout: SELECTOR_WAIT });
-                mainLoginExists = true;
-                logBrowserEvent(`[AO3] Main login form found (attempt ${i+1}).`);
-                break;
-            } catch (e) {
-                logBrowserEvent(`[AO3] Main login form not found (attempt ${i+1}).`);
-            }
-        }
-        if (mainLoginExists) {
-            logBrowserEvent('[AO3] Using main login form.');
+        let loginSuccess = false;
+        let usedMainForm = false;
+        
+        // Try main form first
+        try {
+            logBrowserEvent('[AO3] Attempting login with main form.');
             await page.type(MAIN_SELECTOR, username);
-            await page.type('#user_password', password);
+            await page.type(MAIN_PASSWORD, password);
             await new Promise(res => setTimeout(res, 500));
-            // Submit the nearest form ancestor instead of relying on a global container
+            // Submit the form
+            const submitted = await page.evaluate(() => {
+                const userInput = document.querySelector('#user_login');
+                const form = userInput ? userInput.closest('form') : null;
+                const submitBtn = form && (form.querySelector('input[type="submit"],button[type="submit"],button[name="commit"],input[name="commit"]'));
+                if (submitBtn) { submitBtn.click(); return true; }
+                if (form) { form.submit(); return true; }
+                return false;
+            });
+            if (submitted) {
+                await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT }).catch(() => {});
+                loginSuccess = true;
+                usedMainForm = true;
+                logBrowserEvent('[AO3] Main login form submission successful.');
+            } else {
+                throw new Error('Main form submission failed');
+            }
+        } catch (mainErr) {
+            logBrowserEvent('[AO3] Main login form failed: ' + mainErr.message);
+            // Try small form
             try {
+                logBrowserEvent('[AO3] Attempting login with small form.');
+                await page.type(SMALL_SELECTOR, username);
+                await page.type(SMALL_PASSWORD, password);
+                await new Promise(res => setTimeout(res, 500));
+                // Submit the form
                 const submitted = await page.evaluate(() => {
-                    const userInput = document.querySelector('#user_login');
+                    const userInput = document.querySelector('#user_session_login_small');
                     const form = userInput ? userInput.closest('form') : null;
                     const submitBtn = form && (form.querySelector('input[type="submit"],button[type="submit"],button[name="commit"],input[name="commit"]'));
                     if (submitBtn) { submitBtn.click(); return true; }
                     if (form) { form.submit(); return true; }
                     return false;
                 });
-                if (!submitted) {
-                    // Fallback to known selector if nearest form submission failed
-                    await Promise.all([
-                        page.click('#loginform input[name="commit"]'),
-                        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT })
-                    ]).catch(() => {});
-                } else {
+                if (submitted) {
                     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT }).catch(() => {});
+                    loginSuccess = true;
+                    logBrowserEvent('[AO3] Small login form submission successful.');
+                } else {
+                    throw new Error('Small form submission failed');
                 }
-            } catch (navErr) {
-                logBrowserEvent('[AO3] Navigation after main login submit failed, retrying: ' + (navErr && navErr.message ? navErr.message : ''));
-                await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
-            }
-        } else {
-            // Retry small login form selector with retries
-            let smallLoginExists = false;
-            for (let i = 0; i < SELECTOR_RETRIES; i++) {
-                // Always wait 20s before each small login form attempt to give AO3 time to load and avoid rapid retries
-                if (i > 0) {
-                    logBrowserEvent(`[AO3] Waiting 20s before small login form retry (attempt ${i+1})...`);
-                    await new Promise(res => setTimeout(res, 20000));
-                }
+            } catch (smallErr) {
+                logBrowserEvent('[AO3] Small login form also failed: ' + smallErr.message);
+                // Fallback: try any submit button
                 try {
-                    await page.waitForSelector(SMALL_SELECTOR, { timeout: SELECTOR_WAIT });
-                    smallLoginExists = true;
-                    logBrowserEvent(`[AO3] Small login form found (attempt ${i+1}).`);
-                    break;
-                } catch (e) {
-                    logBrowserEvent(`[AO3] Small login form not found (attempt ${i+1}).`);
-                }
-            }
-            if (smallLoginExists) {
-                logBrowserEvent('[AO3] Using small login form.');
-                await page.type(SMALL_SELECTOR, username);
-                await page.type('#user_session_password_small', password);
-                await new Promise(res => setTimeout(res, 500));
-                // Submit the nearest form ancestor for the small login inputs
-                try {
-                    const submitted = await page.evaluate(() => {
-                        const userInput = document.querySelector('#user_session_login_small');
-                        const form = userInput ? userInput.closest('form') : null;
-                        const submitBtn = form && (form.querySelector('input[type="submit"],button[type="submit"],button[name="commit"],input[name="commit"]'));
-                        if (submitBtn) { submitBtn.click(); return true; }
-                        if (form) { form.submit(); return true; }
-                        return false;
-                    });
-                    if (!submitted) {
+                    logBrowserEvent('[AO3] Attempting fallback login with any submit button.');
+                    const button = await page.$('input[type="submit"], button');
+                    if (button) {
                         await Promise.all([
-                            page.click('#small_login input[name="commit"]'),
+                            page.click('input[type="submit"], button'),
                             page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT })
                         ]).catch(() => {});
+                        loginSuccess = true;
+                        logBrowserEvent('[AO3] Fallback login submission successful.');
                     } else {
-                        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT }).catch(() => {});
+                        throw new Error('No submit button found');
                     }
-                } catch (navErr) {
-                    logBrowserEvent('[AO3] Navigation after small login submit failed, retrying: ' + (navErr && navErr.message ? navErr.message : ''));
-                    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
-                }
-            } else {
-                logBrowserEvent('[AO3] No login form found, using fallback button.');
-                const button = await page.$('input[type="submit"], button');
-                if (button) {
-                    try {
-                        await Promise.all([
-                            button.click(),
-                            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: NAV_TIMEOUT })
-                        ]);
-                    } catch (navErr) {
-                        logBrowserEvent('[AO3] Navigation after fallback submit failed, retrying once: ' + (navErr && navErr.message ? navErr.message : ''));
-                        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
-                    }
+                } catch (fallbackErr) {
+                    logBrowserEvent('[AO3] Fallback login failed: ' + fallbackErr.message);
+                    throw new Error('All login attempts failed');
                 }
             }
         }
+        
         const postLoginTitle = await page.title();
         const postLoginErrorText = await page.evaluate(() => {
             const selectors = ['.error', '.notice', 'h1', 'h2', '#main .wrapper h1', '#main .wrapper h2'];
