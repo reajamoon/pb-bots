@@ -15,8 +15,8 @@ module.exports = {
       defaultValue: null,
     });
 
-    // Drop the old unique index
-    await queryInterface.removeIndex('user_fic_metadata', 'unique_user_fic_metadata_entry');
+    // Drop the old unique constraint
+    await queryInterface.removeConstraint('user_fic_metadata', 'unique_user_fic_metadata_entry');
 
     // Add new unique index on userID + url
     await queryInterface.addIndex('user_fic_metadata', ['userID', 'url'], {
@@ -33,9 +33,10 @@ module.exports = {
     await queryInterface.removeColumn('user_fic_metadata', 'manual_fields');
     await queryInterface.removeColumn('user_fic_metadata', 'url');
 
-    // Restore the old unique index
-    await queryInterface.addIndex('user_fic_metadata', ['userID', 'ao3ID', 'seriesId'], {
-      unique: true,
+    // Restore the old unique constraint
+    await queryInterface.addConstraint('user_fic_metadata', {
+      fields: ['userID', 'ao3ID', 'seriesId'],
+      type: 'unique',
       name: 'unique_user_fic_metadata_entry'
     });
   }
