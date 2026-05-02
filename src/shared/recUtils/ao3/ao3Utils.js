@@ -324,7 +324,7 @@ async function getLoggedInAO3Page(ficUrl) {
         logBrowserEvent(`[AO3] DEBUG: Page URL: ${pageUrl}`);
         
         // DEBUG: Log the actual form structure on login page
-        const debugFormStructure = await page.evaluate(() => {
+        let debugFormStructure = await page.evaluate(() => {
             const forms = document.querySelectorAll('form');
             let formInfo = `Found ${forms.length} forms:\n`;
             forms.forEach((form, i) => {
