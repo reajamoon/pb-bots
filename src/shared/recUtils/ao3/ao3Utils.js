@@ -314,6 +314,30 @@ async function getLoggedInAO3Page(ficUrl) {
         const SMALL_SELECTOR = '#user_session_login_small';
         const SELECTOR_RETRIES = 3;
         const SELECTOR_WAIT = 10000; // 10 seconds per try
+        
+        // DEBUG: Log the actual form structure on login page
+        const debugFormStructure = await page.evaluate(() => {
+            const forms = document.querySelectorAll('form');
+            let formInfo = `Found ${forms.length} forms:\n`;
+            forms.forEach((form, i) => {
+                formInfo += `Form ${i}: action="${form.action}"\n`;
+                const inputs = form.querySelectorAll('input');
+                inputs.forEach(input => {
+                    if (input.type === 'text' || input.type === 'email' || input.type === 'password' || input.name.includes('login') || input.name.includes('user')) {
+                        formInfo += `  Input: name="${input.name}" id="${input.id}" type="${input.type}"\n`;
+                    }
+                });
+            });
+            // Also check for any input with login-related attributes
+            const allInputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]');
+            formInfo += `\nAll text/email/password inputs (${allInputs.length}):\n`;
+            allInputs.forEach(input => {
+                formInfo += `  name="${input.name}" id="${input.id}" placeholder="${input.placeholder}"\n`;
+            });
+            return formInfo;
+        });
+        logBrowserEvent('[AO3] DEBUG: Login page form structure:\n' + debugFormStructure);
+        
         let mainLoginExists = false;
         for (let i = 0; i < SELECTOR_RETRIES; i++) {
             // Always wait 20s before each login form attempt to give AO3 time to load and avoid rapid retries
