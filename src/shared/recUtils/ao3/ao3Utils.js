@@ -318,7 +318,7 @@ async function getLoggedInAO3Page(ficUrl) {
         const SMALL_PASSWORD = '#user_session_password_small';
 
         // DEBUG: Log page details before checking forms
-        const pageTitle = await page.title();
+        pageTitle = await page.title();
         const pageUrl = page.url();
         logBrowserEvent(`[AO3] DEBUG: Page title: "${pageTitle}"`);
         logBrowserEvent(`[AO3] DEBUG: Page URL: ${pageUrl}`);
@@ -351,8 +351,37 @@ async function getLoggedInAO3Page(ficUrl) {
                 formInfo += document.documentElement ? document.documentElement.outerHTML.slice(0, 3000) : 'No document element';
             }
             
+            return formInfo;
+        });
+
+        // If no forms found, wait and retry
+        if (debugFormStructure.includes('Found 0 forms')) {
+            logBrowserEvent('[AO3] No forms found initially, waiting 5 seconds and retrying...');
+            await new Promise(res => setTimeout(res, 5000));
+
+            debugFormStructure = await page.evaluate(() => {
+                const forms = document.querySelectorAll('form');
+                let formInfo = `Found ${forms.length} forms (after wait):\n`;
+                forms.forEach((form, i) => {
+                    formInfo += `Form ${i}: action="${form.action}"\n`;
+                    const inputs = form.querySelectorAll('input');
+                    inputs.forEach(input => {
+                        if (input.type === 'text' || input.type === 'email' || input.type === 'password' || input.name.includes('login') || input.name.includes('user')) {
+                            formInfo += `  Input: name="${input.name}" id="${input.id}" type="${input.type}"\n`;
+                        }
+                    });
+                });
+                // Also check for any input with login-related attributes
+                const allInputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]');
+                formInfo += `\nAll text/email/password inputs (${allInputs.length}):\n`;
+                allInputs.forEach(input => {
+                    formInfo += `  name="${input.name}" id="${input.id}" placeholder="${input.placeholder}"\n`;
+                });
+                return formInfo;
+            });
+        }
         
-        // Try main form first
+        logBrowserEvent('[AO3] DEBUG: Login page form structure:\n' + debugFormStructure);
         try {
             logBrowserEvent('[AO3] Attempting login with main form.');
             await page.type(MAIN_SELECTOR, username);
