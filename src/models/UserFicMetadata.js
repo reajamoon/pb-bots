@@ -66,6 +66,15 @@ export default (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true,
         },
+        url: {  // NEW: for storing the full URL
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        manual_fields: {  // NEW: JSONB for all manual metadata overrides
+            type: DataTypes.JSONB,
+            allowNull: true,
+            defaultValue: null,
+        },
         additional_tags: {
             type: DataTypes.JSONB,
             allowNull: true,
@@ -81,7 +90,7 @@ export default (sequelize) => {
         indexes: [
             {
                 unique: true,
-                fields: ['userID', 'ao3ID', 'seriesId']
+                fields: ['userID', 'url']  // UPDATED: unique on userID + url instead of ao3ID/seriesId
             }
         ]
     });
