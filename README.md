@@ -18,19 +18,19 @@ If Sam starts acting weird, it is probably leviathans. or some aggressive rate l
 
 ## Not Here Yet?
 
-Join us, give the dev a cookie: https://discord.gg/profoundbond
+Join us, give Crypto a cookie: https://discord.gg/profoundbond
 
 ## What This Project Is
 
-PB is Discord's flagship Supernatural community for adult fans of Destiel, and the bots lean into that. Dean, Cas, and Sam are all written to sound in-character in all their member-facing interactions by developer and server-owner Cryptomoon/Reajamoon.
+Profound Bond is a community for adult fans of Destiel and Supernatural hosted on Discord. The three bots that serve the community are written by the developer and server owner crypto/reaja to be in-character (but consider them her fanon interpretations, so don't sweat the small stuff.)
 
 ## In-Jokes & Personality
 
-Sam is snarky, helpful, and a giant nerd about organization. If he recs the same super angsty fic for the hundredth time, just let him cook.
+Sam is snarky, helpful, and a giant nerd about organization. If he recs Tor Valen for the hundredth time, just let him cook.
 Dean is the server's sprint master and also welcomes new members to the fold. Why did Crypto give him a whistle again?
-Cas is happy to give a hug when a member needs it and is always listening for member prayers (modmail), but don't cross him - he is still a stone cold badass.
+Cas is happy to give a hug when a member needs it and is always listening for member prayers (modmail), but don't cross him he's still a stone cold badass and has been known to smite trolls.
 
-If you are writing member-facing text, please follow the voice guides:
+If you are considering contributing and want to submit any member-facing text, please follow the voice guides, I've tried to explain some of my characterization for the boys and how to keep it consistent:
 - `docs/sam-voice-guidelines.md`
 - `docs/dean-voice-guidelines.md`
 - `docs/cas-voice-guidelines.md`
@@ -43,7 +43,7 @@ If you are writing member-facing text, please follow the voice guides:
 - Production DB - Postgres via `DATABASE_URL`
 - Fic metadata fetches are queued - Sam enqueues, Jack processes, and Sam notifies via a poller
 
-If you want the code-level walkthrough, start with `docs/bot-architecture-overview.md`.
+For a deeper overview, start with `docs/bot-architecture-overview.md`.
 
 ## Run The Bots (Contributor Stuff)
 
@@ -77,7 +77,7 @@ See `docs/deployment.md` for operational details.
 - `src/bots/` - bot entrypoints and bot-specific code
 - `src/shared/` - shared utilities (logging, message tracking, rec parsing utilities)
 - `src/models/` - Sequelize models + association setup
-- `migrations/` - database migrations (immutable history)
+- `migrations/` - database migrations
 - `scripts/` - maintenance scripts and slash command deploy/clear utilities
 - `docs/` - technical documentation and project notes
 - `tests/` - Jest tests
@@ -103,4 +103,4 @@ See `docs/deployment.md` for operational details.
 
 ## Project Status
 
-This is primarily a single-developer project. If you are onboarding to tackle a small task, start with the bot README for the area you are touching, then skim the related docs in `docs/`.
+This is primarily a single-developer project. If you want to tackle a small task, start with the bot README for the area you are touching, then skim the related docs in `docs/`.
